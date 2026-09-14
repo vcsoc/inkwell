@@ -397,7 +397,7 @@ async function navigate(route, { historyMode = 'push' } = {}) {
   state.selected = null;
   state.query = '';
   state.searchScope = 'folder';
-  $('#search-scope').value = 'folder';
+  $('#search-scope').value = 'all';
   $('#global-search').value = '';
   state.offset = 0;
   if (!preferences.quick_filter_pinned) {
@@ -586,7 +586,7 @@ function renderMessageList() {
             `<div class="message-row ${m.unread ? 'unread' : ''} ${state.selected?.id === m.id ? 'selected' : ''}" data-message="${m.id}" role="button" tabindex="0" aria-label="${esc(m.subject)}">${m.unread ? '<span class="unread-dot"></span>' : ''}<div class="avatar">${esc(initials(m.sender))}</div><div class="message-content"><div class="message-top"><span class="sender">${esc(displayName(['sent', 'drafts'].includes(state.view) ? m.recipient || 'New draft' : m.sender))}</span><time class="message-date">${esc(timeLabel(m.date))}</time></div><div class="subject">${state.view === 'collection' || state.searchScope !== 'folder' ? `<span class="folder-badge">${esc(['inbox', 'remote'].includes(m.folder) ? state.remoteFolders.find((f) => f.id === (m.local_folder_override ? m.local_destination_id : m.remote_folder_id))?.path || m.folder : m.folder)}</span>` : ''}${esc(m.subject || '(No subject)')}</div><div class="message-pills">${m.unread ? '<span class="mail-pill unread-pill">Unread</span>' : ''}${tagPills(m)}</div><div class="preview">${esc(m.preview)}</div></div><button class="star-button ${m.starred ? 'on' : ''}" data-star="${m.id}" aria-label="${m.starred ? 'Unstar' : 'Star'} message" aria-pressed="${!!m.starred}">${m.starred ? '★' : '☆'}</button><button class="message-more" data-more="${m.id}" aria-label="More email actions" aria-haspopup="menu" aria-expanded="false">⋯</button></div>`,
         )
         .join('')
-    : `<div class="empty-state"><div class="empty-icon">▤</div><h2>${state.query ? 'Nothing found.' : 'A little breathing room.'}</h2><p>${state.query ? 'Try another name, subject, or phrase.' : state.accounts.length ? 'There are no messages here. Sync your account or start a new conversation.' : 'Connect your email to get started, or explore a sample workspace first.'}</p><div class="empty-actions">${!state.accounts.length && !state.query ? '<button class="primary" id="connect-empty">Connect email</button><button class="secondary" id="demo-empty">Explore demo</button>' : ''}</div></div>`;
+    : `<div class="empty-state"><div class="empty-icon">▤</div><h2>${state.query ? 'Nothing found.' : 'A little breathing room.'}</h2><p>${state.query ? 'Try a sender, subject, phrase or tag name. Use tag:Work to search only tags. Folder scope and quick filters still apply.' : state.accounts.length ? 'There are no messages here. Sync your account or start a new conversation.' : 'Connect your email to get started, or explore a sample workspace first.'}</p><div class="empty-actions">${!state.accounts.length && !state.query ? '<button class="primary" id="connect-empty">Connect email</button><button class="secondary" id="demo-empty">Explore demo</button>' : ''}</div></div>`;
   $$('[data-message]').forEach((row) => {
     on(row, 'click', (event) => {
       if (!selection.rowClick(row, event)) return openMessage(Number(row.dataset.message));
@@ -1598,7 +1598,7 @@ async function searchMail() {
   if (['settings', 'calendar', 'contacts', 'tags', 'rules'].includes(state.view))
     await navigate('inbox');
   if (sequence !== searchSequence) return;
-  state.searchScope = scope;
+  state.searchScope = query ? scope : 'folder';
   $('#search-scope').value = scope;
   state.query = query;
   $('#global-search').value = typed;
@@ -1608,11 +1608,25 @@ async function searchMail() {
   }
   state.offset = 0;
   state.selected = null;
-  state.generation++;
+  const generation = ++state.generation;
   await renderMail();
+  if (generation !== state.generation || sequence !== searchSequence) return;
+  const searchKind = /^tags?:/i.test(query) ? 'Tag' : 'Mail and tag';
   $('#page-description').textContent = query
-    ? `Searching downloaded mail: ${$('#search-scope').selectedOptions[0].textContent}${scope === 'all' ? ' (including local Trash)' : ''}.`
-    : 'Showing downloaded messages in the selected scope.';
+    ? scope === 'all'
+      ? `${searchKind} search across all cached folders, including Junk.`
+      : `${searchKind} search: ${$('#search-scope').selectedOptions[0].textContent} (cached mail).`
+    : 'Showing downloaded messages in this folder.';
+  if (query && state.view === 'collection')
+    $('#page-description').textContent += ' Within the current collection.';
+  if (
+    query &&
+    (state.filter === 'unread' ||
+      state.quick?.starred ||
+      state.quick?.tag_id ||
+      (state.quick?.tag_state && state.quick.tag_state !== 'all'))
+  )
+    $('#page-description').textContent += ' Active quick filters also apply.';
 }
 on($('#global-search-form'), 'submit', async (event) => {
   event.preventDefault();

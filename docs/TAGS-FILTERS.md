@@ -20,6 +20,10 @@ Changes are local, atomic SQLite transactions: no provider categories or server 
 
 Pigeon's manager was reviewed for functional reference (grouping, counts, selection, rename, deletion, replacement, and opening tagged items). This is an independent mail-specific implementation, not a copy of its asset-management code.
 
+## Searching tag names
+
+The top mail search defaults to **All folders**, including cached Junk, Sent and Trash. A plain tag name participates in text search; `tag:Work` searches only tag names, `tag:"Follow up"` matches an exact normalized name, and `#Work` matches tags Work or #Work exactly, plus literal #Work in message text. Tag matching supports Unicode case folding and equivalent Unicode spellings. Unused catalog tags do not produce mail results. Folder scopes, active quick filters and collection boundaries still apply. Clearing search returns to the folder being browsed. See [mail search](MAIL-WORKSPACE.md#top-centre-search) for cache limits and syntax.
+
 ## Quick-filter toolbar
 
 The message view includes All mail/Unread, Starred, Tagged/Untagged, and an exact tag selector. These combine with the existing top search and folder/subfolder/all-cached scopes. Collection views use the same filters within their collection. Filters and sorting run **before** 100-message pagination; the footer shows the matching total.

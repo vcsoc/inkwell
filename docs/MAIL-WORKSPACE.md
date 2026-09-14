@@ -16,13 +16,13 @@ Schema version 3 adds stable local folder IDs and message membership. Renaming a
 
 ## Top-centre search
 
-Use the top search field: after at least two trimmed characters, results update 280 ms after typing stops. Enter or the search button also works. Clearing restores messages in the selected scope and resets pagination/unread filtering. Choose a scope:
+Use the top search field: after at least two trimmed characters, results update 280 ms after typing stops. Enter or the search button also works. Search defaults to **All folders**, including cached Junk and tagged messages outside Inbox. Clearing restores the folder being browsed and resets pagination/quick filters. The scope selector controls searches, not ordinary empty-query folder browsing. Choose a scope:
 
 - **Current folder:** the folder being viewed.
 - **Folder + subfolders:** that server folder and its descendants. On the aggregate Inbox, includes connected accounts' Inbox descendants.
-- **All folders:** downloaded mail across accounts, including local Trash and drafts.
+- **All folders (default):** downloaded mail across accounts, including Junk, Archive, Sent, local Trash and drafts.
 
-Search matches sender, subject, plain-text body and local tags, with pagination. Cross-folder results carry folder labels. Search does **not** search older messages still only on the server. Open/sync folders first to populate their caches. Changing folders resets the search scope to Current folder. From a non-mail page, search starts from the aggregate Inbox. The duplicate in-list search field has been removed. Local-only folders do not have server descendants.
+Search matches sender, To/Cc/Bcc addresses, subject, plain-text body and local tag names, with filtering before pagination. Plain tag names work; `tag:Work` searches only tag names (substring), `tag:"Follow up"` matches an exact normalized tag name, and `#Work` matches the tag Work or #Work exactly as well as literal #Work in message text. `tags:` is an alias for `tag:`. These are single tag expressions, not a combined query language; use the exact-tag quick filter alongside a plain text query to combine a tag and message terms. Tag matching is Unicode-normalized and case-insensitive. `%`, `_` and backslashes are literal search characters, not SQL wildcards. Cross-folder results carry folder labels. Search does **not** search older messages still only on the server. Open/sync folders first to populate their caches. Changing folders resets the search selector to All folders; ordinary folder browsing still shows only that folder. From a non-mail page, search uses the aggregate Inbox as its browsing context and searches all cached folders by default. Collection searches remain within their collection, and active quick filters continue to apply; the description makes these restrictions explicit. The duplicate in-list search field has been removed. Local-only folders do not have server descendants.
 
 ## Expanded message context menu
 

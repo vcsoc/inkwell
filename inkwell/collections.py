@@ -5,7 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import Field
 
-from . import store, mail_filters
+from . import store, mail_filters, mail_search
 
 router = APIRouter(prefix="/api/collections")
 Kind = Literal["sender", "organisation", "subject"]
@@ -39,9 +39,10 @@ def query(data: Query):
     column = COLUMNS[data.kind]
     clause = column + "=?"
     params = [data.key]
-    if data.q:
-        clause += " AND (subject LIKE ? OR sender LIKE ? OR body LIKE ? OR EXISTS (SELECT 1 FROM json_each(messages.tags) WHERE value LIKE ?))"
-        params += [f"%{data.q}%"] * 4
+    search, search_params = mail_search.predicate(data.q)
+    if search:
+        clause += " AND " + search
+        params += search_params
     extra, values = data.sql()
     clause = "(" + clause + ")" + extra
     params += values

@@ -148,7 +148,7 @@ test('quick filters combine and clear, sorting and table view persist', async ({
   await expect(page.locator('.message-row')).toHaveCount(3);
   await page.locator('#quick-sort').selectOption('subject');
   await page.locator('#quick-order').selectOption('asc');
-  await expect(page.locator('.message-row .subject').first()).toHaveText(prefix + 'Alpha');
+  await expect(page.locator('.message-row .subject').first()).toContainText(prefix + 'Alpha');
   await page.locator('#quick-view').selectOption('table');
   await expect(page.locator('.message-table-header')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);

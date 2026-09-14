@@ -170,6 +170,25 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
     await window.getByRole('button', { name: 'Save rule', exact: true }).click();
     await expect(window.locator('#rules-list')).toContainText('Desktop rule');
     await window.locator('#navigation [data-view=inbox]').click();
+    await expect(window.locator('#search-scope')).toHaveValue('all');
+    expect(
+      await window.evaluate(
+        async (id) =>
+          (
+            await fetch('/api/messages/' + id, {
+              method: 'PATCH',
+              headers: { 'X-Inkwell': '1', 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tags: ['Desktop tag manager'] }),
+            })
+          ).status,
+        messageId,
+      ),
+    ).toBe(200);
+    await window.locator('#global-search').fill('tag:"DESKTOP TAG MANAGER"');
+    await expect(window.locator('.message-row')).toHaveCount(1);
+    await expect(window.locator('.message-row .tag-pill')).toHaveText('Desktop tag manager');
+    await window.locator('#global-search').fill('');
+    await expect(window.locator('.message-row')).toHaveCount(5);
     await window.locator('#quick-view').selectOption('table');
     await expect(window.locator('.message-table-header')).toBeVisible();
     await window.locator('#quick-view').selectOption('cards');

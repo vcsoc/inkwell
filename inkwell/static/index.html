@@ -83,13 +83,14 @@
               id="global-search"
               type="search"
               aria-label="Search email"
-              placeholder="Search email…"
+              placeholder="Search mail or tags…"
+              title="Search downloaded message text, addresses and tags. Use tag:Work for tags only."
               maxlength="200"
             />
             <select id="search-scope" aria-label="Search scope">
               <option value="folder">Current folder</option>
               <option value="subfolders">Folder + subfolders</option>
-              <option value="all">All folders</option>
+              <option value="all" selected>All folders</option>
             </select>
             <button type="submit" class="icon-button" aria-label="Run email search">⌕</button>
           </form>

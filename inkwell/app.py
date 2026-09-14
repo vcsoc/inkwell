@@ -20,6 +20,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import (
     not_junk,
+    mail_search,
     addresses,
     tag_store,
     mail_filters,
@@ -326,7 +327,7 @@ def messages(
         raise HTTPException(422, "Invalid folder")
     clause = "starred=1 AND folder!='trash'" if folder == "starred" else "folder=?"
     params = [] if folder == "starred" else [folder]
-    if remote_folder_id is not None:
+    if remote_folder_id is not None and scope != "all":
         if not rows("SELECT id FROM remote_folders WHERE id=?", (remote_folder_id,)):
             raise HTTPException(404, "Server folder not found")
         clause = "CASE WHEN local_folder_override=1 THEN local_destination_id ELSE remote_folder_id END=? AND folder IN ('inbox','remote')"
@@ -344,9 +345,10 @@ def messages(
             clause = "(" + clause + " OR folder='inbox')"
     if scope == "all":
         clause, params = "1=1", []
-    if q:
-        clause += " AND (subject LIKE ? OR sender LIKE ? OR body LIKE ? OR EXISTS (SELECT 1 FROM json_each(messages.tags) WHERE value LIKE ?))"
-        params += [f"%{q[:200]}%"] * 4
+    search, search_params = mail_search.predicate(q)
+    if search:
+        clause += " AND " + search
+        params += search_params
     extra, values = filters.sql()
     clause = "(" + clause + ")" + extra
     params += values

@@ -8,6 +8,7 @@ from pathlib import Path
 from cryptography.fernet import Fernet
 
 from .message_keys import sender_key, domain_key, subject_key
+from .mail_search import key as search_key
 
 DATA = Path(os.environ.get("INKWELL_DATA_DIR", Path.home() / ".inkwell"))
 
@@ -161,6 +162,7 @@ def init():
 def db():
     conn = sqlite3.connect(DATA / "inkwell.db", timeout=15)
     conn.row_factory = sqlite3.Row
+    conn.create_function("inkwell_search_key", 1, search_key, deterministic=True)
     conn.create_function(
         "inkwell_tag_key", 1, lambda value: str(value).strip().casefold(), deterministic=True
     )
