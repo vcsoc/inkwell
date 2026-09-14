@@ -229,6 +229,28 @@ test('Trash context menu restores the previous folder and never wraps its labels
   await expect(page.locator(`[data-message="${id}"]`)).toHaveCount(0);
   expect((await api(page, '/messages/' + id)).folder).toBe('archive');
 });
+test('light-theme text reader switches its entire palette to dark and resets on another message', async ({
+  page,
+}) => {
+  await api(page, '/preferences', 'PUT', {
+    ...original,
+    layout: 'classic',
+    preview_mode: 'text',
+    ui_zoom: 100,
+    theme: { ...original.theme, dark: false, surface: '#ffffff', text: '#292e2b' },
+  });
+  await page.reload();
+  await page.locator('.message-row .subject').first().click();
+  await page.locator('#reader-appearance').click();
+  await expect(page.locator('#reader')).toHaveCSS('background-color', 'rgb(32, 39, 49)');
+  await expect(page.locator('.message-body')).toHaveCSS('color', 'rgb(237, 241, 247)');
+  await expect(page.locator('#reader')).toHaveCSS('color-scheme', 'dark');
+  await page.locator('#reader-back').click();
+  await page.locator('.message-row .subject').nth(1).click();
+  await expect(page.locator('#reader')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(page.locator('#reader')).toHaveCSS('color-scheme', 'light');
+});
+
 test('HTML defaults to theme colors, toggles light and dark, and uses a bin icon', async ({
   page,
 }, info) => {
@@ -253,6 +275,9 @@ test('HTML defaults to theme colors, toggles light and dark, and uses a bin icon
       background: '#0d1117',
       surface: '#161b22',
       text: '#e6edf3',
+      selection: '#303e4b',
+      accent: '#9bbacb',
+      accent_text: '#17212b',
     },
   });
   await page.reload();
@@ -266,8 +291,20 @@ test('HTML defaults to theme colors, toggles light and dark, and uses a bin icon
   await expect(page.locator('#trash-message svg')).toBeVisible();
   await page.locator('#reader-appearance').click();
   await expect(body).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(page.locator('#reader')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(page.locator('#reader h2')).toHaveCSS('color', 'rgb(41, 46, 43)');
+  await expect(page.locator('.privacy-banner')).toHaveCSS('background-color', 'rgb(234, 240, 232)');
+  await expect(page.locator('#reader')).toHaveCSS('color-scheme', 'light');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(13, 17, 23)');
+  await page.screenshot({
+    path: `test-results/${info.project.name}-light-reader-in-dark-theme.png`,
+    fullPage: true,
+  });
   await page.locator('#reader-appearance').click();
   await expect(body).toHaveCSS('background-color', 'rgb(22, 27, 34)');
+  await expect(page.locator('#reader')).toHaveCSS('background-color', 'rgb(22, 27, 34)');
+  await expect(page.locator('#reader')).toHaveCSS('color-scheme', 'dark');
+  await expect(page.locator('.privacy-banner')).toHaveCSS('background-color', 'rgb(48, 62, 75)');
   await page.screenshot({
     path: `test-results/${info.project.name}-themed-reader.png`,
     fullPage: true,

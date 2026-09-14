@@ -757,16 +757,44 @@ function renderReader() {
   const view = state.readerAppearance || 'theme',
     dark = view === 'dark' || (view === 'theme' && preferences.theme.dark);
   const pane = $('#reader');
-  ['--bg', '--surface', '--ink', '--muted', '--line'].forEach((name) =>
-    pane.style.removeProperty(name),
-  );
+  const readerColors = [
+    '--bg',
+    '--surface',
+    '--ink',
+    '--muted',
+    '--line',
+    '--accent',
+    '--accent-light',
+    '--accent-text',
+    '--danger',
+  ];
+  readerColors.forEach((name) => pane.style.removeProperty(name));
+  pane.style.colorScheme = dark ? 'dark' : 'light';
   if (view !== 'theme' && dark !== preferences.theme.dark) {
     const colors = dark
-      ? ['#171d25', '#202731', '#edf1f7', '#a5b2c3', '#394452']
-      : ['#f6f6f1', '#ffffff', '#292e2b', '#737b73', '#e7e8e1'];
-    ['--bg', '--surface', '--ink', '--muted', '--line'].forEach((name, index) =>
-      pane.style.setProperty(name, colors[index]),
-    );
+      ? [
+          '#171d25',
+          '#202731',
+          '#edf1f7',
+          '#a5b2c3',
+          '#394452',
+          '#9bbacb',
+          '#303e4b',
+          '#17212b',
+          '#ff9990',
+        ]
+      : [
+          '#f6f6f1',
+          '#ffffff',
+          '#292e2b',
+          '#697264',
+          '#e7e8e1',
+          '#486b54',
+          '#eaf0e8',
+          '#ffffff',
+          '#ac4c45',
+        ];
+    readerColors.forEach((name, index) => pane.style.setProperty(name, colors[index]));
   }
   $('#reader').innerHTML =
     `<div class="reader-actions"><button class="icon-button" id="reader-menu" aria-label="More email actions" aria-haspopup="menu" aria-expanded="false">⋯</button><button class="icon-button" id="reader-back" aria-label="Back to messages">←</button><button class="secondary" id="archive-message">${m.folder === 'trash' ? 'Restore' : m.folder === 'archive' ? 'Move to inbox' : 'Archive'}</button><button class="secondary" id="unread-message">Mark unread</button><button class="secondary" id="reader-appearance" aria-label="Switch reader to ${dark ? 'light' : 'dark'} view">${dark ? '☀ Light view' : '☾ Dark view'}</button><button class="icon-button danger" id="trash-message" aria-label="${m.folder === 'trash' ? 'Permanently delete' : 'Move to trash'}" title="${m.folder === 'trash' ? 'Permanently delete local copy' : 'Move to Trash'}"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button></div><h2>${esc(m.subject || '(No subject)')}</h2><div class="reader-tags">${tagPills(m)}<button class="secondary" id="edit-tags">Tags…</button></div><div class="reader-meta"><div class="avatar">${esc(initials(m.sender))}</div><div><strong>${esc(m.sender)}</strong>${m.demo ? '<span class="badge">SAMPLE</span>' : ''}<small>To ${esc(m.recipient)}</small><small>${esc(new Date(m.date).toLocaleString())}</small></div></div><div id="message-preview"></div><div class="reader-reply"><button class="primary" id="reply" aria-label="Reply">↩ Reply</button><button class="secondary" id="forward">Forward →</button></div>`;

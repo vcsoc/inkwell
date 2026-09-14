@@ -50,6 +50,7 @@
 }
 .reader {
   color: var(--ink);
+  background: var(--surface);
 }
 .reader-actions {
   flex-wrap: wrap;
