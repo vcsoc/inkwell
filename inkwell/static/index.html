@@ -22,6 +22,7 @@
     <link rel="stylesheet" href="/static/calendar-rules.css" />
     <link rel="stylesheet" href="/static/rules-compose.css" />
     <link rel="stylesheet" href="/static/reader-toolbar.css" />
+    <link rel="stylesheet" href="/static/message-menu.css" />
     <script src="/static/appearance.js"></script>
     <script src="/api/preferences/startup.js"></script>
     <title>inkwell — A little more focus</title>
@@ -170,12 +171,7 @@
       </div>
       <div id="modal-body"></div>
     </dialog>
-    <div
-      id="message-menu"
-      class="message-menu hidden"
-      role="menu"
-      aria-label="Email collection actions"
-    >
+    <div id="message-menu" class="message-menu hidden" role="menu" aria-label="Email actions">
       <button role="menuitem" tabindex="-1" data-collection="sender">Find all by sender</button>
       <button role="menuitem" tabindex="-1" data-collection="organisation">
         Find all by organisation
@@ -187,6 +183,10 @@
       <button role="menuitem" tabindex="-1" data-action="forward">Forward</button>
       <button role="menuitem" tabindex="-1" data-action="write">New message to sender</button>
       <hr role="separator" />
+      <button role="menuitem" tabindex="-1" data-action="apply-rule">Apply rule…</button>
+      <button role="menuitem" tabindex="-1" data-action="appearance" hidden>
+        Toggle reader light / dark
+      </button>
       <button role="menuitem" tabindex="-1" data-action="tags">Edit tags…</button>
       <button role="menuitem" tabindex="-1" data-action="read">Mark read (local)</button>
       <button role="menuitem" tabindex="-1" data-action="unread">Mark unread (local)</button>

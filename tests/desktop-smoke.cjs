@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 const { DatabaseSync } = require('node:sqlite');
-const { settingsSection } = require('./ui/helpers.cjs');
+const { settingsSection, readerAction, sidebarClick } = require('./ui/helpers.cjs');
 test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) => {
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'inkwell-desktop-'));
   const initial = new DatabaseSync(path.join(data, 'inkwell.db'));
@@ -93,13 +93,15 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
       wc.sendInputEvent({ type: 'keyUp', keyCode: 'K', modifiers: ['control', 'shift'] });
     });
     await expect(window.locator('#global-search')).toBeFocused();
-    await window.getByRole('button', { name: 'Not Junk', exact: true }).click();
+    await readerAction(window, 'Not Junk', 'Not Junk');
     await expect(window.locator('#toast')).toContainText('Future imports use rules or Inbox');
     await window.locator('.message-row [data-more]').first().click();
     await expect(window.getByRole('menuitem', { name: 'Reply', exact: true })).toBeVisible();
+    await window.getByRole('menuitem', { name: 'File', exact: true }).click();
     await expect(
       window.getByRole('menuitem', { name: 'Move local copy…', exact: true }),
-    ).toBeAttached();
+    ).toBeVisible();
+    await window.keyboard.press('Escape');
     await window.keyboard.press('Escape');
     if (await window.locator('.mobile-tabs').isVisible()) {
       await window
@@ -172,7 +174,7 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
     expect(preferences.contextIsolation).toBe(true);
     expect(preferences.sandbox).toBe(true);
     await window.locator('#close-modal').click();
-    await window.locator('#tag-manager-link').click();
+    await sidebarClick(window, '#tag-manager-link');
     await window.getByLabel('Tag name', { exact: true }).fill('Desktop tag manager');
     await window.getByLabel('Choose tag color', { exact: true }).click();
     await window.getByRole('button', { name: 'Set Tag color to #2664a0', exact: true }).click();
@@ -181,7 +183,7 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
       'background-color',
       'rgb(38, 100, 160)',
     );
-    await window.locator('#rule-manager-link').click();
+    await sidebarClick(window, '#rule-manager-link');
     await expect(window.locator('#not-junk-senders')).toContainText('@');
     await window.getByRole('button', { name: 'Create auto-tag rule', exact: true }).click();
     await window.getByLabel('Rule name', { exact: true }).fill('Desktop rule');
@@ -191,7 +193,20 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
       .selectOption({ label: 'Desktop tag manager' });
     await window.getByRole('button', { name: 'Save rule', exact: true }).click();
     await expect(window.locator('#rules-list')).toContainText('Desktop rule');
-    await window.locator('#navigation [data-view=inbox]').click();
+    await sidebarClick(window, '#navigation [data-view=inbox]');
+    await window.locator(`[data-more="${messageId}"]`).click();
+    await window.getByRole('menuitem', { name: 'Apply rule…', exact: true }).click();
+    await window.getByLabel('Rule name', { exact: true }).fill('Desktop context rule');
+    await window.getByLabel('Condition 1 field', { exact: true }).selectOption('tld');
+    await expect(window.getByLabel('Condition 1 value', { exact: true })).not.toHaveValue('');
+    await window
+      .getByLabel('Action 1 value', { exact: true })
+      .selectOption({ label: 'Desktop tag manager' });
+    await window
+      .getByRole('button', { name: 'Save and apply to this message', exact: true })
+      .click();
+    await expect(window.locator('#toast')).toContainText('saved and applied');
+    await sidebarClick(window, '#navigation [data-view=inbox]');
     await expect(window.locator('#search-scope')).toHaveValue('all');
     expect(
       await window.evaluate(

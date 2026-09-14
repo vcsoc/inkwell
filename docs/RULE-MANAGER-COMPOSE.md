@@ -19,6 +19,18 @@ The first matching eligible enabled rule wins, in creation order. This is not a 
 
 Legacy rules retain their behavior and appear in the builder. Rule tag references use stable catalog IDs: rename keeps references, merge redirects them, and deleting a referenced tag disables the affected rules. Review those rules before enabling them again. Deleting a rule does not undo earlier actions or delete mail.
 
+## Rules from a message
+
+Choose **Apply rule…** from an email's context menu or reader More menu. The editor starts with the exact normalized sender address; changing its field to Subject, Sender domain or Sender TLD fills that message's corresponding value. Values remain editable. The subject starts as a case-insensitive substring condition; sender/domain/TLD default to exact matching.
+
+**TLD** means the final DNS label: `.ca`, `.com`, or `.uk` for `example.co.uk`. It is not the registrable domain or a public-suffix lookup. Leading dots and letter case are normalized; `co.uk` is rejected as a TLD value. TLD conditions support is/is not and do not match missing domains or IP literals. These broad conditions do not authenticate sender identity.
+
+- **Save rule** stores the configuration for future imports, subject to normal first-match priority.
+- **Save and apply to this message** saves it, then explicitly runs only that selected rule on the selected cached incoming copy, even if it was already locally filed. It does not run other rules or apply to every matching cached message. Conditions, enabled state, exclusions, resource validation, tag limits and Not Junk protection still apply. Drafts and known sent copies are protected. A nonmatching rule leaves the copy unchanged.
+- Saving and application are separate operations. If application fails, the saved rule remains visible and the editor retains its ID and edits; retry updates it rather than creating a duplicate. The message changes themselves are transactional.
+
+`GET /api/rules/from-message/{id}` supplies the seed. `POST /api/rules/{id}/apply-message` accepts `{message_id}`. Both inherit normal session/origin protection. Schema **10** marks TLD rule configuration support; older binaries reject it. Rollback requires a pre-upgrade database with its matching vault key.
+
 ## Domain auto-tagging
 
 In Rule Manager, choose **Create auto-tag rule**. This starts a tag-only rule with **Sender domain → is** and **Add tag**, without an implicit move action.

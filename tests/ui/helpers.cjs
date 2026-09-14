@@ -7,4 +7,22 @@ async function settingsSection(page, name) {
     'page',
   );
 }
-module.exports = { settingsSection };
+async function selectEmailMenuAction(page, name) {
+  const item = page.getByRole('menuitem', { name, exact: true, includeHidden: true });
+  const panel = await item.evaluate((el) => el.closest('.submenu-panel')?.id);
+  if (panel && !(await item.isVisible())) await page.locator(`[aria-controls="${panel}"]`).click();
+  await item.click();
+}
+async function readerAction(page, name, menuName) {
+  const button = page.locator('.reader-actions').getByRole('button', { name, exact: true });
+  if (await button.isVisible()) await button.click();
+  else {
+    await page.locator('#reader-menu').click();
+    await selectEmailMenuAction(page, menuName);
+  }
+}
+async function sidebarClick(page, selector) {
+  if (!(await page.locator(selector).isVisible())) await page.locator('#menu').click();
+  await page.locator(selector).click();
+}
+module.exports = { settingsSection, selectEmailMenuAction, readerAction, sidebarClick };

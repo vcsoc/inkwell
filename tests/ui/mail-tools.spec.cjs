@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { selectEmailMenuAction } = require('./helpers.cjs');
 
 async function demo(page) {
   await page.goto('/');
@@ -104,7 +105,7 @@ test('message menu supports reply, forward, address and text export without send
   const id = await page.locator('.message-row').first().getAttribute('data-message');
   for (const action of ['Reply', 'Forward']) {
     await menu(page, id);
-    await page.getByRole('menuitem', { name: action, exact: true }).click();
+    await selectEmailMenuAction(page, action);
     await expect(page.locator('#compose-form')).toBeVisible();
     await expect(page.locator('#compose-form input[name=subject]')).toHaveValue(
       action === 'Reply' ? /^Re:/ : /^Fwd:/,
@@ -113,7 +114,7 @@ test('message menu supports reply, forward, address and text export without send
     await expect(page.locator('#modal')).not.toBeVisible();
   }
   await menu(page, id);
-  await page.getByRole('menuitem', { name: 'Copy sender address…', exact: true }).click();
+  await selectEmailMenuAction(page, 'Copy sender address…');
   await expect(page.getByRole('textbox', { name: 'Sender address', exact: true })).toHaveAttribute(
     'readonly',
     '',
@@ -121,7 +122,7 @@ test('message menu supports reply, forward, address and text export without send
   await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
   await menu(page, id);
   const download = page.waitForEvent('download');
-  await page.getByRole('menuitem', { name: 'Save message as text…', exact: true }).click();
+  await selectEmailMenuAction(page, 'Save message as text…');
   expect((await download).suggestedFilename()).toBe(`inkwell-message-${id}.txt`);
 });
 
@@ -146,7 +147,7 @@ test('local menu state and move actions work and preserve originals on cleanup',
         (response) =>
           response.url().endsWith('/api/messages/' + id) && response.request().method() === 'PATCH',
       );
-      await page.getByRole('menuitem', { name: action, exact: true }).click();
+      await selectEmailMenuAction(page, action);
       await patched;
       await expect(page.locator('#toast')).toContainText('Server mail is unchanged');
       const message = await page.evaluate(
@@ -159,7 +160,7 @@ test('local menu state and move actions work and preserve originals on cleanup',
       if (action === 'Remove star (local)') expect(message.starred).toBe(0);
     }
     await menu(page, id);
-    await page.getByRole('menuitem', { name: 'Move local copy…', exact: true }).click();
+    await selectEmailMenuAction(page, 'Move local copy…');
     await page.getByLabel('Local destination').selectOption('archive');
     await page.getByRole('button', { name: 'Move local copy', exact: true }).click();
     await expect(page.locator(`[data-message="${id}"]`)).toHaveCount(0);

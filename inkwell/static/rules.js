@@ -1,7 +1,7 @@
 'use strict';
 window.InkwellRules = async (
   root,
-  { api, esc, field, toast, isCurrent, foldersChanged = async () => {} },
+  { api, esc, field, toast, isCurrent, sourceMessage = null, foldersChanged = async () => {} },
 ) => {
   const [rules, folders, remote, tags, accounts, safeSenders] = await Promise.all([
     api('/rules'),
@@ -28,6 +28,7 @@ window.InkwellRules = async (
   const fields = {
     sender: 'Sender address',
     domain: 'Sender domain',
+    tld: 'Sender TLD',
     subject: 'Subject',
     recipient: 'To recipients',
     body: 'Message text',
@@ -111,15 +112,16 @@ window.InkwellRules = async (
       renderList();
     }
   };
-  const editor = (rule = {}) => {
+  const editor = (rule = {}, context = null) => {
     const epoch = ++editorEpoch;
+    let savedId = rule.id;
     editingId = rule.id || null;
     let conditions = structuredClone(
       rule.conditions || [{ field: 'subject', operator: 'contains', value: '' }],
     );
     let actions = structuredClone(rule.actions || [{ type: 'move', value: 'archive' }]);
     root.querySelector('#rule-editor').innerHTML =
-      `<h2>${rule.id ? 'Edit rule' : 'New rule'}</h2><form id="rule-form">${field('Rule name', 'name', rule.name || '', 'text', 'required maxlength="100"')}<label class="check-label"><input type="checkbox" name="enabled" ${rule.enabled !== false ? 'checked' : ''}> Enabled</label><label class="field">Match conditions<select name="mode" aria-label="Match conditions"><option value="all">All conditions (AND)</option><option value="any">Any condition (OR)</option></select></label><h3>Conditions</h3><div id="rule-conditions"></div><button type="button" class="secondary" id="add-condition">Add condition</button><h3>Actions</h3><div id="rule-actions"></div><button type="button" class="secondary" id="add-action">Add action</button><h3>Additional exclusions</h3><label class="check-label"><input name="exclude_unread" type="checkbox" ${rule.exclude_unread ? 'checked' : ''}> Exclude unread messages</label>${field('Only messages older than days (0 = any age)', 'older_than_days', rule.older_than_days || 0, 'number', 'required min="0" max="36500"')}<div class="form-actions"><button class="secondary" id="new-rule" type="button">New rule</button><button class="primary">Save rule</button></div></form>`;
+      `<h2>${rule.id ? 'Edit rule' : 'New rule'}</h2>${context ? `<p>Build from: ${esc(context.subject)}. Change the condition field to Sender address, Subject, Sender domain or Sender TLD to use this message’s values.</p>` : ''}<p class="fine-print">TLD means the last domain label: .ca or .com; example.co.uk has TLD .uk. TLD rules are broad and do not verify sender identity.</p><form id="rule-form">${field('Rule name', 'name', rule.name || '', 'text', 'required maxlength="100"')}<label class="check-label"><input type="checkbox" name="enabled" ${rule.enabled !== false ? 'checked' : ''}> Enabled</label><label class="field">Match conditions<select name="mode" aria-label="Match conditions"><option value="all">All conditions (AND)</option><option value="any">Any condition (OR)</option></select></label><h3>Conditions</h3><div id="rule-conditions"></div><button type="button" class="secondary" id="add-condition">Add condition</button><h3>Actions</h3><div id="rule-actions"></div><button type="button" class="secondary" id="add-action">Add action</button><h3>Additional exclusions</h3><label class="check-label"><input name="exclude_unread" type="checkbox" ${rule.exclude_unread ? 'checked' : ''}> Exclude unread messages</label>${field('Only messages older than days (0 = any age)', 'older_than_days', rule.older_than_days || 0, 'number', 'required min="0" max="36500"')}<div class="form-actions"><button class="secondary" id="new-rule" type="button">New rule</button><button class="primary">Save rule</button>${context ? `<button class="primary" name="apply_message" ${context.can_apply ? '' : 'disabled'}>Save and apply to this message</button><p class="fine-print">Only the selected cached incoming copy is applied now; future imports use normal rule priority. Drafts and sent copies are excluded.</p>` : ''}</div></form>`;
     const form = root.querySelector('#rule-form');
     form.elements.mode.value = rule.mode || 'all';
     const renderConditions = () => {
@@ -128,7 +130,7 @@ window.InkwellRules = async (
           const ops =
             c.field === 'age_days'
               ? ['gt', 'lt']
-              : ['tag', 'unread', 'starred'].includes(c.field)
+              : ['tld', 'tag', 'unread', 'starred'].includes(c.field)
                 ? ['is', 'not_is']
                 : ['contains', 'not_contains', 'is', 'not_is', 'starts_with', 'ends_with'];
           return `<div class="rule-builder-row" data-condition="${i}"><label>Field<select aria-label="Condition ${i + 1} field" data-part="field">${options(Object.entries(fields), c.field)}</select></label><label>Operator<select aria-label="Condition ${i + 1} operator" data-part="operator">${options(
@@ -184,10 +186,12 @@ window.InkwellRules = async (
             operator:
               f === 'age_days'
                 ? 'gt'
-                : ['domain', 'tag', 'unread', 'starred'].includes(f)
+                : ['sender', 'domain', 'tld', 'tag', 'unread', 'starred'].includes(f)
                   ? 'is'
                   : 'contains',
-            value: ['unread', 'starred'].includes(f) ? 'true' : f === 'age_days' ? '0' : '',
+            value:
+              context?.values?.[f] ||
+              (['unread', 'starred'].includes(f) ? 'true' : f === 'age_days' ? '0' : ''),
           };
           renderConditions();
         } else if (part) conditions[index][part] = event.target.value;
@@ -245,8 +249,8 @@ window.InkwellRules = async (
       event.preventDefault();
       form.inert = true;
       try {
-        await api('/rules' + (rule.id ? '/' + rule.id : ''), {
-          method: rule.id ? 'PUT' : 'POST',
+        const saved = await api('/rules' + (savedId ? '/' + savedId : ''), {
+          method: savedId ? 'PUT' : 'POST',
           body: {
             name: form.elements.name.value,
             enabled: form.elements.enabled.checked,
@@ -257,12 +261,35 @@ window.InkwellRules = async (
             older_than_days: Number(form.elements.older_than_days.value),
           },
         });
+        savedId = savedId || saved.id;
+        if (epoch === editorEpoch) editingId = savedId;
         await reloadList();
+        let applied = null;
+        if (context && event.submitter?.name === 'apply_message') {
+          try {
+            applied = (
+              await api('/rules/' + savedId + '/apply-message', {
+                method: 'POST',
+                body: { message_id: context.message_id },
+              })
+            ).applied;
+            await foldersChanged();
+          } catch (error) {
+            toast('Rule saved, but applying failed: ' + error.message);
+            return;
+          }
+        }
         if (isCurrent() && root.isConnected && epoch === editorEpoch) {
           editor();
           root.querySelector('#rules-list').scrollIntoView({ block: 'nearest' });
         }
-        toast('Rule saved. Future imports use it immediately.');
+        toast(
+          applied === null
+            ? 'Rule saved. Future imports use it immediately.'
+            : applied
+              ? 'Rule saved and applied to this local message.'
+              : 'Rule saved; this message did not match, or action limits / Not Junk protection prevented applying it.',
+        );
       } catch (error) {
         toast(error.message);
       } finally {
@@ -372,5 +399,6 @@ window.InkwellRules = async (
     }
   };
   renderList();
-  editor();
+  editor(sourceMessage?.rule || {}, sourceMessage);
+  if (sourceMessage) root.querySelector('#rule-form [name=name]').focus();
 };

@@ -93,11 +93,15 @@ function canMarkNotJunk(message) {
   );
 }
 function showMessageMenu(id, trigger, event) {
+  $('#message-menu [data-action=delete]').hidden = !['trash', 'drafts'].includes(
+    (state.messages.find((m) => m.id === id) || state.selected)?.folder,
+  );
   $('#message-menu [data-action=restore]').hidden =
     (state.messages.find((m) => m.id === id) || state.selected)?.folder !== 'trash';
   $('#message-menu [data-action=not-junk]').hidden = !canMarkNotJunk(
     state.messages.find((m) => m.id === id) || state.selected,
   );
+  $('#message-menu [data-action=appearance]').hidden = state.selected?.id !== id;
   const rect = trigger.getBoundingClientRect();
   messageMenu.show(id, trigger, event?.clientX || rect.left, event?.clientY || rect.bottom);
 }
@@ -467,7 +471,10 @@ async function navigate(route, { historyMode = 'push' } = {}) {
   else if (view === 'settings') await renderSettings();
   else if (view === 'rules') {
     const generation = state.generation;
+    const sourceMessage = state.ruleSeed;
+    state.ruleSeed = null;
     await InkwellRules($('#workspace'), {
+      sourceMessage,
       foldersChanged: refreshCounts,
       api,
       esc,
@@ -716,6 +723,18 @@ async function editTags(message) {
 async function messageAction(action, id) {
   const generation = state.generation;
   if (action === 'open') return openMessage(id);
+  if (action === 'apply-rule') {
+    const seed = await api('/rules/from-message/' + id);
+    if (generation !== state.generation) return;
+    state.ruleSeed = seed;
+    return navigate('rules');
+  }
+  if (['star', 'unstar'].includes(action) && state.selected?.id === id)
+    return setReaderStar(state.selected, action === 'star');
+  if (action === 'appearance') {
+    if (state.selected?.id === id) $('#reader-appearance')?.click();
+    return;
+  }
   const m = await api('/messages/' + id);
   if (generation !== state.generation) return;
   if (action === 'tags') return editTags(m);
@@ -883,6 +902,29 @@ async function openMessage(id) {
   renderReader();
   await refreshCounts();
 }
+async function setReaderStar(m, starred) {
+  const button = $('#reader-star');
+  if (button?.disabled) return;
+  if (button) button.disabled = true;
+  try {
+    await api('/messages/' + m.id, { method: 'PATCH', body: { starred } });
+    m.starred = starred;
+    const listed = state.messages.find((row) => row.id === m.id);
+    if (listed) listed.starred = starred;
+    if (state.selected === m) {
+      renderMessageList();
+      if (button) paintReaderStar(button, starred);
+    }
+    await refreshCounts();
+    if (
+      state.selected === m &&
+      (state.view === 'starred' || state.quick?.starred || preferences.mail_sort === 'starred')
+    )
+      await renderMail();
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
 function paintReaderStar(button, starred) {
   if (!button) return;
   button.setAttribute('aria-pressed', String(starred));
@@ -955,31 +997,7 @@ function renderReader() {
         button.disabled = false;
       }
     });
-  on($('#reader-star'), 'click', async () => {
-    const button = $('#reader-star');
-    button.disabled = true;
-    try {
-      const starred = !m.starred;
-      await api('/messages/' + m.id, { method: 'PATCH', body: { starred } });
-      m.starred = starred;
-      const listed = state.messages.find((row) => row.id === m.id);
-      if (listed) listed.starred = starred;
-      if (state.selected === m) {
-        renderMessageList();
-        paintReaderStar(button, starred);
-      }
-      await refreshCounts();
-      if (
-        state.selected === m &&
-        (state.view === 'starred' || state.quick?.starred || preferences.mail_sort === 'starred')
-      )
-        await renderMail();
-    } catch (error) {
-      toast(error.message);
-    } finally {
-      button.disabled = false;
-    }
-  });
+  on($('#reader-star'), 'click', () => setReaderStar(m, !m.starred));
   void InkwellHtmlPreview($('#message-preview'), m, {
     api,
     navigate,

@@ -26,10 +26,11 @@ Search matches sender, To/Cc/Bcc addresses, subject, plain-text body and local t
 
 ## Expanded message context menu
 
-Right-click a message, press Shift+F10/Context Menu, or use its **⋯** button. The reader has the same menu. Keyboard arrows/Home/End navigate it; Escape returns focus. Long menus scroll on small screens.
+Right-click a message, press Shift+F10/Context Menu, or use its **⋯** button. The reader has the same menu. The compact first level exposes common actions and **File**, **Mark**, **Find related** and **More actions** submenus. Desktop submenus fly out and flip near screen edges; touch screens use a drill-down panel with Back. Up/Down/Home/End navigate, Right opens a submenu, Left returns, and Escape closes a submenu before closing the whole menu and restoring focus. Long panels scroll within viewport bounds; labels do not wrap.
 
 Available actions:
 
+- **Apply rule…** opens a prefilled rule editor for sender, subject, domain or TLD. Save for future imports or explicitly save and apply just to this selected cached copy; see [context rules](RULE-MANAGER-COMPOSE.md#rules-from-a-message).
 - Find all by sender, organisation or subject.
 - Open message / edit local draft.
 - Reply, Forward, or New message to sender (opens a compose form; never sends automatically).
@@ -55,7 +56,7 @@ These are working actions, **not full Outlook menu parity**. Reply all, provider
 
 ## Reader toolbar
 
-The reader uses consistent SVG icons and compact labels (three pixels below the configured base size, minimum 12px). Direct actions include Reply, Forward, archive/restore, mark unread, star/unstar, Move, Tags, Save text, add sender to contacts, copy sender address, reader light/dark, Trash/delete and More. Controls wrap on narrow panes and retain 44px touch targets on phones. Save text exports the readable cached message, not original MIME. Actions remain local except explicitly sending from the composer; no unsupported provider operations are shown as working buttons.
+The reader uses consistent SVG icon-only buttons with tooltips and accessible names. Direct actions include Reply, Forward, archive/restore, mark unread, star/unstar, Move, Tags, Save text, add sender to contacts, copy sender address, reader light/dark, Trash/delete and More. Controls stay on one line and retain 44px touch targets on phones. Pane-width container queries move secondary controls out of the visible toolbar when necessary; every such action remains in More's grouped menu, including reader light/dark when a reader is open. Extremely narrow panes have an internal horizontal-scroll fallback instead of page overflow. Save text exports the readable cached message, not original MIME. Actions remain local except explicitly sending from the composer; no unsupported provider operations are shown as working buttons.
 
 ## Tags and quick filters
 

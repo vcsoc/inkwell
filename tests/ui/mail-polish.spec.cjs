@@ -217,6 +217,7 @@ test('Trash context menu restores the previous folder and never wraps its labels
   await page.goto('/#/trash');
   await page.locator(`[data-more="${id}"]`).click();
   const menu = page.locator('#message-menu');
+  await menu.getByRole('menuitem', { name: 'File', exact: true }).click();
   await expect(menu.getByRole('menuitem', { name: 'Restore from Trash' })).toBeVisible();
   expect(
     await menu
@@ -224,7 +225,7 @@ test('Trash context menu restores the previous folder and never wraps its labels
       .evaluateAll((nodes) => nodes.every((n) => getComputedStyle(n).whiteSpace === 'nowrap')),
   ).toBe(true);
   const box = await menu.boundingBox();
-  expect(box.width).toBeGreaterThanOrEqual(Math.min(360, page.viewportSize().width - 16));
+  expect(box.width).toBeLessThanOrEqual(page.viewportSize().width - 16);
   await menu.getByRole('menuitem', { name: 'Restore from Trash' }).click();
   await expect(page.locator(`[data-message="${id}"]`)).toHaveCount(0);
   expect((await api(page, '/messages/' + id)).folder).toBe('archive');

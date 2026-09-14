@@ -222,5 +222,5 @@ def test_legacy_schema_migration_preserves_accounts(tmp_path, monkeypatch):
     store.init()
     with store.db() as db:
         account = dict(db.execute("SELECT * FROM accounts").fetchone())
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 9
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 10
     assert account["provider"] == "imap" and account["secret"] == "legacy-secret"

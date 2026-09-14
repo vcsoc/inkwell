@@ -1,6 +1,7 @@
 """Multi-condition, multi-action rules for local imported copies only."""
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 from fastapi import APIRouter, HTTPException
@@ -62,7 +63,16 @@ def delete_folder(id: int):
 class Condition(BaseModel):
     model_config = ConfigDict(extra="forbid")
     field: Literal[
-        "sender", "domain", "subject", "recipient", "body", "tag", "unread", "starred", "age_days"
+        "sender",
+        "domain",
+        "tld",
+        "subject",
+        "recipient",
+        "body",
+        "tag",
+        "unread",
+        "starred",
+        "age_days",
     ]
     operator: Literal[
         "is", "not_is", "contains", "not_contains", "starts_with", "ends_with", "gt", "lt"
@@ -75,6 +85,7 @@ class Condition(BaseModel):
         if not self.value or any(ord(c) < 32 for c in self.value):
             raise ValueError("Condition needs a value without control characters")
         allowed = {
+            "tld": {"is", "not_is"},
             "tag": {"is", "not_is"},
             "unread": {"is", "not_is"},
             "starred": {"is", "not_is"},
@@ -90,6 +101,13 @@ class Condition(BaseModel):
             )
             if not self.value:
                 raise ValueError("Enter an exact sender address or domain")
+        if self.field == "tld":
+            try:
+                self.value = self.value.lstrip(".").encode("idna").decode("ascii").lower()
+            except UnicodeError:
+                raise ValueError("Enter a single TLD such as .com or .ca")
+            if not re.fullmatch(r"[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?", self.value):
+                raise ValueError("Enter a single TLD such as .com or .ca, not co.uk")
         if self.field in {"unread", "starred"} and self.value not in {"true", "false"}:
             raise ValueError("Choose true or false")
         if self.field == "age_days" and (
@@ -228,6 +246,77 @@ def configured_rules(db):
     ]
 
 
+def sender_tld(domain):
+    label = domain.rsplit(".", 1)[-1]
+    return (
+        label if "." in domain and re.fullmatch(r"[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?", label) else ""
+    )
+
+
+@router.get("/rules/from-message/{id}")
+def from_message(id: int):
+    from . import not_junk
+
+    with store.db() as db:
+        m = db.execute("SELECT * FROM messages WHERE id=?", (id,)).fetchone()
+        if not m:
+            raise HTTPException(404, "Message not found")
+        sender = sender_key(m["sender"])
+        domain = domain_key(m["sender"])
+        values = {
+            "sender": sender,
+            "domain": domain,
+            "subject": m["subject"][:500],
+            "tld": sender_tld(domain),
+        }
+        field = "sender" if sender else "subject"
+        return {
+            "message_id": id,
+            "subject": m["subject"],
+            "can_apply": not_junk.incoming(db, m),
+            "values": values,
+            "rule": {
+                "name": ("Rule for " + (sender or m["subject"]))[:100],
+                "conditions": [
+                    {
+                        "field": field,
+                        "operator": "is" if sender else "contains",
+                        "value": values[field],
+                    }
+                ],
+                "actions": [{"type": "add_tag", "value": ""}],
+            },
+        }
+
+
+class ApplyMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    message_id: int = Field(gt=0)
+
+
+@router.post("/rules/{id}/apply-message")
+def apply_message(id: int, data: ApplyMessage):
+    from . import not_junk
+
+    with store.db() as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute("SELECT config FROM mail_rules WHERE id=?", (id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Rule not found")
+        rule = Rule.model_validate_json(row["config"])
+        validate_rule(rule, db)
+        m = db.execute("SELECT * FROM messages WHERE id=?", (data.message_id,)).fetchone()
+        if not m:
+            raise HTTPException(404, "Message not found")
+        if not not_junk.incoming(db, m):
+            raise HTTPException(422, "Rules cannot be applied to drafts or sent copies")
+        return {
+            "applied": apply(
+                db, m["id"], configured=[rule], force=True, safe_sender=not_junk.remembered(db, m)
+            )
+        }
+
+
 def matches(condition, m, now, db, cache):
     field, op, value = condition.field, condition.operator, condition.value
     if field == "age_days":
@@ -246,6 +335,9 @@ def matches(condition, m, now, db, cache):
         tag = tag_store.selected(db, [int(value)])[0]
         equal = any(t.casefold() == tag["key"] for t in json.loads(m["tags"]))
         return equal if op == "is" else not equal
+    if field == "tld":
+        text = sender_tld(m["domain_key"])
+        return bool(text) and (text == value if op == "is" else text != value)
     column = {"sender": "sender_key", "domain": "domain_key"}.get(field, field)
     if column not in cache:
         cache[column] = m[column].casefold()

@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { selectEmailMenuAction } = require('./helpers.cjs');
 for (const [kind, label] of [
   ['sender', 'Find all by sender'],
   ['organisation', 'Find all by organisation'],
@@ -38,7 +39,7 @@ for (const [kind, label] of [
     await expect(row).toBeVisible();
     if (info.project.name === 'desktop') await row.click({ button: 'right' });
     else await row.getByRole('button', { name: 'More email actions' }).click();
-    await page.getByRole('menuitem', { name: label, exact: true }).click();
+    await selectEmailMenuAction(page, label);
     await expect(page.locator('#breadcrumb')).toHaveText('Grouped mail');
     await expect(page.locator('.collection-banner')).toContainText(`${setup.total} messages`);
     await expect(page.locator('.message-row')).toHaveCount(setup.total);
@@ -66,12 +67,22 @@ test('keyboard context menu navigation and dismissal restore focus', async ({ pa
   await row.focus();
   await page.keyboard.press('Shift+F10');
   await expect(
+    page.getByRole('menuitem', { name: 'Open message / edit draft', exact: true }),
+  ).toBeFocused();
+  await page.getByRole('menuitem', { name: 'Find related', exact: true }).focus();
+  await page.keyboard.press('ArrowRight');
+  // Mobile drill-down starts with Back; desktop starts with the first action.
+  if (await page.locator('#message-sub-find .submenu-back').isVisible())
+    await page.keyboard.press('ArrowDown');
+  await expect(
     page.getByRole('menuitem', { name: 'Find all by sender', exact: true }),
   ).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(
     page.getByRole('menuitem', { name: 'Find all by organisation', exact: true }),
   ).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByRole('menuitem', { name: 'Find related', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.locator('#message-menu')).not.toBeVisible();
   await expect(row).toBeFocused();

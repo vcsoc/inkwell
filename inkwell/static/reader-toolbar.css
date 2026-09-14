@@ -1,8 +1,13 @@
+.reader {
+  container-type: inline-size;
+  container-name: mail-reader;
+}
 .reader .reader-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   margin-bottom: 20px;
 }
 .reader .reader-actions .reader-tool {
@@ -11,7 +16,9 @@
   justify-content: center;
   gap: 6px;
   min-height: 36px;
-  padding: 7px 9px;
+  min-width: 36px;
+  flex: none;
+  padding: 7px;
   white-space: nowrap;
   font-size: max(12px, calc(var(--font-size, 16px) - 3px));
   line-height: 1.3;
@@ -46,5 +53,57 @@
 @media (pointer: coarse), (max-width: 700px) {
   .reader .reader-actions .reader-tool {
     min-height: 44px;
+    min-width: 44px;
+  }
+}
+.reader-tool > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@container mail-reader (max-width: 620px) {
+  #reader-save,
+  #reader-contact,
+  #reader-copy {
+    display: none;
+  }
+}
+@container mail-reader (max-width: 500px) {
+  #forward,
+  #unread-message,
+  #reader-star,
+  #reader-move,
+  #archive-message,
+  #reader-not-junk {
+    display: none;
+  }
+}
+@media (pointer: coarse) {
+  @container mail-reader (max-width: 760px) {
+    #reader-save,
+    #reader-contact,
+    #reader-copy {
+      display: none;
+    }
+  }
+  @container mail-reader (max-width: 600px) {
+    #forward,
+    #unread-message,
+    #reader-star,
+    #reader-move,
+    #archive-message,
+    #reader-not-junk {
+      display: none;
+    }
+  }
+}
+@container mail-reader (max-width: 320px) {
+  #edit-tags {
+    display: none;
   }
 }

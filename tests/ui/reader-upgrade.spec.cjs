@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { readerAction } = require('./helpers.cjs');
 const { execFileSync } = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
@@ -111,11 +112,11 @@ test('unread and editable reusable tags appear as pills; text preview preference
   const row = page.locator(`[data-message="${id}"]`);
   await expect(row.locator('.unread-pill')).toHaveText('Unread');
   await row.click();
-  await page.getByRole('button', { name: 'Tags…', exact: true }).click();
+  await readerAction(page, 'Tags…', 'Edit tags…');
   await page.getByLabel('Tags (comma-separated)').fill('Project, Follow up');
   await page.getByRole('button', { name: 'Save tags', exact: true }).click();
   await expect(page.locator('#reader .tag-pill')).toHaveText(['Project', 'Follow up']);
-  await page.getByRole('button', { name: 'Tags…', exact: true }).click();
+  await readerAction(page, 'Tags…', 'Edit tags…');
   await page.getByLabel('Tags (comma-separated)').fill('');
   await page
     .getByRole('group', { name: 'Existing tags' })
@@ -222,24 +223,27 @@ test('Reader toolbar uses compact SVG controls with working star, move and sende
     .first()
     .evaluate((b) => parseFloat(getComputedStyle(b).fontSize));
   expect(size).toBeLessThan(16);
-  await toolbar.getByRole('button', { name: 'Star message', exact: true }).click();
-  await expect(
-    toolbar.getByRole('button', { name: 'Unstar message', exact: true }),
-  ).toHaveAttribute('aria-pressed', 'true');
+  await readerAction(page, 'Star message', 'Star (local)');
+  await expect(page.locator('#reader-star')).toHaveAttribute('aria-pressed', 'true');
   expect((await request(page, '/messages/' + id)).starred).toBe(1);
-  await toolbar.getByRole('button', { name: 'Copy sender address', exact: true }).click();
+  await readerAction(page, 'Copy sender address', 'Copy sender address…');
   await expect(page.locator('#modal-body input')).toHaveValue('alex@example.org');
   await page.locator('#close-modal').click();
-  await toolbar.getByRole('button', { name: 'Add sender to contacts', exact: true }).click();
+  await readerAction(page, 'Add sender to contacts', 'Add sender to People…');
   await expect(page.getByLabel('Email', { exact: true })).toHaveValue('alex@example.org');
   await page.locator('#close-modal').click();
+  const tops = await toolbar
+    .locator('button:visible')
+    .evaluateAll((nodes) => nodes.map((n) => Math.round(n.getBoundingClientRect().top)));
+  expect(new Set(tops).size).toBe(1);
+  expect(await toolbar.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   const box = await toolbar.boundingBox();
   expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize().width);
   await page.screenshot({
     path: 'test-results/' + info.project.name + '-reader-toolbar.png',
     fullPage: true,
   });
-  await toolbar.getByRole('button', { name: 'Move local copy', exact: true }).click();
+  await readerAction(page, 'Move local copy', 'Move local copy…');
   await page.locator('#move-local-form select').selectOption('archive');
   await page.locator('#move-local-form button[type=submit]').click();
   await expect.poll(async () => (await request(page, '/messages/' + id)).folder).toBe('archive');
@@ -255,7 +259,7 @@ test('Not Junk is available in context menu and reader, remembers sender and can
   await request(page, '/messages/' + id, 'PATCH', { folder: 'trash' });
   await page.goto('/#/trash');
   await page.locator(`[data-message="${id}"]`).click();
-  await page.getByRole('button', { name: 'Not Junk', exact: true }).click();
+  await readerAction(page, 'Not Junk', 'Not Junk');
   await expect.poll(async () => (await request(page, '/messages/' + id)).folder).toBe('inbox');
   await page.goto('/#/rules');
   await expect(page.locator('#not-junk-senders')).toContainText('alex@example.org');

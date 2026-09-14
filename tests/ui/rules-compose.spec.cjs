@@ -222,9 +222,10 @@ test('Context menu text is smaller without losing touch targets or no-wrap label
     base: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--font-size')),
     height: el.getBoundingClientRect().height,
     wrap: getComputedStyle(el).whiteSpace,
+    touch: matchMedia('(pointer: coarse), (max-width: 760px)').matches,
   }));
   expect(values.size).toBe(Math.max(12, values.base - 2));
-  expect(values.height).toBeGreaterThanOrEqual(44);
+  expect(values.height).toBeGreaterThanOrEqual(values.touch ? 44 : 34);
   expect(values.wrap).toBe('nowrap');
 });
 
