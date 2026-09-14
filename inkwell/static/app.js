@@ -318,15 +318,22 @@ function navigation() {
     .map(([id, icon, name], i) => {
       const local = state.localFolders?.find((f) => 'local-' + f.id === id);
       const parent = local?.parent;
+      const divider =
+        i === 6
+          ? '<div class="nav-divider"></div>' +
+            (state.localFolders?.length
+              ? '<div id="folder-root-drop">Local folders · top level</div>'
+              : '')
+          : '';
       if (
         parent &&
         (['inbox', 'archive', 'sent', 'drafts', 'trash'].includes(parent) ||
           state.localFolders.some((f) => 'local-' + f.id === parent) ||
           state.remoteFolders.some((f) => 'remote:' + f.id === parent))
       )
-        return '';
-      const button = `<button class="nav-item ${state.view === id ? 'active' : ''}" data-view="${id}" aria-label="${esc(name)}"><span aria-hidden="true">${icon}</span>${esc(local?.name || name)}${id === 'inbox' && state.counts.find((c) => c.folder === id)?.unread ? `<span class="nav-count">${state.counts.find((c) => c.folder === id).unread}</span>` : ''}</button>`;
-      return `${i === 6 ? '<div class="nav-divider"></div>' : ''}` + localBranch(id, button);
+        return divider;
+      const button = `<button class="nav-item ${state.view === id ? 'active' : ''}" data-view="${id}" aria-label="${esc(name)}"><span aria-hidden="true">${icon}</span>${local ? `<span class="folder-name">${esc(local.name)}</span>` : esc(name)}${id === 'inbox' && state.counts.find((c) => c.folder === id)?.unread ? `<span class="nav-count">${state.counts.find((c) => c.folder === id).unread}</span>` : ''}</button>`;
+      return divider + localBranch(id, button);
     })
     .join('');
   const inboxButton = $('#navigation [data-view="inbox"]');
@@ -375,6 +382,7 @@ function navigation() {
   $('#tag-manager-link').classList.toggle('active', state.view === 'tags');
   $('#rule-manager-link').classList.toggle('active', state.view === 'rules');
   selection.bindFolders();
+  folderDrag.bind();
 }
 function installLocalFolders(localFolders) {
   state.localFolders = localFolders;
@@ -385,6 +393,109 @@ function installLocalFolders(localFolders) {
     0,
     ...localFolders.map((folder) => ['local-' + folder.id, '▱', folder.path || folder.name]),
   );
+}
+async function applyFolderMove(data) {
+  await api('/local-folders/move', { method: 'POST', body: data });
+  const destination =
+    data.placement === 'inside'
+      ? data.target
+      : state.localFolders.find((f) => 'local-' + f.id === data.target)?.parent;
+  if (destination)
+    collapsedFolders.delete(
+      destination.startsWith('remote:') ? Number(destination.slice(7)) : destination,
+    );
+  await refreshCounts();
+  $('#rule-editor')?.dispatchEvent(
+    new CustomEvent('inkwell-folders-changed', { detail: state.localFolders }),
+  );
+  if (state.view.startsWith('local-')) {
+    const title = folders.find((f) => f[0] === state.view)?.[2];
+    if (title) {
+      $('#breadcrumb').textContent = title;
+      $('#page-title').innerHTML = esc(title) + '<span>.</span>';
+      document.title = title + ' — inkwell';
+    }
+  }
+  toast('Local folder moved. Mail and rules were preserved.');
+}
+const folderDrag = InkwellFolderDrag($('#navigation'), {
+  folders: () => state.localFolders || [],
+  onMove: applyFolderMove,
+  onError: toast,
+});
+async function moveFolderForm(selected) {
+  if (!(await requestModalClose())) return;
+  const source = state.localFolders.find((f) => 'local-' + f.id === selected.key);
+  if (!source) return;
+  const excluded = new Set([selected.key]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const f of state.localFolders)
+      if (excluded.has(f.parent) && !excluded.has('local-' + f.id)) {
+        excluded.add('local-' + f.id);
+        changed = true;
+      }
+  }
+  modal(
+    'Move folder',
+    `<form id="folder-move-form"><p>${esc(source.path || source.name)}</p><p class="fine-print">Local folders only. Mail stays in the same folder; server folders are unchanged.</p><label class="field">Placement<select name="placement" aria-label="Placement"><option value="inside">Inside folder</option><option value="before">Before folder</option><option value="after">After folder</option></select></label><label class="field">Target folder<select name="target" aria-label="Target folder"></select></label><p id="folder-move-preview" class="notice" aria-live="polite"></p><div class="form-actions"><button class="primary">Move folder</button></div></form>`,
+  );
+  const form = $('#folder-move-form');
+  const update = () => {
+    const previous = form.elements.target.value;
+    const choices =
+      form.elements.placement.value === 'inside'
+        ? [
+            ['', 'Top level'],
+            ...['inbox', 'archive', 'sent', 'drafts', 'trash'].map((k) => [
+              k,
+              k[0].toUpperCase() + k.slice(1),
+            ]),
+            ...state.remoteFolders.map((f) => ['remote:' + f.id, f.path + ' (local view)']),
+          ]
+        : [];
+    choices.push(
+      ...state.localFolders
+        .filter((f) => !excluded.has('local-' + f.id))
+        .map((f) => ['local-' + f.id, f.path || f.name]),
+    );
+    form.elements.target.innerHTML = choices
+      .map(([key, label]) => `<option value="${key}">${esc(label)}</option>`)
+      .join('');
+    if (choices.some(([key]) => key === previous)) form.elements.target.value = previous;
+    $('button', form).disabled = !choices.length;
+    preview();
+  };
+  const preview = () => {
+    $('#folder-move-preview').textContent =
+      'Place ' +
+      source.name +
+      ' ' +
+      form.elements.placement.value +
+      ' ' +
+      (form.elements.target.selectedOptions[0]?.textContent || '—');
+  };
+  form.elements.placement.onchange = update;
+  form.elements.target.onchange = preview;
+  update();
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const button = $('button', form);
+    if (button.disabled) return;
+    button.disabled = true;
+    try {
+      await applyFolderMove({
+        id: source.id,
+        target: form.elements.target.value,
+        placement: form.elements.placement.value,
+      });
+      if (form.isConnected) await requestModalClose();
+    } catch (error) {
+      toast(error.message);
+      button.disabled = false;
+    }
+  };
 }
 InkwellFolderMenu(
   $('#navigation'),
@@ -421,6 +532,7 @@ InkwellFolderMenu(
     };
   },
   toast,
+  moveFolderForm,
 );
 async function refreshCounts() {
   const [counts, accounts, remoteFolders, localFolders] = await Promise.all([

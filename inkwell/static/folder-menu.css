@@ -10,6 +10,9 @@
   max-width: calc(100vw - 16px);
   overflow: auto;
 }
+.folder-context-menu [hidden] {
+  display: none !important;
+}
 .folder-context-menu button {
   width: 100%;
   min-height: 44px;

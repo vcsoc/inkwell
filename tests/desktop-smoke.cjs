@@ -192,6 +192,12 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
     await expect(
       window.locator('#navigation [aria-label="Archive / Desktop subfolder"]'),
     ).toBeAttached();
+    const movingFolder = window.locator('#navigation [aria-label="Archive / Desktop subfolder"]');
+    if (!(await movingFolder.isVisible())) await window.locator('#menu').click();
+    await movingFolder.dragTo(window.locator('#navigation [data-view=inbox]'));
+    await expect(
+      window.locator('[data-local-branch="inbox"] [aria-label="Inbox / Desktop subfolder"]'),
+    ).toBeAttached();
     await sidebarClick(window, '#rule-manager-link');
     await expect(window.locator('#not-junk-senders')).toContainText('@');
     expect(

@@ -6,10 +6,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from . import store, message_moves, tag_store
+from . import store, message_moves, tag_store, folder_tree
 from .message_keys import sender_key, domain_key
 
 router = APIRouter(prefix="/api")
+router.include_router(folder_tree.router)
 
 
 class Folder(BaseModel):
@@ -28,7 +29,9 @@ class Folder(BaseModel):
 @router.get("/local-folders")
 def folders():
     with store.db() as db:
-        result = [dict(r) for r in db.execute("SELECT * FROM local_folders ORDER BY name")]
+        result = [
+            dict(r) for r in db.execute("SELECT * FROM local_folders ORDER BY position,name,id")
+        ]
         labels = {key: key.title() for key in ("inbox", "archive", "sent", "drafts", "trash")}
         labels.update(
             {
@@ -57,31 +60,7 @@ def add_folder(data: Folder):
     with store.db() as db:
         db.execute("BEGIN IMMEDIATE")
         parent = data.parent
-        if parent not in ("", "inbox", "archive", "sent", "drafts", "trash"):
-            if re.fullmatch(r"local-[1-9][0-9]*", parent):
-                if int(parent[6:]) >= 2**63:
-                    raise HTTPException(422, "Invalid parent folder")
-                cursor = parent
-                depth = 0
-                while cursor.startswith("local-"):
-                    row = db.execute(
-                        "SELECT parent FROM local_folders WHERE id=?", (int(cursor[6:]),)
-                    ).fetchone()
-                    if not row:
-                        raise HTTPException(404, "Parent folder no longer exists")
-                    depth += 1
-                    if depth >= 32:
-                        raise HTTPException(422, "Maximum folder nesting reached")
-                    cursor = row["parent"]
-            elif re.fullmatch(r"remote:[1-9][0-9]*", parent):
-                if int(parent[7:]) >= 2**63:
-                    raise HTTPException(422, "Invalid parent folder")
-                if not db.execute(
-                    "SELECT 1 FROM remote_folders WHERE id=?", (int(parent[7:]),)
-                ).fetchone():
-                    raise HTTPException(404, "Parent folder no longer exists")
-            else:
-                raise HTTPException(422, "Invalid parent folder")
+        folder_tree.parent_depth(db, parent)
         if db.execute(
             "SELECT 1 FROM local_folders WHERE name=? COLLATE NOCASE AND parent=?",
             (data.name, parent),
@@ -89,7 +68,8 @@ def add_folder(data: Folder):
             raise HTTPException(409, "A folder in this location already has that name")
         return {
             "id": db.execute(
-                "INSERT INTO local_folders(name,parent) VALUES (?,?)", (data.name, parent)
+                "INSERT INTO local_folders(name,parent,position) VALUES (?,?,(SELECT COALESCE(MAX(position),-1)+1 FROM local_folders))",
+                (data.name, parent),
             ).lastrowid
         }
 

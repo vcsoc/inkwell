@@ -139,6 +139,7 @@ window.InkwellRules = async (
       if (targets[i][0].startsWith('local-')) targets.splice(i, 1);
     targets.push(...event.detail.map((f) => ['local-' + f.id, f.path || f.name]));
     refreshTargets();
+    renderList();
   });
   const reloadList = async () => {
     const epoch = ++listEpoch;

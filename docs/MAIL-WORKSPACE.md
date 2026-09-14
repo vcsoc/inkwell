@@ -22,6 +22,18 @@ Subfolders are **local to inkwell**, even beneath an Outlook folder. No provider
 
 Schema **11** preserves existing folder IDs, names, messages, rules and the folder ID high-water mark while adding parent relationships. Downgrading requires a compatible database/vault-key backup. Creating folders neither files existing mail nor applies rules.
 
+## Move and reorder local folders
+
+Drag a **local folder** by its name. Hover near the top or bottom of another local folder for **Place before / Place after**; hover over its middle to **Move inside**. A themed placement marker and inside-target outline preview the result before releasing. Dropping into a folder appends the moved branch after its existing local children. Hovering over a collapsed destination opens it after a short delay. Drop on **Local folders · top level** to move a branch back to the root.
+
+Nothing is committed until a valid drop. Escape or dropping outside a valid destination cancels. A folder cannot go inside itself or its descendants, exceed 32 local levels, or collide with a sibling name. The backend revalidates under a transaction; failures leave the hierarchy unchanged.
+
+For keyboard/touch use, right-click or hold a local folder and choose **Move folder…**. Choose Inside, Before or After and a target; the form shows a placement preview. **Move folder** applies immediately without confirmation.
+
+The entire local branch moves, preserving folder IDs, mail contents, message membership, rule references and child order. Ordering persists across restarts; new folders append to their siblings. Missing-parent branches shown at the root can be reordered with other root folders. Built-in folders and the discovered Outlook hierarchy remain fixed; they accept local children but cannot themselves be dragged or reordered. This is not provider folder management and does not move server mail. Mail-message dragging continues to file messages, separately from folder dragging.
+
+Schema **12** adds persistent folder positions and preserves the former alphabetical order on upgrade. Rollback requires a compatible pre-upgrade database and vault key.
+
 ## Top-centre search
 
 Use the top search field: after at least two trimmed characters, results update 280 ms after typing stops. Enter or the search button also works. Search defaults to **All folders**, including cached Junk and tagged messages outside Inbox. Clearing restores the folder being browsed and resets pagination/quick filters. The scope selector controls searches, not ordinary empty-query folder browsing. Choose a scope:

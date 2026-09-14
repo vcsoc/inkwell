@@ -1,5 +1,5 @@
 'use strict';
-window.InkwellFolderMenu = (navigation, create, onError) => {
+window.InkwellFolderMenu = (navigation, create, onError, move) => {
   const menu = document.createElement('div');
   menu.id = 'folder-menu';
   menu.className = 'folder-context-menu hidden';
@@ -9,12 +9,17 @@ window.InkwellFolderMenu = (navigation, create, onError) => {
   item.type = 'button';
   item.textContent = 'New subfolder…';
   item.setAttribute('role', 'menuitem');
-  menu.append(item);
+  const moveItem = document.createElement('button');
+  moveItem.type = 'button';
+  moveItem.textContent = 'Move folder…';
+  moveItem.setAttribute('role', 'menuitem');
+  menu.append(item, moveItem);
   document.body.append(menu);
   let trigger = null,
     parent = null,
     timer = null,
     suppressClick = false;
+  let scrollSnapshot = new Map();
   const target = (e) => {
     const b = e.target.closest('[data-view],[data-remote-folder]');
     if (!b || !navigation.contains(b)) return null;
@@ -30,6 +35,14 @@ window.InkwellFolderMenu = (navigation, create, onError) => {
   const show = (t, x, y) => {
     trigger = t.button;
     parent = { key: t.key, name: trigger.getAttribute('aria-label') || trigger.textContent.trim() };
+    scrollSnapshot = new Map();
+    for (let element = trigger; element; element = element.parentElement)
+      scrollSnapshot.set(element, [element.scrollLeft, element.scrollTop]);
+    scrollSnapshot.set(document, [
+      document.scrollingElement.scrollLeft,
+      document.scrollingElement.scrollTop,
+    ]);
+    moveItem.hidden = !move || !t.key.startsWith('local-');
     menu.classList.remove('hidden');
     const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
     menu.style.maxWidth = Math.max(1, (innerWidth - 16) / zoom) + 'px';
@@ -93,6 +106,11 @@ window.InkwellFolderMenu = (navigation, create, onError) => {
     close(true);
     Promise.resolve(create(selected)).catch((e) => onError(e.message));
   };
+  moveItem.onclick = () => {
+    const selected = parent;
+    close(true);
+    Promise.resolve(move(selected)).catch((e) => onError(e.message));
+  };
   menu.onkeydown = (e) => {
     e.stopPropagation();
     if (['Escape', 'Tab'].includes(e.key)) {
@@ -100,7 +118,15 @@ window.InkwellFolderMenu = (navigation, create, onError) => {
       close(true);
     } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
       e.preventDefault();
-      item.focus();
+      const items = [item, moveItem].filter((b) => !b.hidden),
+        index = items.indexOf(document.activeElement);
+      items[
+        e.key === 'Home'
+          ? 0
+          : e.key === 'End'
+            ? items.length - 1
+            : (index + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
+      ].focus();
     }
   };
   document.addEventListener('pointerdown', (e) => {
@@ -112,7 +138,12 @@ window.InkwellFolderMenu = (navigation, create, onError) => {
   document.addEventListener(
     'scroll',
     (e) => {
-      if (!menu.contains(e.target)) close();
+      if (!menu.contains(e.target)) {
+        const element = e.target === document ? document.scrollingElement : e.target,
+          previous = scrollSnapshot.get(e.target);
+        if (!previous || previous[0] !== element.scrollLeft || previous[1] !== element.scrollTop)
+          close();
+      }
     },
     true,
   );

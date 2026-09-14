@@ -106,9 +106,9 @@ def test_schema_upgrade_keeps_ids_and_high_water_mark(client):
         db.execute("PRAGMA user_version=10")
     store.init()
     assert client.get("/api/local-folders").json() == [
-        {"id": 5, "name": "Keep", "parent": "", "path": "Keep"}
+        {"id": 5, "name": "Keep", "parent": "", "path": "Keep", "position": 0}
     ]
     assert create(client, "New") > 50
     store.init()
     with store.db() as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 11
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 12
