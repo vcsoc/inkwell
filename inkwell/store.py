@@ -154,6 +154,11 @@ def init():
                 "CREATE TABLE not_junk_senders(sender_key TEXT PRIMARY KEY,created_at TEXT NOT NULL)"
             )
             conn.execute("PRAGMA user_version=9")
+        # Repair derived keys from old unquoted Graph display names, without changing
+        # message contents, filing, or sender decisions. Idempotent; no schema change.
+        conn.execute("""UPDATE messages SET sender_key=inkwell_sender_key(sender),
+            domain_key=inkwell_domain_key(sender)
+            WHERE sender_key='' AND inkwell_sender_key(sender)!=''""")
     if os.name != "nt":
         os.chmod(DATA / "inkwell.db", 0o600)
 

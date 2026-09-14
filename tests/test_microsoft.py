@@ -92,8 +92,15 @@ def test_device_flow_validation_pending_slowdown_and_expiry(client, monkeypatch)
     assert client.post(f"/api/microsoft/{flow_id}/poll").status_code == 410
 
 
-def test_graph_sync_and_send(client, monkeypatch):
+@pytest.mark.parametrize("fallback", [False, True])
+def test_graph_sync_and_send(client, monkeypatch, fallback):
     account_id, _ = connect(client, monkeypatch, [])
+    if fallback:
+
+        def reject_address(**kwargs):
+            raise ValueError("Exercise the tolerant incoming-header formatting path")
+
+        monkeypatch.setattr(microsoft, "Address", reject_address)
     calls = []
 
     def handle(request):
@@ -115,7 +122,10 @@ def test_graph_sync_and_send(client, monkeypatch):
                     {
                         "id": "immutable123",
                         "from": {
-                            "emailAddress": {"name": "Friend", "address": "friend@example.com"}
+                            "emailAddress": {
+                                "name": "Friend, Example",
+                                "address": "friend@example.com",
+                            }
                         },
                         "subject": "A Microsoft email",
                         "body": {
@@ -135,6 +145,12 @@ def test_graph_sync_and_send(client, monkeypatch):
     assert client.post("/api/sync").json()[0]["added"] == 1
     assert client.post("/api/sync").json()[0]["added"] == 0
     message = client.get("/api/messages").json()[0]
+    assert message["sender"] == '"Friend, Example" <friend@example.com>'
+    with store.db() as db:
+        assert (
+            db.execute("SELECT sender_key FROM messages WHERE id=?", (message["id"],)).fetchone()[0]
+            == "friend@example.com"
+        )
     body = client.get("/api/messages/" + str(message["id"])).json()["body"]
     assert "Hello" in body and "steal" not in body
     assert (

@@ -2,14 +2,23 @@
 
 import re
 import unicodedata
-from email.utils import parseaddr
+from email.utils import parseaddr, getaddresses
 
 _PREFIX = re.compile(r"^\s*(?:re|fw|fwd)(?:\[\d+\])?\s*:\s*", re.IGNORECASE)
 
 
 def sender_key(value):
     try:
-        address = parseaddr(value or "")[1]
+        parsed = getaddresses([value or ""])
+        address = parsed[0][1] if len(parsed) == 1 else ""
+        if "@" not in address:
+            # Older Graph imports left commas in display names unquoted. Recover only
+            # a single trailing angle address, never choose one sender from a list.
+            legacy = re.fullmatch(r"[^<>@\r\n]+<([^<>\r\n]+)>", value or "")
+            if legacy and not any(ord(c) < 32 or ord(c) == 127 for c in value):
+                candidate = legacy.group(1).strip()
+                if parseaddr(candidate)[1] == candidate:
+                    address = candidate
         local, domain = address.rsplit("@", 1)
         if not local or not domain or any(char.isspace() for char in domain):
             return ""

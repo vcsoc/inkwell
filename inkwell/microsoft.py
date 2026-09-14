@@ -248,6 +248,7 @@ def access_token(account):
 def sync_account(account, folder=None, trusted_only=False):
     from .mail import TextExtractor
     from .message_keys import sender_key
+    from email.utils import quote as quote_display_name
 
     trusted = set()
     if trusted_only:
@@ -290,7 +291,8 @@ def sync_account(account, folder=None, trusted_only=False):
                         )
                     )
                 except (ValueError, IndexError):
-                    sender = f"{sender.get('name', '')} <{sender.get('address', '')}>"
+                    name = quote_display_name(str(sender.get("name") or ""))
+                    sender = f'"{name}" <{sender.get("address", "")}>'
                 if trusted_only and sender_key(sender) not in trusted:
                     continue
                 recipient = ", ".join(

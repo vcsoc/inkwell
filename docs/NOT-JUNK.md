@@ -25,6 +25,10 @@ Sender headers can be spoofed. A remembered address is a filing preference, not 
 
 Under **Rule Manager → Not Junk senders**, **Forget sender** stops the special handling for future imports. It does not undo earlier filing, delete messages or disable ordinary user rules.
 
+## Sender display names
+
+Commas in display names are quoted on Microsoft import. Older cached imports with an unquoted display name and one unambiguous trailing `<address>` are recognized too. Startup repairs their empty sender/domain lookup keys without changing message text, filing, or remembered decisions. Multiple-address lists are not treated as one sender. After updating, restart and retry Not Junk; re-importing is unnecessary.
+
 ## Storage and APIs
 
 Schema **9** adds `not_junk_senders(sender_key,created_at)`. The list is local plaintext data protected by the workspace's filesystem permissions and existing API session/origin/host checks. Earlier binaries cannot open schema 9; rollback requires a consistent earlier database/vault-key backup.
