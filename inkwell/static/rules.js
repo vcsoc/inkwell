@@ -16,7 +16,7 @@ window.InkwellRules = async (
     ['inbox', 'Inbox'],
     ['archive', 'Archive'],
     ['trash', 'Trash'],
-    ...folders.map((f) => ['local-' + f.id, f.name]),
+    ...folders.map((f) => ['local-' + f.id, f.path || f.name]),
     ...remote.map((f) => [
       'remote:' + f.id,
       (accounts.find((a) => a.id === f.account_id)?.email || 'Account') +
@@ -133,6 +133,13 @@ window.InkwellRules = async (
     editorEpoch = 0,
     editingId = null,
     listEpoch = 0;
+  root.querySelector('#rule-editor').addEventListener('inkwell-folders-changed', (event) => {
+    if (!isCurrent() || !root.isConnected) return;
+    for (let i = targets.length - 1; i >= 0; i--)
+      if (targets[i][0].startsWith('local-')) targets.splice(i, 1);
+    targets.push(...event.detail.map((f) => ['local-' + f.id, f.path || f.name]));
+    refreshTargets();
+  });
   const reloadList = async () => {
     const epoch = ++listEpoch;
     const fresh = await api('/rules');

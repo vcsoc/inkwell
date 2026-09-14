@@ -14,6 +14,7 @@ router = APIRouter(prefix="/api")
 
 class Folder(BaseModel):
     name: str = Field(min_length=1, max_length=80)
+    parent: str = Field(default="", max_length=80)
 
     @field_validator("name")
     @classmethod
@@ -27,19 +28,69 @@ class Folder(BaseModel):
 @router.get("/local-folders")
 def folders():
     with store.db() as db:
-        return [dict(r) for r in db.execute("SELECT * FROM local_folders ORDER BY name")]
+        result = [dict(r) for r in db.execute("SELECT * FROM local_folders ORDER BY name")]
+        labels = {key: key.title() for key in ("inbox", "archive", "sent", "drafts", "trash")}
+        labels.update(
+            {
+                "remote:" + str(r["id"]): r["path"]
+                for r in db.execute("SELECT id,path FROM remote_folders")
+            }
+        )
+        by_key = {"local-" + str(r["id"]): r for r in result}
+        for row in result:
+            parts = [row["name"]]
+            parent = row["parent"]
+            seen = set()
+            while parent in by_key and parent not in seen:
+                seen.add(parent)
+                ancestor = by_key[parent]
+                parts.insert(0, ancestor["name"])
+                parent = ancestor["parent"]
+            if parent in labels:
+                parts.insert(0, labels[parent])
+            row["path"] = " / ".join(parts)
+        return result
 
 
 @router.post("/local-folders")
 def add_folder(data: Folder):
     with store.db() as db:
         db.execute("BEGIN IMMEDIATE")
+        parent = data.parent
+        if parent not in ("", "inbox", "archive", "sent", "drafts", "trash"):
+            if re.fullmatch(r"local-[1-9][0-9]*", parent):
+                if int(parent[6:]) >= 2**63:
+                    raise HTTPException(422, "Invalid parent folder")
+                cursor = parent
+                depth = 0
+                while cursor.startswith("local-"):
+                    row = db.execute(
+                        "SELECT parent FROM local_folders WHERE id=?", (int(cursor[6:]),)
+                    ).fetchone()
+                    if not row:
+                        raise HTTPException(404, "Parent folder no longer exists")
+                    depth += 1
+                    if depth >= 32:
+                        raise HTTPException(422, "Maximum folder nesting reached")
+                    cursor = row["parent"]
+            elif re.fullmatch(r"remote:[1-9][0-9]*", parent):
+                if int(parent[7:]) >= 2**63:
+                    raise HTTPException(422, "Invalid parent folder")
+                if not db.execute(
+                    "SELECT 1 FROM remote_folders WHERE id=?", (int(parent[7:]),)
+                ).fetchone():
+                    raise HTTPException(404, "Parent folder no longer exists")
+            else:
+                raise HTTPException(422, "Invalid parent folder")
         if db.execute(
-            "SELECT 1 FROM local_folders WHERE name=? COLLATE NOCASE", (data.name,)
+            "SELECT 1 FROM local_folders WHERE name=? COLLATE NOCASE AND parent=?",
+            (data.name, parent),
         ).fetchone():
-            raise HTTPException(409, "A local folder already has that name")
+            raise HTTPException(409, "A folder in this location already has that name")
         return {
-            "id": db.execute("INSERT INTO local_folders(name) VALUES (?)", (data.name,)).lastrowid
+            "id": db.execute(
+                "INSERT INTO local_folders(name,parent) VALUES (?,?)", (data.name, parent)
+            ).lastrowid
         }
 
 
@@ -52,6 +103,8 @@ def delete_folder(id: int):
             any(a.type == "move" and a.value == key for a in r.actions)
             for r in configured_rules(db)
         )
+        if db.execute("SELECT 1 FROM local_folders WHERE parent=?", (key,)).fetchone():
+            raise HTTPException(409, "Folder has subfolders; nothing was deleted")
         if db.execute("SELECT 1 FROM messages WHERE folder=?", (key,)).fetchone() or referenced:
             raise HTTPException(
                 409, "Folder is not empty or is used by a rule; nothing was deleted"

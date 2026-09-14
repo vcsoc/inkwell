@@ -183,6 +183,15 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
       'background-color',
       'rgb(38, 100, 160)',
     );
+    if (!(await window.locator('#navigation [data-view=archive]').isVisible()))
+      await window.locator('#menu').click();
+    await window.locator('#navigation [data-view=archive]').click({ button: 'right' });
+    await window.getByRole('menuitem', { name: 'New subfolder…', exact: true }).click();
+    await window.getByLabel('Folder name', { exact: true }).fill('Desktop subfolder');
+    await window.getByRole('button', { name: 'Create subfolder', exact: true }).click();
+    await expect(
+      window.locator('#navigation [aria-label="Archive / Desktop subfolder"]'),
+    ).toBeAttached();
     await sidebarClick(window, '#rule-manager-link');
     await expect(window.locator('#not-junk-senders')).toContainText('@');
     expect(

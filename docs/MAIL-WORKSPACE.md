@@ -14,12 +14,20 @@ Opening a server folder imports up to its newest **200 messages** and displays t
 
 Schema version 3 adds stable local folder IDs and message membership. Renaming a discovered server folder preserves its local ID. Missing folders are removed from navigation only after complete discovery; cached messages are not deleted. An older executable cannot reopen a version-3 workspace—retain a pre-upgrade backup if downgrading.
 
+## Create local subfolders
+
+Right-click Inbox, Archive, Sent, Drafts, Trash, a local folder or a displayed server folder and choose **New subfolder…**. Enter a name and click **Create subfolder**. Keyboard users can use Shift+F10/Context Menu; on touch screens, hold a folder. Escape dismisses the menu and restores focus. The name form can be closed without creating anything.
+
+Subfolders are **local to inkwell**, even beneath an Outlook folder. No provider folders or messages are created, moved or deleted. The parent is a navigation relationship, not an inherited Sent/Drafts role. New folders appear beneath their parent with collapsible branches and work as local Move/rule destinations. Paths distinguish equal names under different parents; duplicate names within the same parent are rejected. Nesting is limited to 32 local levels. A folder with children cannot be deleted. If a server parent disappears or its account is disconnected, retained local children appear at the root instead of being deleted.
+
+Schema **11** preserves existing folder IDs, names, messages, rules and the folder ID high-water mark while adding parent relationships. Downgrading requires a compatible database/vault-key backup. Creating folders neither files existing mail nor applies rules.
+
 ## Top-centre search
 
 Use the top search field: after at least two trimmed characters, results update 280 ms after typing stops. Enter or the search button also works. Search defaults to **All folders**, including cached Junk and tagged messages outside Inbox. Clearing restores the folder being browsed and resets pagination/quick filters. The scope selector controls searches, not ordinary empty-query folder browsing. Choose a scope:
 
 - **Current folder:** the folder being viewed.
-- **Folder + subfolders:** that server folder and its descendants. On the aggregate Inbox, includes connected accounts' Inbox descendants.
+- **Folder + subfolders:** the selected folder and its local descendants, plus server descendants where applicable. On the aggregate Inbox, includes connected accounts' Inbox descendants and their attached local folders.
 - **All folders (default):** downloaded mail across accounts, including Junk, Archive, Sent, local Trash and drafts.
 
 Search matches sender, To/Cc/Bcc addresses, subject, plain-text body and local tag names, with filtering before pagination. Plain tag names work; `tag:Work` searches only tag names (substring), `tag:"Follow up"` matches an exact normalized tag name, and `#Work` matches the tag Work or #Work exactly as well as literal #Work in message text. `tags:` is an alias for `tag:`. These are single tag expressions, not a combined query language; use the exact-tag quick filter alongside a plain text query to combine a tag and message terms. Tag matching is Unicode-normalized and case-insensitive. `%`, `_` and backslashes are literal search characters, not SQL wildcards. Cross-folder results carry folder labels. Search does **not** search older messages still only on the server. Open/sync folders first to populate their caches. Changing folders resets the search selector to All folders; ordinary folder browsing still shows only that folder. From a non-mail page, search uses the aggregate Inbox as its browsing context and searches all cached folders by default. Collection searches remain within their collection, and active quick filters continue to apply; the description makes these restrictions explicit. The duplicate in-list search field has been removed. Local-only folders do not have server descendants.

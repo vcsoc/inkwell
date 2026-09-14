@@ -94,7 +94,7 @@ Open **Ask inkwell**, write your prompt, and optionally check **Include selected
 ## Limitations / next milestones
 
 - **Not Outlook feature parity:** Microsoft Graph/OAuth supports delegated inbox reading and sending only. No Exchange/EWS, shared mailboxes or enterprise administration. The distributed build includes a public Inkwell application registration; Microsoft or organizational consent policies still apply.
-- No attachments, rich HTML compose, Reply All, conversation threading, provider-side rules, signatures, scheduled sending or remote folder management. Compose supports multiple To/Cc/Bcc recipients and local address autocomplete; see [Rule Manager and recipients](docs/RULE-MANAGER-COMPOSE.md).
+- No attachments, rich HTML compose, Reply All, conversation threading, provider-side rules, signatures, scheduled sending or remote folder management. Right-click folder creation builds **local-only subfolders**, not server folders. Compose supports multiple To/Cc/Bcc recipients and local address autocomplete; see [Rule Manager and recipients](docs/RULE-MANAGER-COMPOSE.md).
 - No background IMAP IDLE, periodic polling, SMTP Sent-folder upload or two-way flag sync. Startup and post-Microsoft-connection imports are automatic. SMTP copies are stored locally; providers may separately save their own copies.
 - No CalDAV/CardDAV, per-occurrence exceptions, meeting invites, reminders, push notifications, tasks, calendar import or video-meeting creation.
 - Local deletion is not server deletion. A permanently deleted imported message may return on the next sync.

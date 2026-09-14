@@ -49,7 +49,7 @@ def init():
         # Version 1: preserve password accounts while adding Microsoft OAuth metadata.
         conn.execute("BEGIN IMMEDIATE")
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        if version > 10:
+        if version > 11:
             raise RuntimeError("This database was created by a newer inkwell version")
         if version < 1:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)")}
@@ -157,6 +157,26 @@ def init():
         if version < 10:
             # Older rule engines cannot interpret TLD conditions safely.
             conn.execute("PRAGMA user_version=10")
+        if version < 11:
+            sequence = conn.execute(
+                "SELECT seq FROM sqlite_sequence WHERE name='local_folders'"
+            ).fetchone()
+            last_id = sequence[0] if sequence else 0
+            conn.execute("ALTER TABLE local_folders RENAME TO local_folders_old")
+            conn.execute(
+                "CREATE TABLE local_folders(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,parent TEXT NOT NULL DEFAULT '')"
+            )
+            conn.execute("INSERT INTO local_folders(id,name) SELECT id,name FROM local_folders_old")
+            conn.execute("DROP TABLE local_folders_old")
+            updated = conn.execute(
+                "UPDATE sqlite_sequence SET seq=max(seq,?) WHERE name='local_folders'", (last_id,)
+            )
+            if not updated.rowcount:
+                conn.execute(
+                    "INSERT INTO sqlite_sequence(name,seq) VALUES ('local_folders',?)", (last_id,)
+                )
+            conn.execute("CREATE INDEX local_folder_parent ON local_folders(parent)")
+            conn.execute("PRAGMA user_version=11")
         # Repair derived keys from old unquoted Graph display names, without changing
         # message contents, filing, or sender decisions. Idempotent; no schema change.
         conn.execute("""UPDATE messages SET sender_key=inkwell_sender_key(sender),

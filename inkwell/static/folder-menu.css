@@ -1,0 +1,50 @@
+.folder-context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 8px 24px #0002;
+  max-width: calc(100vw - 16px);
+  overflow: auto;
+}
+.folder-context-menu button {
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  white-space: nowrap;
+  padding: 8px 12px;
+  font-size: max(12px, calc(var(--font-size, 16px) - 2px));
+}
+.folder-context-menu button:hover,
+.folder-context-menu button:focus-visible {
+  background: var(--accent-light);
+}
+#navigation [data-local-branch] > summary {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+#navigation [data-local-branch] > summary::before {
+  content: '▸';
+  flex: none;
+  width: 14px;
+  color: var(--muted);
+}
+#navigation [data-local-branch][open] > summary::before {
+  content: '▾';
+}
+#navigation [data-local-branch] > summary > button {
+  min-width: 0;
+}
+#navigation .folder-children .nav-item {
+  min-width: 0;
+}
+#navigation .folder-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

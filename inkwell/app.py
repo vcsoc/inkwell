@@ -343,6 +343,29 @@ def messages(
         params = [remote_folder_id] if remote_folder_id is not None else []
         if remote_folder_id is None:
             clause = "(" + clause + " OR folder='inbox')"
+    if scope == "subfolders":
+        roots = [f"remote:{remote_folder_id}" if remote_folder_id is not None else folder]
+        if remote_folder_id is not None or folder == "inbox":
+            root = "id=?" if remote_folder_id is not None else "well_known='inbox'"
+            descendants = rows(
+                f"""WITH RECURSIVE tree(id,remote_id,account_id) AS (
+                SELECT id,remote_id,account_id FROM remote_folders WHERE {root}
+                UNION SELECT c.id,c.remote_id,c.account_id FROM remote_folders c JOIN tree p
+                ON c.parent_remote_id=p.remote_id AND c.account_id=p.account_id
+            ) SELECT id FROM tree""",
+                (remote_folder_id,) if remote_folder_id is not None else (),
+            )
+            roots.extend("remote:" + str(r["id"]) for r in descendants)
+        clause = (
+            "("
+            + clause
+            + """ OR folder IN (
+            WITH RECURSIVE children(id) AS (
+                SELECT id FROM local_folders WHERE parent IN (SELECT value FROM json_each(?))
+                UNION SELECT f.id FROM local_folders f JOIN children c ON f.parent='local-'||c.id
+            ) SELECT 'local-'||id FROM children))"""
+        )
+        params.append(json.dumps(roots))
     if scope == "all":
         clause, params = "1=1", []
     search, search_params = mail_search.predicate(q)

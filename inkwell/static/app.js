@@ -270,6 +270,23 @@ function requestModalClose() {
 window.inkwellFlushBeforeClose = () =>
   state.composer ? requestModalClose() : Promise.resolve(true);
 const collapsedFolders = new Set();
+function localChildren(parent, seen = new Set()) {
+  return (state.localFolders || [])
+    .filter((f) => f.parent === parent && !seen.has(f.id))
+    .map((f) => {
+      const next = new Set(seen);
+      next.add(f.id);
+      const key = 'local-' + f.id;
+      const button = `<button class="nav-item ${state.view === key ? 'active' : ''}" data-view="${key}" aria-label="${esc(f.path || f.name)}" title="${esc(f.path || f.name)} · Local folder"><span aria-hidden="true">▱</span><span class="folder-name">${esc(f.name)}</span></button>`;
+      return localBranch(key, button, localChildren(key, next));
+    })
+    .join('');
+}
+function localBranch(key, button, children = localChildren(key)) {
+  return children
+    ? `<details data-local-branch="${key}" ${collapsedFolders.has(key) ? '' : 'open'}><summary>${button}</summary><div class="folder-children">${children}</div></details>`
+    : button;
+}
 function remoteTree() {
   return state.accounts
     .filter((a) => state.remoteFolders.some((f) => f.account_id === a.id))
@@ -285,7 +302,8 @@ function remoteTree() {
                 if (seen.has(folder.id)) return '';
                 seen.add(folder.id);
                 const button = `<button class="nav-item remote-folder ${state.remoteFolder?.id === folder.id && state.view === 'remote' ? 'active' : ''}" data-remote-folder="${folder.id}" title="${esc(folder.path)} · ${folder.total_count} on server" aria-label="${esc(folder.path)}"><span aria-hidden="true">▱</span><span class="folder-name">${esc(folder.name)}</span><small>${folder.unread_count || ''}</small></button>`;
-                const children = branch(folder.remote_id, depth + 1);
+                const children =
+                  branch(folder.remote_id, depth + 1) + localChildren('remote:' + folder.id);
                 return children
                   ? `<details data-folder-branch="${folder.id}" ${collapsedFolders.has(folder.id) ? '' : 'open'}><summary>${button}</summary><div class="folder-children">${children}</div></details>`
                   : button;
@@ -297,12 +315,25 @@ function remoteTree() {
 }
 function navigation() {
   $('#navigation').innerHTML = folders
-    .map(
-      ([id, icon, name], i) =>
-        `${i === 6 ? '<div class="nav-divider"></div>' : ''}<button class="nav-item ${state.view === id ? 'active' : ''}" data-view="${id}" aria-label="${esc(name)}"><span aria-hidden="true">${icon}</span>${esc(name)}${id === 'inbox' && state.counts.find((c) => c.folder === id)?.unread ? `<span class="nav-count">${state.counts.find((c) => c.folder === id).unread}</span>` : ''}</button>`,
-    )
+    .map(([id, icon, name], i) => {
+      const local = state.localFolders?.find((f) => 'local-' + f.id === id);
+      const parent = local?.parent;
+      if (
+        parent &&
+        (['inbox', 'archive', 'sent', 'drafts', 'trash'].includes(parent) ||
+          state.localFolders.some((f) => 'local-' + f.id === parent) ||
+          state.remoteFolders.some((f) => 'remote:' + f.id === parent))
+      )
+        return '';
+      const button = `<button class="nav-item ${state.view === id ? 'active' : ''}" data-view="${id}" aria-label="${esc(name)}"><span aria-hidden="true">${icon}</span>${esc(local?.name || name)}${id === 'inbox' && state.counts.find((c) => c.folder === id)?.unread ? `<span class="nav-count">${state.counts.find((c) => c.folder === id).unread}</span>` : ''}</button>`;
+      return `${i === 6 ? '<div class="nav-divider"></div>' : ''}` + localBranch(id, button);
+    })
     .join('');
-  $('#navigation [data-view="inbox"]')?.insertAdjacentHTML('afterend', remoteTree());
+  const inboxButton = $('#navigation [data-view="inbox"]');
+  (inboxButton?.closest('[data-local-branch="inbox"]') || inboxButton)?.insertAdjacentHTML(
+    'afterend',
+    remoteTree(),
+  );
   $$('#navigation [data-remote-folder]').forEach((b) =>
     on(b, 'click', (event) => {
       event.preventDefault();
@@ -317,7 +348,19 @@ function navigation() {
       else collapsedFolders.add(id);
     }),
   );
-  $$('#navigation [data-view]').forEach((b) => on(b, 'click', () => navigate(b.dataset.view)));
+  $$('#navigation [data-local-branch]').forEach((d) =>
+    d.addEventListener('toggle', () => {
+      if (d.open) collapsedFolders.delete(d.dataset.localBranch);
+      else collapsedFolders.add(d.dataset.localBranch);
+    }),
+  );
+  $$('#navigation [data-view]').forEach((b) =>
+    on(b, 'click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      return navigate(b.dataset.view);
+    }),
+  );
   $$('.mobile-tabs button, .app-rail button').forEach((b) =>
     b.classList.toggle(
       'active',
@@ -337,8 +380,48 @@ function installLocalFolders(localFolders) {
   state.localFolders = localFolders;
   for (let i = folders.length - 1; i >= 0; i--)
     if (folders[i][0].startsWith('local-')) folders.splice(i, 1);
-  folders.splice(6, 0, ...localFolders.map((folder) => ['local-' + folder.id, '▱', folder.name]));
+  folders.splice(
+    6,
+    0,
+    ...localFolders.map((folder) => ['local-' + folder.id, '▱', folder.path || folder.name]),
+  );
 }
+InkwellFolderMenu(
+  $('#navigation'),
+  async (parent) => {
+    if (!(await requestModalClose())) return;
+    modal(
+      'New subfolder',
+      `<form id="subfolder-form"><p>Under: <strong>${esc(parent.name)}</strong></p><p class="fine-print">Local to inkwell. No server folders are created or changed.</p>${field('Folder name', 'name', '', 'text', 'required maxlength="80"')}<div class="form-actions"><button class="primary">Create subfolder</button></div></form>`,
+    );
+    const form = $('#subfolder-form');
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      const button = $('button', form);
+      if (button.disabled) return;
+      button.disabled = true;
+      try {
+        await api('/local-folders', {
+          method: 'POST',
+          body: { name: form.elements.name.value, parent: parent.key },
+        });
+        collapsedFolders.delete(
+          parent.key.startsWith('remote:') ? Number(parent.key.slice(7)) : parent.key,
+        );
+        if (form.isConnected) await requestModalClose();
+        await refreshCounts();
+        $('#rule-editor')?.dispatchEvent(
+          new CustomEvent('inkwell-folders-changed', { detail: state.localFolders }),
+        );
+        toast('Local subfolder created.');
+      } catch (error) {
+        toast(error.message);
+        button.disabled = false;
+      }
+    };
+  },
+  toast,
+);
 async function refreshCounts() {
   const [counts, accounts, remoteFolders, localFolders] = await Promise.all([
     api('/counts'),
