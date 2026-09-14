@@ -46,7 +46,7 @@ For a phone, see [Mobile setup](docs/MOBILE.md). `localhost` on a phone refers t
 | Mobile | Touch-oriented navigation, responsive mail reader, full-screen forms, safe-area support, install manifest, offline connectivity explanation |
 | Email | Multiple IMAP/SMTP accounts, inbox sync, isolated HTML/text previews, opt-in remote images, search, pagination, unread/tag pills, local read/unread, stars, archive/trash, drafts, reply, forward, explicit SMTP sending, draft autosave, local drag-and-drop and Trash restore |
 | Calendar | Themed month grid/agenda, all-day and multi-day events, drag/two-endpoint ranges, timezone-aware daily/weekly/monthly/yearly repeats, whole-series editing, `.ics` export |
-| Mail rules | Dedicated Rule Manager, AND/OR condition builder, multiple local move/read/star/tag actions, existing-mail application and custom folders — never server mutations |
+| Mail rules | Dedicated Rule Manager, AND/OR conditions, multiple local actions, and [Not Junk](docs/NOT-JUNK.md) sender memory with Inbox/rule filing — never server mutations |
 | People | Create/edit/delete contacts, compose from contact, recipient suggestions |
 | AI | OpenAI, OpenRouter, Anthropic, Gemini and compatible APIs; official Codex CLI subscription bridge; Ollama, LM Studio, llama.cpp and served Unsloth models; explicit context sharing and draft suggestions |
 | Appearance | Saved popup/internal forms; responsive calendar side editor; 16px defaults, separate sidebar font/size, adjustable spacing, in-app RGB/hex colors, four palettes, contrast guidance and YAML/JSON theme import/export |

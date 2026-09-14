@@ -75,7 +75,8 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
       wc.sendInputEvent({ type: 'keyUp', keyCode: 'K', modifiers: ['control', 'shift'] });
     });
     await expect(window.locator('#global-search')).toBeFocused();
-    await window.getByRole('button', { name: 'Back to messages' }).click();
+    await window.getByRole('button', { name: 'Not Junk', exact: true }).click();
+    await expect(window.locator('#toast')).toContainText('Future imports use rules or Inbox');
     await window.locator('.message-row [data-more]').first().click();
     await expect(window.getByRole('menuitem', { name: 'Reply', exact: true })).toBeVisible();
     await expect(
@@ -163,6 +164,7 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
       'rgb(38, 100, 160)',
     );
     await window.locator('#rule-manager-link').click();
+    await expect(window.locator('#not-junk-senders')).toContainText('@');
     await window.getByLabel('Rule name', { exact: true }).fill('Desktop rule');
     await window.getByLabel('Condition 1 value', { exact: true }).fill('ABC');
     await window.getByRole('button', { name: 'Save rule', exact: true }).click();

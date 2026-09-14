@@ -34,8 +34,18 @@
 .card:has(> #local-folder-form) {
   margin-top: 18px;
 }
-#rule-editor {
+#rule-editor,
+#not-junk-senders {
   margin-top: 18px;
+}
+#not-junk-senders .rule-row {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+#not-junk-senders .rule-row span {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 #rule-editor h3 {
   margin-top: 22px;

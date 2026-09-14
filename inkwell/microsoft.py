@@ -245,8 +245,16 @@ def access_token(account):
         return updated["access_token"]
 
 
-def sync_account(account, folder=None):
+def sync_account(account, folder=None, trusted_only=False):
     from .mail import TextExtractor
+    from .message_keys import sender_key
+
+    trusted = set()
+    if trusted_only:
+        with store.db() as db:
+            trusted = {r[0] for r in db.execute("SELECT sender_key FROM not_junk_senders")}
+        if not trusted:
+            return 0
 
     headers = {
         "Authorization": "Bearer " + access_token(account),
@@ -283,6 +291,8 @@ def sync_account(account, folder=None):
                     )
                 except (ValueError, IndexError):
                     sender = f"{sender.get('name', '')} <{sender.get('address', '')}>"
+                if trusted_only and sender_key(sender) not in trusted:
+                    continue
                 recipient = ", ".join(
                     r.get("emailAddress", {}).get("address", "")
                     for r in message.get("toRecipients", [])
@@ -303,6 +313,15 @@ def sync_account(account, folder=None):
                     extractor.feed(text)
                     text = "".join(extractor.parts)
                 with store.db() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if (
+                        trusted_only
+                        and not db.execute(
+                            "SELECT 1 FROM not_junk_senders WHERE sender_key=?",
+                            (sender_key(sender),),
+                        ).fetchone()
+                    ):
+                        continue
                     # Account may have been disconnected while the network request ran.
                     if not db.execute(
                         "SELECT 1 FROM accounts WHERE id=?", (account["id"],)

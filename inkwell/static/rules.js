@@ -3,12 +3,13 @@ window.InkwellRules = async (
   root,
   { api, esc, field, toast, isCurrent, foldersChanged = async () => {} },
 ) => {
-  const [rules, folders, remote, tags, accounts] = await Promise.all([
+  const [rules, folders, remote, tags, accounts, safeSenders] = await Promise.all([
     api('/rules'),
     api('/local-folders'),
     api('/remote-folders'),
     api('/tags'),
     api('/accounts'),
+    api('/not-junk-senders'),
   ]);
   if (!isCurrent() || !root.isConnected) return;
   const targets = [
@@ -62,6 +63,26 @@ window.InkwellRules = async (
       )
       .join('');
   root.innerHTML = `<section class="card"><h2>Rule Manager</h2><p>First matching enabled rule wins, in the order shown. All conditions can match (AND), or any condition can match (OR). Text matching is case-insensitive. All actions in the matching rule are applied locally. No server mail is moved or deleted.</p><label class="field">Find rules<input type="search" id="rules-search" placeholder="Find a rule…"></label><div id="rules-list"></div><button class="secondary" id="create-rule">Create rule</button><button class="secondary" id="apply-rules">Apply rules to existing imported copies…</button><p class="notice">Imports run rules immediately on new copies. Apply existing skips drafts, sent, Trash and already locally managed copies. Age/read conditions are not a periodic scheduler. Rules with missing folders/tags or overflowing 12 tags are skipped without partial actions.</p></section><section class="card"><form id="local-folder-form">${field('New local folder', 'name', '', 'text', 'required maxlength="80"')}<button class="secondary">Create local folder</button></form></section><section class="card" id="rule-editor"></section>`;
+  root.insertAdjacentHTML(
+    'beforeend',
+    `<section class="card" id="not-junk-senders"><h2>Not Junk senders</h2><p>Exact sender addresses remembered across this workspace. Their incoming copies use the first applicable non-junk rule, or Inbox. Junk/Trash destinations are skipped. Sender headers can be spoofed; this is local filing, not an authentication guarantee or a change to Outlook spam filtering.</p>${safeSenders.map((s) => `<div class="rule-row"><span>${esc(s.sender_key)}</span><button class="secondary" data-forget-sender="${esc(s.sender_key)}">Forget sender</button></div>`).join('') || '<p>No remembered senders.</p>'}<p class="fine-print">Forgetting affects future imports only; it does not undo earlier filing.</p></section>`,
+  );
+  root.querySelectorAll('[data-forget-sender]').forEach(
+    (button) =>
+      (button.onclick = async () => {
+        button.disabled = true;
+        try {
+          await api('/not-junk-senders?sender=' + encodeURIComponent(button.dataset.forgetSender), {
+            method: 'DELETE',
+          });
+          button.closest('.rule-row').remove();
+          toast('Sender forgotten. Existing mail stays where it is.');
+        } catch (error) {
+          toast(error.message);
+          button.disabled = false;
+        }
+      }),
+  );
   const clean = (r) => {
     const { id, problem, ...data } = r;
     return data;

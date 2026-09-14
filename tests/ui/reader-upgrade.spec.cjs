@@ -55,6 +55,7 @@ with store.db() as db:
   await expect(page.locator(`[data-message="${id}"]`)).toBeVisible();
 });
 test.afterEach(async ({ page }) => {
+  await request(page, '/not-junk-senders?sender=alex%40example.org', 'DELETE');
   if (id) {
     await request(page, '/messages/' + id, 'PATCH', { folder: 'trash' });
     expect(await request(page, '/messages/' + id, 'DELETE')).toEqual({ ok: true });
@@ -214,8 +215,8 @@ test('Reader toolbar uses compact SVG controls with working star, move and sende
 }, info) => {
   await page.locator(`[data-message="${id}"]`).click();
   const toolbar = page.getByRole('group', { name: 'Email actions', exact: true });
-  await expect(toolbar.locator('button')).toHaveCount(14);
-  await expect(toolbar.locator('button svg')).toHaveCount(14);
+  await expect(toolbar.locator('button')).toHaveCount(15);
+  await expect(toolbar.locator('button svg')).toHaveCount(15);
   const size = await toolbar
     .locator('button')
     .first()
@@ -242,4 +243,64 @@ test('Reader toolbar uses compact SVG controls with working star, move and sende
   await page.locator('#move-local-form select').selectOption('archive');
   await page.locator('#move-local-form button[type=submit]').click();
   await expect.poll(async () => (await request(page, '/messages/' + id)).folder).toBe('archive');
+});
+
+test('Not Junk is available in context menu and reader, remembers sender and can be forgotten', async ({
+  page,
+}) => {
+  await page.locator(`[data-message="${id}"] [data-more]`).click();
+  await page.getByRole('menuitem', { name: 'Not Junk', exact: true }).click();
+  await expect(page.locator('#toast')).toContainText('Future imports use rules or Inbox');
+  expect((await request(page, '/not-junk-senders'))[0].sender_key).toBe('alex@example.org');
+  await request(page, '/messages/' + id, 'PATCH', { folder: 'trash' });
+  await page.goto('/#/trash');
+  await page.locator(`[data-message="${id}"]`).click();
+  await page.getByRole('button', { name: 'Not Junk', exact: true }).click();
+  await expect.poll(async () => (await request(page, '/messages/' + id)).folder).toBe('inbox');
+  await page.goto('/#/rules');
+  await expect(page.locator('#not-junk-senders')).toContainText('alex@example.org');
+  await page.getByRole('button', { name: 'Forget sender', exact: true }).click();
+  await expect.poll(async () => (await request(page, '/not-junk-senders')).length).toBe(0);
+  expect((await request(page, '/messages/' + id)).folder).toBe('inbox');
+});
+
+test('Not Junk background polling syncs without replacing an open composer', async ({ page }) => {
+  let syncs = 0;
+  await page.route('**/api/sync', (route) => {
+    syncs++;
+    return route.fulfill({ json: [] });
+  });
+  const account = (
+    await request(page, '/accounts', 'POST', {
+      name: 'Polling fixture',
+      email: 'poll@example.test',
+      username: 'poll@example.test',
+      password: 'test-only',
+      imap_host: 'imap.example.test',
+      smtp_host: 'smtp.example.test',
+      smtp_port: 465,
+      smtp_security: 'tls',
+    })
+  ).id;
+  try {
+    await request(page, '/messages/' + id + '/not-junk', 'POST');
+    await page.reload();
+    await expect.poll(() => syncs).toBe(1);
+    await page.waitForFunction(() => document.documentElement.dataset.busy === 'false');
+    await page.locator('#heading-compose').click();
+    await page.getByLabel('Subject', { exact: true }).fill('Not Junk polling fixture');
+    await page.evaluate(() => pollNotJunkMail());
+    expect(syncs).toBe(2);
+    await expect(page.getByLabel('Subject', { exact: true })).toHaveValue(
+      'Not Junk polling fixture',
+    );
+  } finally {
+    if (await page.locator('#compose-form').isVisible()) await page.locator('#close-modal').click();
+    for (const draft of await request(
+      page,
+      '/messages?folder=drafts&q=Not%20Junk%20polling%20fixture',
+    ))
+      await request(page, '/messages/' + draft.id, 'DELETE');
+    await request(page, '/accounts/' + account, 'DELETE');
+  }
 });

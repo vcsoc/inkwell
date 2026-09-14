@@ -108,4 +108,4 @@ def test_collection_migration_backfills_existing_mail(tmp_path, monkeypatch):
     with store.db() as db:
         row = db.execute("SELECT sender_key,domain_key,subject_key,body FROM messages").fetchone()
         assert tuple(row) == ("old@example.com", "example.com", "original", "Preserve this")
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 9

@@ -47,7 +47,11 @@ HTML preview is now the default, with a privacy banner and explicit per-view ima
 
 **Rule Manager** in the sidebar (also under Settings → Mail rules) lists existing inkwell rules and provides an AND/OR condition builder with multiple local move/read/star/tag actions. Compose/Reply support optional Cc/Bcc and shared local address autocomplete. See [Rule Manager and recipients](RULE-MANAGER-COMPOSE.md).
 
-These are working actions, **not full Outlook menu parity**. Reply all, provider categories, reminders, junk/block rules, original-source viewing, printing, attachment handling, and server folder creation/rename/move/delete remain unimplemented.
+These are working actions, **not full Outlook menu parity**. Reply all, provider categories, reminders, provider junk/block controls, original-source viewing, printing, attachment handling, and server folder creation/rename/move/delete remain unimplemented.
+
+## Not Junk
+
+**Not Junk** in the message menu and toolbar refiles all cached incoming mail from the exact sender using applicable non-junk rules or Inbox, and remembers future imports. Rule Manager lists these senders with a Forget action. Microsoft sync also checks Junk for remembered senders; an open app polls about every two minutes. Provider mail remains unchanged. See [Not Junk](NOT-JUNK.md) for scope, limits and safeguards.
 
 ## Reader toolbar
 

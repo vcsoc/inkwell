@@ -20,7 +20,7 @@ def safe_next(url):
 def discover(account):
     headers = {"Authorization": "Bearer " + microsoft.access_token(account)}
     found = {}
-    requests = 0
+    requests = 1  # Includes the initial Inbox identity lookup.
     with microsoft.client() as http:
         response = http.get(microsoft.GRAPH + "/me/mailFolders/inbox?$select=id", headers=headers)
         response.raise_for_status()
@@ -61,6 +61,21 @@ def discover(account):
                             )
                         )
                 url = data.get("@odata.nextLink")
+        # Resolve roles by provider IDs, not localized display names. These are GET-only.
+        for role in ("junkemail", "deleteditems", "sentitems", "drafts"):
+            requests += 1
+            if requests > 500:
+                raise ValueError("Folder discovery exceeded its request limit")
+            response = http.get(
+                microsoft.GRAPH + "/me/mailFolders/" + role + "?$select=id", headers=headers
+            )
+            if response.status_code == 404:
+                continue
+            response.raise_for_status()
+            remote_id = response.json()["id"]
+            if remote_id in found:
+                parent, name, path, _, total, unread = found[remote_id]
+                found[remote_id] = (parent, name, path, role, total, unread)
     # Publish only a complete snapshot. Keep cached mail when folders disappear.
     with store.db() as db:
         db.execute("BEGIN IMMEDIATE")

@@ -77,9 +77,27 @@ const selection = InkwellMessageSelection({
 function closeMessageMenu() {
   messageMenu.close();
 }
+function canMarkNotJunk(message) {
+  if (
+    !message ||
+    !message.sender?.includes('@') ||
+    message.draft_revision ||
+    ['drafts', 'sent'].includes(message.folder) ||
+    ['drafts', 'sent'].includes(message.restore_folder)
+  )
+    return false;
+  const folder = state.remoteFolders.find((f) => f.id === message.remote_folder_id);
+  return !(
+    ['drafts', 'sentitems'].includes(folder?.well_known) ||
+    ['drafts', 'sent', 'sent items'].includes(folder?.name?.toLowerCase())
+  );
+}
 function showMessageMenu(id, trigger, event) {
   $('#message-menu [data-action=restore]').hidden =
     (state.messages.find((m) => m.id === id) || state.selected)?.folder !== 'trash';
+  $('#message-menu [data-action=not-junk]').hidden = !canMarkNotJunk(
+    state.messages.find((m) => m.id === id) || state.selected,
+  );
   const rect = trigger.getBoundingClientRect();
   messageMenu.show(id, trigger, event?.clientX || rect.left, event?.clientY || rect.bottom);
 }
@@ -701,6 +719,21 @@ async function messageAction(action, id) {
   const m = await api('/messages/' + id);
   if (generation !== state.generation) return;
   if (action === 'tags') return editTags(m);
+  if (action === 'not-junk') {
+    const result = await api('/messages/' + id + '/not-junk', { method: 'POST' });
+    await refreshCounts();
+    if (generation === state.generation) {
+      state.selected = null;
+      await renderMail();
+    }
+    toast(
+      result.updated_messages +
+        ' incoming copies from ' +
+        result.sender +
+        ' filed locally. Future imports use rules or Inbox.',
+    );
+    return;
+  }
   const address = m.sender.match(/<([^>]+)>/)?.[1] || m.sender;
   const refresh = async () => {
     await refreshCounts();
@@ -903,18 +936,25 @@ function renderReader() {
     readerColors.forEach((name, index) => pane.style.setProperty(name, colors[index]));
   }
   $('#reader').innerHTML =
-    `${InkwellReaderToolbar(m, dark)}<h2>${esc(m.subject || '(No subject)')}</h2><div class="reader-tags">${tagPills(m)}</div><div class="reader-meta"><div class="avatar">${esc(initials(m.sender))}</div><div><strong>${esc(m.sender)}</strong>${m.demo ? '<span class="badge">SAMPLE</span>' : ''}<small>To ${esc(m.recipient)}</small>${m.cc ? `<small>Cc ${esc(m.cc)}</small>` : ''}${m.bcc ? `<small>Bcc ${esc(m.bcc)}</small>` : ''}<small>${esc(new Date(m.date).toLocaleString())}</small></div></div><div id="message-preview"></div>`;
+    `${InkwellReaderToolbar(m, dark, canMarkNotJunk(m))}<h2>${esc(m.subject || '(No subject)')}</h2><div class="reader-tags">${tagPills(m)}</div><div class="reader-meta"><div class="avatar">${esc(initials(m.sender))}</div><div><strong>${esc(m.sender)}</strong>${m.demo ? '<span class="badge">SAMPLE</span>' : ''}<small>To ${esc(m.recipient)}</small>${m.cc ? `<small>Cc ${esc(m.cc)}</small>` : ''}${m.bcc ? `<small>Bcc ${esc(m.bcc)}</small>` : ''}<small>${esc(new Date(m.date).toLocaleString())}</small></div></div><div id="message-preview"></div>`;
   InkwellPaintTags($('#reader'));
   on($('#edit-tags'), 'click', () => editTags(m));
   for (const [id, action] of [
     ['reader-move', 'move'],
+    ['reader-not-junk', 'not-junk'],
     ['reader-save', 'save'],
     ['reader-contact', 'contact'],
     ['reader-copy', 'copy'],
   ])
-    on($('#' + id), 'click', () =>
-      messageAction(action, m.id).catch((error) => toast(error.message)),
-    );
+    on($('#' + id), 'click', async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        await messageAction(action, m.id);
+      } finally {
+        button.disabled = false;
+      }
+    });
   on($('#reader-star'), 'click', async () => {
     const button = $('#reader-star');
     button.disabled = true;
@@ -1011,6 +1051,29 @@ function renderReader() {
     }),
   );
 }
+let notJunkPolling = false;
+async function pollNotJunkMail() {
+  if (notJunkPolling || !state.routerReady || !state.accounts.length || pendingWork) return;
+  notJunkPolling = true;
+  try {
+    if (!(await api('/not-junk-senders')).length) return;
+    const generation = state.generation;
+    await api('/sync', { method: 'POST' });
+    await refreshCounts();
+    if (
+      generation === state.generation &&
+      !$('#modal').open &&
+      !state.selected &&
+      !['settings', 'calendar', 'contacts', 'tags', 'rules'].includes(state.view)
+    )
+      await renderMail();
+  } catch {
+    /* Retry at the next interval; manual Sync exposes connection errors. */
+  } finally {
+    notJunkPolling = false;
+  }
+}
+setInterval(pollNotJunkMail, 120000);
 async function compose(data = {}) {
   if ($('#modal').open && !(await requestModalClose())) return;
   InkwellComposer(data, {

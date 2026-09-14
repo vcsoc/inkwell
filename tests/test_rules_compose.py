@@ -210,12 +210,13 @@ def test_drafts_cc_bcc_history_survive_resume_delete_and_schema_upgrade(client):
         db.execute("ALTER TABLE messages DROP COLUMN cc")
         db.execute("ALTER TABLE messages DROP COLUMN bcc")
         db.execute("DROP TABLE address_history")
+        db.execute("DROP TABLE not_junk_senders")
         db.execute("PRAGMA user_version=7")
     store.init()
     store.init()
     assert client.get("/api/addresses?q=old").json()[0]["address"] == "old@example.com"
     with store.db() as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 9
 
 
 def test_send_multiple_recipients_and_bcc_only_preserve_local_sent(client, monkeypatch):

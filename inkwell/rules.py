@@ -260,12 +260,20 @@ def matches(condition, m, now, db, cache):
     }[op]()
 
 
-def apply(db, message_id, now=None, configured=None):
+def apply(db, message_id, now=None, configured=None, force=False, safe_sender=False):
+    from . import not_junk
+
+    m = db.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
+    if not m:
+        return False
+    if not force and not_junk.remembered(db, m):
+        if not not_junk.incoming(db, m):
+            return False
+        return not_junk.file_copy(db, m, configured)
     configured = configured if configured is not None else configured_rules(db)
     if not configured:
         return False
-    m = db.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
-    if not m or m["local_folder_override"] or m["folder"] in ("drafts", "sent", "trash"):
+    if not force and (m["local_folder_override"] or m["folder"] in ("drafts", "sent", "trash")):
         return False
     now = now or datetime.now(timezone.utc)
     cache = {}
@@ -281,6 +289,10 @@ def apply(db, message_id, now=None, configured=None):
                 continue
         try:
             validate_rule(rule, db)
+            if safe_sender and any(
+                a.type == "move" and not_junk.blocked_destination(db, a.value) for a in rule.actions
+            ):
+                continue
             results = (matches(c, m, now, db, cache) for c in rule.conditions)
             if not (all(results) if rule.mode == "all" else any(results)):
                 continue

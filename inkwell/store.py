@@ -48,7 +48,7 @@ def init():
         # Version 1: preserve password accounts while adding Microsoft OAuth metadata.
         conn.execute("BEGIN IMMEDIATE")
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        if version > 8:
+        if version > 9:
             raise RuntimeError("This database was created by a newer inkwell version")
         if version < 1:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)")}
@@ -148,6 +148,11 @@ def init():
 
             addresses.migrate(conn)
             conn.execute("PRAGMA user_version=8")
+        if version < 9:
+            conn.execute(
+                "CREATE TABLE not_junk_senders(sender_key TEXT PRIMARY KEY,created_at TEXT NOT NULL)"
+            )
+            conn.execute("PRAGMA user_version=9")
     if os.name != "nt":
         os.chmod(DATA / "inkwell.db", 0o600)
 

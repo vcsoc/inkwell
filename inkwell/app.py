@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import (
+    not_junk,
     addresses,
     tag_store,
     mail_filters,
@@ -63,6 +64,7 @@ app.include_router(rules.router)
 app.include_router(message_moves.router)
 app.include_router(tag_store.router)
 app.include_router(addresses.router)
+app.include_router(not_junk.router)
 app.add_middleware(
     TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]", *EXTRA_HOSTS]
 )
@@ -252,6 +254,19 @@ def sync():
                 if account["provider"] == "microsoft":
                     try:
                         result["folders"] = remote_folders.discover(account)
+                        if rows("SELECT sender_key FROM not_junk_senders LIMIT 1"):
+                            for junk in rows(
+                                "SELECT * FROM remote_folders WHERE account_id=? AND well_known='junkemail'",
+                                (account["id"],),
+                            ):
+                                try:
+                                    result["added"] += microsoft.sync_account(
+                                        account, junk, trusted_only=True
+                                    )
+                                except Exception:
+                                    result["folder_error"] = (
+                                        "Junk check failed; cached mail was preserved. Retry Sync."
+                                    )
                     except Exception:
                         result["folder_error"] = (
                             "Folder discovery failed; cached folders were preserved. Retry Sync."
