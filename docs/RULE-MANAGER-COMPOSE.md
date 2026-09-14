@@ -2,16 +2,18 @@
 
 ## Rule Manager
 
-Open **Rule Manager** in the sidebar, or `/#/rules`. The same editor remains available under **Settings → Mail rules**. All saved rules are listed with their conditions, actions, enabled state and missing-resource warnings. Search, create, edit, duplicate, enable/disable and delete are available without confirmation dialogs.
+Open **Rule Manager** in the sidebar, or `/#/rules`. The same editor remains available under **Settings → Mail rules**. The compact list is on the **left**, with the selected rule's editor on the **right**. Click a rule name to edit it; its highlighted row exposes Disable/Enable, Duplicate and Delete. Rows show status and counts, with the complete condition/action summary in their tooltip. Missing-resource warnings remain visible. The first saved rule opens initially; **Create rule** starts a blank rule, and saving keeps the saved rule selected and open rather than jumping back to a blank form.
+
+Search filters the list without losing editor changes. Selecting another rule or navigating away discards unsaved rule edits without confirmation. **Advanced options** contains the extra unread/age exclusions and opens automatically when they are active. **Tags and folders** holds resource creation; **How rules work** and **Not Junk senders** are expandable secondary sections. On narrow panes the list stacks above the editor; resizing does not discard edits.
 
 For “move all emails with ABC in the subject to XYZ”:
 
-1. Create XYZ using **New local folder**, unless it already exists. Creating a folder preserves the rule currently being edited.
+1. Choose **Create rule**. If needed, expand **Tags and folders** and create XYZ using **New local folder**; your rule edits are preserved.
 2. Enter a rule name. Set **Subject → contains → ABC**.
 3. Choose **Move local copy → XYZ** and save.
-4. Future imports use it automatically. **Apply rules to existing imported copies…** applies saved rules to eligible cached mail immediately.
+4. Future imports use it automatically. **Apply to existing mail** applies saved rules to eligible cached mail immediately.
 
-Choose **All conditions (AND)** or **Any condition (OR)**. Up to 20 conditions and 20 actions per rule, with 100 rules total. Nested condition groups are not provided. Text matching is case-insensitive; exact sender/domain matching also normalizes addresses and IDNA. Conditions cover sender address, sender domain, subject, To header, message text, tag, unread/starred state and age. Text operators include equals/not equals, contains/does not contain, starts with and ends with. Age supports older/newer than a number of days.
+Choose **All (AND)** or **Any (OR)** beside Conditions. Up to 20 conditions and 20 actions per rule, with 100 rules total. Nested condition groups are not provided. Text matching is case-insensitive; exact sender/domain matching also normalizes addresses and IDNA. Conditions cover sender address, sender domain, subject, To header, message text, tag, unread/starred state and age. Text operators include equals/not equals, contains/does not contain, starts with and ends with. Age supports older/newer than a number of days.
 
 Actions: move locally, mark read/unread, star/unstar, add/remove a catalog tag. All actions belong to the same rule; the arrow button moves an action earlier. Contradictory flag/tag actions execute in their displayed order, so the last applicable action wins. At most one move action is allowed. Destinations include local folders and displayed server-folder branches, but filing into a branch changes only the local view, not provider membership.
 
@@ -33,10 +35,10 @@ Choose **Apply rule…** from an email's context menu or reader More menu. The e
 
 ## Domain auto-tagging
 
-In Rule Manager, choose **Create auto-tag rule**. This starts a tag-only rule with **Sender domain → is** and **Add tag**, without an implicit move action.
+In Rule Manager, choose **Auto-tag** (accessible name: Create auto-tag rule). This starts a tag-only rule with **Sender domain → is** and **Add tag**, without an implicit move action.
 
 1. Give the rule a name and enter `@example.com` (or `example.com`) as the condition value.
-2. Select the `example` tag. If it does not exist, enter `example` under **New rule tag** and click **Create tag**; the empty Add tag action is selected automatically without discarding the rule edit.
+2. Select the `example` tag. If it does not exist, expand **Tags and folders**, enter `example` under **New rule tag** and click **Create tag**; the empty Add tag action is selected automatically without discarding the rule edit.
 3. Click **Save rule**.
 
 Every newly imported matching copy receives the tag immediately. Domain matching is exact and case-insensitive: subdomains and lookalikes such as `example.com.evil` do not match. Tag-only actions preserve the message's folder and read state. First-match ordering still applies: an earlier matching rule wins, so add the tag action to that existing rule when appropriate. Rules do not change provider mail or tags, and cannot process messages that have not been imported.

@@ -185,6 +185,15 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
     );
     await sidebarClick(window, '#rule-manager-link');
     await expect(window.locator('#not-junk-senders')).toContainText('@');
+    expect(
+      await window.evaluate(() => {
+        const left = document.querySelector('.rule-list-pane').getBoundingClientRect(),
+          right = document.querySelector('#rule-editor').getBoundingClientRect();
+        return document.querySelector('.rule-manager').clientWidth > 840
+          ? left.right < right.left
+          : left.bottom < right.top;
+      }),
+    ).toBe(true);
     await window.getByRole('button', { name: 'Create auto-tag rule', exact: true }).click();
     await window.getByLabel('Rule name', { exact: true }).fill('Desktop rule');
     await window.getByLabel('Condition 1 value', { exact: true }).fill('@example.com');
@@ -193,6 +202,8 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
       .selectOption({ label: 'Desktop tag manager' });
     await window.getByRole('button', { name: 'Save rule', exact: true }).click();
     await expect(window.locator('#rules-list')).toContainText('Desktop rule');
+    await expect(window.locator('.rule-entry.active .rule-choice')).toContainText('Desktop rule');
+    await expect(window.getByLabel('Rule name', { exact: true })).toHaveValue('Desktop rule');
     await sidebarClick(window, '#navigation [data-view=inbox]');
     await window.locator(`[data-more="${messageId}"]`).click();
     await window.getByRole('menuitem', { name: 'Apply rule…', exact: true }).click();

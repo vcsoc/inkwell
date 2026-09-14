@@ -23,7 +23,7 @@ This does **not** move/delete provider messages, remove a provider junk flag, mo
 
 Sender headers can be spoofed. A remembered address is a filing preference, not proof of identity or an authentication override.
 
-Under **Rule Manager → Not Junk senders**, **Forget sender** stops the special handling for future imports. It does not undo earlier filing, delete messages or disable ordinary user rules.
+Expand **Rule Manager → Not Junk senders** below the rule list. **Forget sender** stops the special handling for future imports. It does not undo earlier filing, delete messages or disable ordinary user rules.
 
 ## Sender display names
 

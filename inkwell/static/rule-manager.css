@@ -1,0 +1,327 @@
+.rule-manager {
+  container: rules-workspace / inline-size;
+}
+main:has(#workspace .rule-manager) > .page-heading {
+  padding-block: 16px;
+}
+main:has(#workspace .rule-manager) #eyebrow {
+  display: none;
+}
+main:has(#workspace .rule-manager) #page-title {
+  font-size: 30px;
+  margin: 0;
+}
+.rule-condition-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.rule-manager #rule-editor .rule-condition-heading h3,
+.rule-manager .rule-condition-heading .field {
+  margin: 0;
+}
+.rule-manager-shell {
+  display: grid;
+  grid-template-columns: minmax(230px, 28%) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.rule-manager .rule-list-pane {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 160px);
+  min-height: 320px;
+  padding: 14px;
+  min-width: 0;
+}
+.rule-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.rule-manager h2 {
+  font-size: 19px;
+  margin: 0 0 12px;
+}
+#rule-count {
+  color: var(--muted);
+  font-size: 13px;
+}
+.rule-create-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.rule-manager .rule-search-label {
+  margin: 0 0 10px;
+}
+.rule-manager #rules-list {
+  flex: 1 1 auto;
+  min-height: 80px;
+  overflow: auto;
+  margin: 0;
+}
+.rule-entry {
+  border: 1px solid transparent;
+  border-radius: 7px;
+  margin: 3px 0;
+  overflow: hidden;
+}
+.rule-entry.active {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+.rule-choice {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  text-align: left;
+  min-width: 0;
+}
+.rule-choice strong,
+.rule-choice small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rule-choice strong {
+  font-size: max(13px, calc(var(--font-size, 16px) - 1px));
+  font-weight: 600;
+}
+.rule-choice small {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.rule-choice:hover {
+  background: var(--accent-light);
+}
+.rule-choice:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.rule-entry-tools {
+  display: none;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 0 8px 8px;
+}
+.rule-entry.active .rule-entry-tools,
+.rule-entry:focus-within .rule-entry-tools {
+  display: flex;
+}
+.rule-manager .rule-entry-tools button {
+  font-size: 12px;
+  min-height: 32px;
+  padding: 5px 8px;
+}
+.rule-problem {
+  margin: 4px 10px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.rule-empty {
+  padding: 12px;
+  color: var(--muted);
+}
+.rule-list-footer {
+  flex: none;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+.rule-manager #apply-rules {
+  width: 100%;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.rule-manager summary {
+  cursor: pointer;
+  min-height: 36px;
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.rule-manager details p {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 8px 0;
+}
+.rule-manager #rule-help[open],
+.rule-manager #rule-sender-tools[open] {
+  max-height: 240px;
+  overflow: auto;
+}
+.rule-manager #not-junk-senders {
+  margin: 0;
+}
+.rule-editor-pane {
+  min-width: 0;
+}
+.rule-manager #rule-editor {
+  margin: 0;
+  padding: 18px;
+  max-height: calc(100dvh - 160px);
+  overflow: auto;
+  scroll-padding-block: 12px 80px;
+}
+.rule-name-row {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+}
+.rule-name-row > .field {
+  flex: 1;
+  min-width: 0;
+}
+.rule-manager #rule-form .check-label {
+  margin: 0 0 12px;
+  flex: none;
+}
+.rule-manager .field {
+  margin-bottom: 12px;
+}
+.rule-manager .field input,
+.rule-manager .field select {
+  padding: 8px 10px;
+  min-height: 38px;
+}
+.rule-manager .rule-match {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.rule-manager .rule-match select {
+  width: auto;
+  max-width: 100%;
+}
+.rule-manager #rule-editor h3 {
+  font-size: 14px;
+  margin: 16px 0 6px;
+}
+.rule-manager .rule-builder-row {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  margin: 8px 0;
+  border: 0;
+  background: var(--bg);
+}
+.rule-manager [data-condition] {
+  grid-template-columns: minmax(100px, 1fr) minmax(95px, 0.9fr) minmax(140px, 1.5fr) auto;
+}
+.rule-manager [data-action-index] {
+  grid-template-columns: minmax(120px, 1fr) minmax(140px, 1.4fr) auto auto;
+}
+.rule-manager [data-action-index]:not(:has(select[data-part='value'])) {
+  grid-template-columns: minmax(120px, 1fr) auto auto;
+}
+.rule-manager .rule-builder-row label {
+  font-size: 12px;
+  gap: 4px;
+}
+.rule-manager .rule-builder-row input,
+.rule-manager .rule-builder-row select {
+  min-height: 38px;
+  padding: 8px;
+}
+.rule-manager .rule-builder-row button {
+  padding: 7px 9px;
+  min-height: 38px;
+  font-size: 12px;
+}
+.rule-manager #rule-advanced {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.rule-manager #rule-form .form-actions {
+  position: sticky;
+  bottom: -18px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  margin-top: 14px;
+  padding: 10px 0;
+  z-index: 1;
+}
+.rule-context {
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  max-height: 4.5em;
+  overflow: auto;
+  margin: 0 0 12px;
+}
+.rule-manager #rule-resource-tools {
+  margin-top: 12px;
+  padding: 6px 18px;
+}
+.rule-resource-forms {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+@container rules-workspace (max-width: 840px) {
+  .rule-manager-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rule-manager .rule-list-pane {
+    position: static;
+    max-height: none;
+    min-height: 0;
+  }
+  .rule-manager #rules-list {
+    max-height: 210px;
+    flex: auto;
+  }
+  .rule-manager #rule-editor {
+    max-height: none;
+    overflow: visible;
+  }
+  .rule-manager #rule-form .form-actions {
+    position: static;
+  }
+}
+@container rules-workspace (max-width: 560px) {
+  .rule-name-row {
+    flex-wrap: wrap;
+  }
+  .rule-name-row > .field {
+    flex-basis: 100%;
+  }
+  .rule-manager [data-condition],
+  .rule-manager [data-action-index],
+  .rule-manager [data-action-index]:not(:has(select[data-part='value'])) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .rule-manager .rule-builder-row > button {
+    justify-self: end;
+  }
+  .rule-manager .rule-builder-row label {
+    grid-column: 1 / -1;
+  }
+  .rule-resource-forms {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (pointer: coarse), (max-width: 700px) {
+  .rule-manager #rule-form .check-label,
+  .rule-manager button,
+  .rule-manager summary,
+  .rule-manager .field input,
+  .rule-manager .field select,
+  .rule-manager .rule-builder-row input,
+  .rule-manager .rule-builder-row select {
+    min-height: 44px;
+  }
+}

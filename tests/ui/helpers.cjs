@@ -25,4 +25,14 @@ async function sidebarClick(page, selector) {
   if (!(await page.locator(selector).isVisible())) await page.locator('#menu').click();
   await page.locator(selector).click();
 }
-module.exports = { settingsSection, selectEmailMenuAction, readerAction, sidebarClick };
+async function openRuleSection(page, id) {
+  const section = page.locator('#' + id);
+  if (!(await section.evaluate((el) => el.open))) await section.locator(':scope > summary').click();
+}
+module.exports = {
+  settingsSection,
+  selectEmailMenuAction,
+  readerAction,
+  sidebarClick,
+  openRuleSection,
+};

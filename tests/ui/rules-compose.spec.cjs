@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { openRuleSection } = require('./helpers.cjs');
 const { DatabaseSync } = require('node:sqlite');
 const path = require('node:path'),
   os = require('node:os');
@@ -60,6 +61,7 @@ test('Auto-tag shortcut creates and selects a tag without losing the domain rule
   await expect(page.getByLabel('Condition 1 field', { exact: true })).toHaveValue('domain');
   await expect(page.getByLabel('Condition 1 operator', { exact: true })).toHaveValue('is');
   await page.getByLabel('Condition 1 value', { exact: true }).fill('@example.com');
+  await openRuleSection(page, 'rule-resource-tools');
   await page.getByLabel('New rule tag', { exact: true }).fill(prefix);
   await page.getByRole('button', { name: 'Create tag', exact: true }).click();
   await expect(page.getByLabel('Action 1 value', { exact: true })).not.toHaveValue('');
@@ -94,11 +96,13 @@ test('Rule Manager builds AND/OR conditions and multiple actions, preserves edit
     await expect(page.locator('#rule-manager-link')).toBeVisible();
     await page.locator('#rule-manager-link').click();
   }
+  await page.locator('#create-rule').click();
   await page.getByLabel('Rule name', { exact: true }).fill(prefix + ' ABC rule');
   await page.getByLabel('Condition 1 value', { exact: true }).fill('ABC');
   await page.getByRole('button', { name: 'Add condition', exact: true }).click();
   await page.getByLabel('Condition 2 field', { exact: true }).selectOption('unread');
   await page.getByLabel('Match conditions', { exact: true }).selectOption('any');
+  await openRuleSection(page, 'rule-resource-tools');
   await page.getByLabel('New local folder', { exact: true }).fill(prefix + ' XYZ');
   await page.getByRole('button', { name: 'Create local folder', exact: true }).click();
   await expect(page.locator('#toast')).toContainText('Local folder created');

@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { readerAction } = require('./helpers.cjs');
+const { readerAction, openRuleSection } = require('./helpers.cjs');
 const { execFileSync } = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
@@ -263,6 +263,7 @@ test('Not Junk is available in context menu and reader, remembers sender and can
   await expect.poll(async () => (await request(page, '/messages/' + id)).folder).toBe('inbox');
   await page.goto('/#/rules');
   await expect(page.locator('#not-junk-senders')).toContainText('alex@example.org');
+  await openRuleSection(page, 'rule-sender-tools');
   await page.getByRole('button', { name: 'Forget sender', exact: true }).click();
   await expect.poll(async () => (await request(page, '/not-junk-senders')).length).toBe(0);
   expect((await request(page, '/messages/' + id)).folder).toBe('inbox');

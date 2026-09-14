@@ -63,11 +63,13 @@ window.InkwellRules = async (
           `<option value="${esc(id)}" ${String(id) === String(value) ? 'selected' : ''}>${esc(label)}</option>`,
       )
       .join('');
-  root.innerHTML = `<section class="card"><h2>Rule Manager</h2><p>First matching enabled rule wins, in the order shown. All conditions can match (AND), or any condition can match (OR). Text matching is case-insensitive. All actions in the matching rule are applied locally. No server mail is moved or deleted.</p><label class="field">Find rules<input type="search" id="rules-search" placeholder="Find a rule…"></label><div id="rules-list"></div><button class="secondary" id="create-rule">Create rule</button><button class="secondary" id="auto-tag-rule">Create auto-tag rule</button><button class="secondary" id="apply-rules">Apply rules to existing imported copies…</button><p class="notice">Imports run rules immediately on new copies. Apply existing skips drafts, sent, Trash and already locally managed copies. Age/read conditions are not a periodic scheduler. Rules with missing folders/tags or overflowing 12 tags are skipped without partial actions.</p></section><section class="card"><form id="local-folder-form">${field('New local folder', 'name', '', 'text', 'required maxlength="80"')}<button class="secondary">Create local folder</button></form></section><section class="card"><form id="rule-tag-form">${field('New rule tag', 'name', '', 'text', 'required maxlength="32"')}<button class="secondary">Create tag</button></form><p class="fine-print">Auto-tag example: Sender domain is @example.com → Add tag example. Exact domains exclude subdomains and lookalike domains. New imports are tagged immediately. An earlier matching rule takes precedence; add the tag action to that rule instead when appropriate. Tag-only actions leave filing unchanged. Change tag colors in Tag Manager.</p></section><section class="card" id="rule-editor"></section>`;
-  root.insertAdjacentHTML(
-    'beforeend',
-    `<section class="card" id="not-junk-senders"><h2>Not Junk senders</h2><p>Exact sender addresses remembered across this workspace. Their incoming copies use the first applicable non-junk rule, or Inbox. Junk/Trash destinations are skipped. Sender headers can be spoofed; this is local filing, not an authentication guarantee or a change to Outlook spam filtering.</p>${safeSenders.map((s) => `<div class="rule-row"><span>${esc(s.sender_key)}</span><button class="secondary" data-forget-sender="${esc(s.sender_key)}">Forget sender</button></div>`).join('') || '<p>No remembered senders.</p>'}<p class="fine-print">Forgetting affects future imports only; it does not undo earlier filing.</p></section>`,
-  );
+  root.innerHTML = `<div class="rule-manager"><div class="rule-manager-shell"><aside class="rule-list-pane card" aria-label="Saved rules"><div class="rule-list-heading"><h2>Rules</h2><span id="rule-count"></span></div><div class="rule-create-actions"><button class="primary" id="create-rule">Create rule</button><button class="secondary" id="auto-tag-rule" aria-label="Create auto-tag rule" title="Create auto-tag rule">Auto-tag</button></div><label class="field rule-search-label">Find rules<input type="search" id="rules-search" placeholder="Find a rule…"></label><div id="rules-list"></div><div class="rule-list-footer"><button class="secondary" id="apply-rules" title="Apply all enabled rules to eligible existing imported copies">Apply to existing mail</button><details id="rule-help"><summary>How rules work</summary><p>First matching enabled rule wins, in the order shown. Rules run on newly imported local copies, never on the server. Match all conditions (AND) or any (OR).</p><p>Apply existing skips drafts, sent, Trash and already locally managed copies. Missing resources or more than 12 final tags skip the rule without partial actions.</p><p>Auto-tag: Sender domain is @example.com → Add tag example. Exact domains exclude subdomains. TLD is the last label: example.co.uk has TLD .uk. Sender conditions do not verify identity. Age conditions are not a scheduler.</p></details><details id="rule-sender-tools"><summary>Not Junk senders</summary></details></div></aside><div class="rule-editor-pane"><section class="card" id="rule-editor"></section><details class="card" id="rule-resource-tools"><summary>Tags and folders</summary><div class="rule-resource-forms"><form id="rule-tag-form">${field('New rule tag', 'name', '', 'text', 'required maxlength="32"')}<button class="secondary">Create tag</button></form><form id="local-folder-form">${field('New local folder', 'name', '', 'text', 'required maxlength="80"')}<button class="secondary">Create local folder</button></form></div><p class="fine-print">Create a destination or tag without losing your edits. Tag colors are in Tag Manager.</p></details></div></div></div>`;
+  root
+    .querySelector('#rule-sender-tools')
+    .insertAdjacentHTML(
+      'beforeend',
+      `<div id="not-junk-senders"><p>Exact sender addresses remembered across this workspace. Their incoming copies use the first applicable non-junk rule, or Inbox. Junk/Trash destinations are skipped. Sender headers can be spoofed; this is local filing, not an authentication guarantee or a change to Outlook spam filtering.</p>${safeSenders.map((s) => `<div class="rule-row"><span>${esc(s.sender_key)}</span><button class="secondary" data-forget-sender="${esc(s.sender_key)}">Forget sender</button></div>`).join('') || '<p>No remembered senders.</p>'}<p class="fine-print">Forgetting affects future imports only; it does not undo earlier filing.</p></div>`,
+    );
   root.querySelectorAll('[data-forget-sender]').forEach(
     (button) =>
       (button.onclick = async () => {
@@ -90,14 +92,41 @@ window.InkwellRules = async (
   };
   const renderList = () => {
     const q = root.querySelector('#rules-search').value.toLowerCase();
+    const visible = rules.filter((r) => r.name.toLowerCase().includes(q));
+    root.querySelector('#rule-count').textContent = q
+      ? `${visible.length} / ${rules.length}`
+      : String(rules.length);
     root.querySelector('#rules-list').innerHTML =
-      rules
-        .filter((r) => r.name.toLowerCase().includes(q))
-        .map(
-          (r) =>
-            `<div class="rule-row"><div><strong>${rules.indexOf(r) + 1}. ${esc(r.name)}</strong><p>${r.enabled ? 'Enabled' : 'Disabled'} · ${r.mode === 'any' ? 'ANY' : 'ALL'} of ${r.conditions.length} conditions · ${r.actions.length} actions</p><small>${r.conditions.map((c) => esc(fields[c.field] + ' ' + operations[c.operator] + ' ' + (c.field === 'tag' ? tags.find((t) => String(t.id) === c.value)?.name || 'Missing tag' : c.value))).join(r.mode === 'any' ? ' OR ' : ' AND ')}</small><p>${r.actions.map((a) => esc(types[a.type] + (a.type === 'move' ? ': ' + (targets.find((t) => t[0] === a.value)?.[1] || 'Missing folder') : a.type.endsWith('_tag') ? ': ' + (tags.find((t) => String(t.id) === a.value)?.name || 'Missing tag') : ''))).join(' → ')}</p>${r.problem ? `<p class="danger">Needs attention: ${esc(r.problem)}</p>` : ''}</div><button class="secondary" data-toggle-rule="${r.id}">${r.enabled ? 'Disable' : 'Enable'}</button><button class="secondary" data-edit-rule="${r.id}">Edit</button><button class="secondary" data-copy-rule="${r.id}">Duplicate</button><button class="secondary danger" data-delete-rule="${r.id}">Delete</button></div>`,
-        )
-        .join('') || '<p>No matching rules.</p>';
+      visible
+        .map((r) => {
+          const description =
+            r.conditions
+              .map(
+                (c) =>
+                  fields[c.field] +
+                  ' ' +
+                  operations[c.operator] +
+                  ' ' +
+                  (c.field === 'tag'
+                    ? tags.find((t) => String(t.id) === c.value)?.name || 'Missing tag'
+                    : c.value),
+              )
+              .join(r.mode === 'any' ? ' OR ' : ' AND ') +
+            ' → ' +
+            r.actions
+              .map(
+                (a) =>
+                  types[a.type] +
+                  (a.type === 'move'
+                    ? ': ' + (targets.find((t) => t[0] === a.value)?.[1] || 'Missing folder')
+                    : a.type.endsWith('_tag')
+                      ? ': ' + (tags.find((t) => String(t.id) === a.value)?.name || 'Missing tag')
+                      : ''),
+              )
+              .join(' → ');
+          return `<div class="rule-entry ${r.id === editingId ? 'active' : ''}" data-rule-entry="${r.id}"><button class="rule-choice" data-edit-rule="${r.id}" aria-label="Edit ${esc(r.name)}" aria-current="${r.id === editingId ? 'true' : 'false'}" title="${esc(r.name + ' — ' + description)}"><strong>${rules.indexOf(r) + 1}. ${esc(r.name)}</strong><small>${r.enabled ? 'Enabled' : 'Disabled'} · ${r.mode === 'any' ? 'ANY' : 'ALL'} of ${r.conditions.length} ${r.conditions.length === 1 ? 'condition' : 'conditions'} · ${r.actions.length} ${r.actions.length === 1 ? 'action' : 'actions'}</small></button>${r.problem ? `<p class="danger rule-problem">${esc(r.problem)}</p>` : ''}<div class="rule-entry-tools"><button class="secondary" data-toggle-rule="${r.id}">${r.enabled ? 'Disable' : 'Enable'}</button><button class="secondary" data-copy-rule="${r.id}">Duplicate</button><button class="secondary danger" data-delete-rule="${r.id}">Delete</button></div></div>`;
+        })
+        .join('') || '<p class="rule-empty">No matching rules.</p>';
   };
   let refreshTargets = () => {},
     selectCreatedTag = () => {},
@@ -112,17 +141,33 @@ window.InkwellRules = async (
       renderList();
     }
   };
+  const paintSelection = () => {
+    root.querySelectorAll('[data-rule-entry]').forEach((row) => {
+      const active = Number(row.dataset.ruleEntry) === editingId;
+      row.classList.toggle('active', active);
+      row.querySelector('[data-edit-rule]').setAttribute('aria-current', String(active));
+    });
+  };
   const editor = (rule = {}, context = null) => {
     const epoch = ++editorEpoch;
     let savedId = rule.id;
     editingId = rule.id || null;
+    paintSelection();
     let conditions = structuredClone(
       rule.conditions || [{ field: 'subject', operator: 'contains', value: '' }],
     );
     let actions = structuredClone(rule.actions || [{ type: 'move', value: 'archive' }]);
     root.querySelector('#rule-editor').innerHTML =
-      `<h2>${rule.id ? 'Edit rule' : 'New rule'}</h2>${context ? `<p>Build from: ${esc(context.subject)}. Change the condition field to Sender address, Subject, Sender domain or Sender TLD to use this message’s values.</p>` : ''}<p class="fine-print">TLD means the last domain label: .ca or .com; example.co.uk has TLD .uk. TLD rules are broad and do not verify sender identity.</p><form id="rule-form">${field('Rule name', 'name', rule.name || '', 'text', 'required maxlength="100"')}<label class="check-label"><input type="checkbox" name="enabled" ${rule.enabled !== false ? 'checked' : ''}> Enabled</label><label class="field">Match conditions<select name="mode" aria-label="Match conditions"><option value="all">All conditions (AND)</option><option value="any">Any condition (OR)</option></select></label><h3>Conditions</h3><div id="rule-conditions"></div><button type="button" class="secondary" id="add-condition">Add condition</button><h3>Actions</h3><div id="rule-actions"></div><button type="button" class="secondary" id="add-action">Add action</button><h3>Additional exclusions</h3><label class="check-label"><input name="exclude_unread" type="checkbox" ${rule.exclude_unread ? 'checked' : ''}> Exclude unread messages</label>${field('Only messages older than days (0 = any age)', 'older_than_days', rule.older_than_days || 0, 'number', 'required min="0" max="36500"')}<div class="form-actions"><button class="secondary" id="new-rule" type="button">New rule</button><button class="primary">Save rule</button>${context ? `<button class="primary" name="apply_message" ${context.can_apply ? '' : 'disabled'}>Save and apply to this message</button><p class="fine-print">Only the selected cached incoming copy is applied now; future imports use normal rule priority. Drafts and sent copies are excluded.</p>` : ''}</div></form>`;
+      `<h2>${rule.id ? 'Edit rule' : 'New rule'}</h2>${context ? `<p class="rule-context" title="${esc(context.subject)}">From message: ${esc(context.subject)}</p>` : ''}<form id="rule-form"><div class="rule-name-row">${field('Rule name', 'name', rule.name || '', 'text', 'required maxlength="100"')}<label class="check-label"><input type="checkbox" name="enabled" ${rule.enabled !== false ? 'checked' : ''}> Enabled</label></div><div class="rule-condition-heading"><h3>Conditions</h3><label class="field rule-match">Match<select name="mode" aria-label="Match conditions"><option value="all">All (AND)</option><option value="any">Any (OR)</option></select></label></div><div id="rule-conditions"></div><button type="button" class="secondary" id="add-condition">Add condition</button><h3>Actions</h3><div id="rule-actions"></div><button type="button" class="secondary" id="add-action">Add action</button><details id="rule-advanced" ${rule.exclude_unread || rule.older_than_days ? 'open' : ''}><summary>Advanced options</summary><label class="check-label"><input name="exclude_unread" type="checkbox" ${rule.exclude_unread ? 'checked' : ''}> Exclude unread messages</label>${field('Only messages older than days (0 = any age)', 'older_than_days', rule.older_than_days || 0, 'number', 'required min="0" max="36500"')}</details><div class="form-actions"><button class="primary">Save rule</button>${context ? `<button class="primary" name="apply_message" ${context.can_apply ? '' : 'disabled'}>Save and apply to this message</button><p class="fine-print">Only the selected cached incoming copy is applied now; future imports use normal rule priority. Drafts and sent copies are excluded.</p>` : ''}</div></form>`;
     const form = root.querySelector('#rule-form');
+    form.addEventListener(
+      'invalid',
+      (event) => {
+        const details = event.target.closest('details');
+        if (details) details.open = true;
+      },
+      true,
+    );
     form.elements.mode.value = rule.mode || 'all';
     const renderConditions = () => {
       form.querySelector('#rule-conditions').innerHTML = conditions
@@ -239,10 +284,6 @@ window.InkwellRules = async (
       actions.push({ type: 'star', value: '' });
       renderActions();
     };
-    form.querySelector('#new-rule').onclick = () => {
-      editor();
-      root.querySelector('#rule-form [name=name]').focus();
-    };
     renderConditions();
     renderActions();
     form.onsubmit = async (event) => {
@@ -280,8 +321,8 @@ window.InkwellRules = async (
           }
         }
         if (isCurrent() && root.isConnected && epoch === editorEpoch) {
-          editor();
-          root.querySelector('#rules-list').scrollIntoView({ block: 'nearest' });
+          editor(rules.find((r) => r.id === savedId) || {}, context);
+          root.querySelector('#rule-form .primary:not([name])')?.focus({ preventScroll: true });
         }
         toast(
           applied === null
@@ -356,8 +397,24 @@ window.InkwellRules = async (
       }
       if (b.dataset.toggleRule) {
         const r = rules.find((r) => r.id === Number(b.dataset.toggleRule));
-        await api('/rules/' + r.id, { method: 'PUT', body: { ...clean(r), enabled: !r.enabled } });
-        await reloadList();
+        const epoch = editorEpoch,
+          checkbox = editingId === r.id ? root.querySelector('#rule-form [name=enabled]') : null;
+        b.disabled = true;
+        if (checkbox) checkbox.disabled = true;
+        try {
+          await api('/rules/' + r.id, {
+            method: 'PUT',
+            body: { ...clean(r), enabled: !r.enabled },
+          });
+          await reloadList();
+          if (isCurrent() && root.isConnected && epoch === editorEpoch) {
+            if (checkbox) checkbox.checked = !r.enabled;
+            root.querySelector(`[data-toggle-rule="${r.id}"]`)?.focus({ preventScroll: true });
+          }
+        } finally {
+          b.disabled = false;
+          if (checkbox) checkbox.disabled = false;
+        }
       }
     } catch (error) {
       toast(error.message);
@@ -399,6 +456,6 @@ window.InkwellRules = async (
     }
   };
   renderList();
-  editor(sourceMessage?.rule || {}, sourceMessage);
+  editor(sourceMessage?.rule || rules[0] || {}, sourceMessage);
   if (sourceMessage) root.querySelector('#rule-form [name=name]').focus();
 };

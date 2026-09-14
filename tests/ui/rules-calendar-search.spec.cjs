@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { openRuleSection } = require('./helpers.cjs');
 let preferences,
   ruleId,
   folderId,
@@ -70,6 +71,8 @@ test('one live search uses two-character minimum and clearing restores mail', as
 test('rule editor creates local destinations and saves sender exclusions', async ({ page }) => {
   await page.goto('/#/settings/rules');
   const name = 'Rules folder ' + Date.now();
+  await page.locator('#create-rule').click();
+  await openRuleSection(page, 'rule-resource-tools');
   await page.getByLabel('New local folder').fill(name);
   await page.getByRole('button', { name: 'Create local folder', exact: true }).click();
   await expect(page.locator('#toast')).toContainText('Local folder created');
@@ -79,10 +82,11 @@ test('rule editor creates local destinations and saves sender exclusions', async
   await page.getByLabel('Condition 1 operator', { exact: true }).selectOption('is');
   await page.getByLabel('Condition 1 value', { exact: true }).fill('example.org');
   await page.getByLabel('Action 1 value', { exact: true }).selectOption('local-' + folderId);
+  await openRuleSection(page, 'rule-advanced');
   await page.getByLabel('Exclude unread messages').check();
   await page.getByLabel('Only messages older than days (0 = any age)').fill('7');
   await page.getByRole('button', { name: 'Save rule', exact: true }).click();
-  await expect(page.locator('.rule-row')).toContainText('Older read sender mail');
+  await expect(page.locator('#rules-list')).toContainText('Older read sender mail');
   const saved = (await api(page, '/rules')).find((r) => r.name === 'Older read sender mail');
   ruleId = saved.id;
   expect(saved).toMatchObject({
@@ -94,7 +98,7 @@ test('rule editor creates local destinations and saves sender exclusions', async
   await page.locator('[data-edit-rule="' + ruleId + '"]').click();
   await page.getByLabel('Enabled', { exact: true }).uncheck();
   await page.getByRole('button', { name: 'Save rule', exact: true }).click();
-  await expect(page.locator('.rule-row')).toContainText('Disabled');
+  await expect(page.locator('#rules-list')).toContainText('Disabled');
   await page.goto('/#/local-' + folderId);
   await expect(page.locator('#page-title')).toContainText(name);
 });
