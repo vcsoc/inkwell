@@ -6,7 +6,9 @@ A thin, light, indeterminate strip runs across the top of the mail list while th
 
 ## Outlook server folder tree
 
-Connected Microsoft accounts appear underneath the main Inbox navigation button, with their server folder hierarchy nested under each account. Parent branches can be collapsed; select a folder's button to view it. On phones, use **Open navigation** to access the tree. Names are rendered as text, including names containing markup characters.
+The sidebar starts with **inkwell · local mail**, keeping Inbox, Starred, Sent, Drafts, Archive, Trash and local folders together. Connected Microsoft accounts appear separately below, in collapsible **Outlook** groups. Multiple accounts get numbered groups; hover the group heading for its address without bringing back a visible account banner. Parent branches can also be collapsed; select a folder's button to view it. On phones, use **Open navigation**. Names are rendered as text, including names containing markup characters.
+
+The main **Inbox** is the aggregate local workspace view across accounts, including locally refiled Inbox copies. **Outlook → Inbox** is the account's discovered server folder view. These are different views, not a second Inbox created on the server. The main **Drafts** contains editable, autosaved inkwell drafts; **Outlook → Drafts** contains downloaded server-draft snapshots, not those local editors. The top Inbox count describes cached unread mail; account-tree counts come from the server and can be much larger than the downloaded cache.
 
 Startup and manual Inbox **Sync** discover the visible Graph mail folder hierarchy, including folders nested inside Inbox. The app follows paginated child lists and preserves its previous snapshot if discovery fails. Discovery is limited to 500 requests per account. Counts in the tree are server counts, not downloaded-message counts.
 
@@ -43,6 +45,20 @@ Use the top search field: after at least two trimmed characters, results update 
 - **All folders (default):** downloaded mail across accounts, including Junk, Archive, Sent, local Trash and drafts.
 
 Search matches sender, To/Cc/Bcc addresses, subject, plain-text body and local tag names, with filtering before pagination. Plain tag names work; `tag:Work` searches only tag names (substring), `tag:"Follow up"` matches an exact normalized tag name, and `#Work` matches the tag Work or #Work exactly as well as literal #Work in message text. `tags:` is an alias for `tag:`. These are single tag expressions, not a combined query language; use the exact-tag quick filter alongside a plain text query to combine a tag and message terms. Tag matching is Unicode-normalized and case-insensitive. `%`, `_` and backslashes are literal search characters, not SQL wildcards. Cross-folder results carry folder labels. Search does **not** search older messages still only on the server. Open/sync folders first to populate their caches. Changing folders resets the search selector to All folders; ordinary folder browsing still shows only that folder. From a non-mail page, search uses the aggregate Inbox as its browsing context and searches all cached folders by default. Collection searches remain within their collection, and active quick filters continue to apply; the description makes these restrictions explicit. The duplicate in-list search field has been removed. Local-only folders do not have server descendants.
+
+## Delete selected messages
+
+Press **Delete** with message-list or reader focus. Checked messages take priority; otherwise it acts on the highlighted/open message. The selection toolbar also provides **Trash** or **Delete permanently**.
+
+- Outside local Trash, selected copies move to **Trash** and keep their restore origins, including local drafts.
+- If every selected copy is already in local Trash, Delete permanently removes those local message records.
+- A mixed selection containing Trash and non-Trash copies only moves copies to Trash; it does not permanently delete part of the selection.
+
+No confirmation is shown. Held-key repeats and modified Delete shortcuts are ignored. Delete does not act on mail while typing in an input, search, editable region or open form, or while folder navigation has focus. The packaged desktop also handles Delete from the sandboxed HTML reader without granting that frame script or same-origin privileges.
+
+`POST /api/messages/trash-selection` accepts `{ids, permanent}`. The whole selection is validated under an immediate transaction; missing messages or a changed non-Trash location abort permanent deletion without deleting other selected copies. Later responses cannot replace a different page's editor.
+
+All operations are **local only**. Outlook's Deleted Items folder is not inkwell's local Trash. Permanent removal is not secure disk erasure and does not remove mail still on the server; a later provider import can download that server copy again.
 
 ## Expanded message context menu
 

@@ -26,6 +26,13 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
     tools.querySelector('#restore-selected').hidden = ![...ids].every(
       (id) => state.messages.find((m) => m.id === id)?.folder === 'trash',
     );
+    const deleting = tools.querySelector('#delete-selected');
+    deleting.textContent =
+      ids.size &&
+      [...ids].every((id) => state.messages.find((m) => m.id === id)?.folder === 'trash')
+        ? 'Delete permanently'
+        : 'Trash';
+    deleting.disabled = busy;
     const select = tools.querySelector('#selection-destination');
     const drafts = [...ids].some(
       (id) => state.messages.find((m) => m.id === id)?.folder === 'drafts',
@@ -38,16 +45,45 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
   const run = async (folder, restore = false) => {
     if (busy || !ids.size) return;
     busy = true;
-    const moving = [...ids];
+    const moving = [...ids],
+      generation = state.generation;
     try {
       await api('/messages/' + (restore ? 'restore' : 'move'), {
         method: 'POST',
         body: restore ? { ids: moving } : { ids: moving, folder },
       });
-      ids.clear();
-      await refresh();
+      if (generation === state.generation) ids.clear();
+      await refresh({ generation, affected: moving });
       toast(
         `${moving.length} message${moving.length === 1 ? '' : 's'} ${restore ? 'restored' : 'moved'} locally. Server mail was not changed.`,
+      );
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      busy = false;
+      paint();
+    }
+  };
+  const deleteSelected = async () => {
+    if (busy) return;
+    const chosen = ids.size ? [...ids] : state.selected ? [state.selected.id] : [];
+    if (!chosen.length) return;
+    const records = chosen.map(
+      (id) =>
+        state.messages.find((m) => m.id === id) ||
+        (state.selected?.id === id ? state.selected : null),
+    );
+    if (records.some((m) => !m)) return;
+    const permanent = records.every((m) => m.folder === 'trash'),
+      generation = state.generation;
+    busy = true;
+    paint();
+    try {
+      await api('/messages/trash-selection', { method: 'POST', body: { ids: chosen, permanent } });
+      if (generation === state.generation) ids.clear();
+      await refresh({ generation, affected: chosen });
+      toast(
+        `${chosen.length} local message${chosen.length === 1 ? '' : 's'} ${permanent ? 'permanently deleted' : 'moved to Trash'}. Server mail was not changed.`,
       );
     } catch (error) {
       toast(error.message);
@@ -94,8 +130,12 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
       tools.className = 'selection-tools';
       document.querySelector('.mail-toolbar').after(tools);
     }
-    tools.innerHTML = `<label class="select-all-label"><input type="checkbox" id="select-all-messages" aria-label="Select all visible messages"><span id="selection-count"></span></label><span class="selection-bulk" hidden><select id="selection-destination" aria-label="Move selected messages to"><option value="inbox">Inbox</option><option value="archive">Archive</option><option value="trash">Trash</option>${(state.localFolders || []).map((f) => `<option value="local-${f.id}">${esc(f.name)}</option>`).join('')}${state.remoteFolders.map((f) => `<option value="remote:${f.id}">${esc(state.accounts.find((a) => a.id === f.account_id)?.email || 'Account')} / ${esc(f.path)}</option>`).join('')}</select><button class="secondary" id="move-selected">Move</button><button class="secondary" id="restore-selected" hidden>Restore</button><button class="secondary" id="clear-selection">Clear</button><select id="selection-tag" aria-label="Tag for selected messages"><option value="">Choose tag…</option>${(state.tagCatalog || []).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select><button class="secondary" id="add-selected-tag">Add tag</button><button class="secondary" id="remove-selected-tag">Remove tag</button></span>`;
+    tools.innerHTML = `<label class="select-all-label"><input type="checkbox" id="select-all-messages" aria-label="Select all visible messages"><span id="selection-count"></span></label><span class="selection-bulk" hidden><select id="selection-destination" aria-label="Move selected messages to"><option value="inbox">Inbox</option><option value="archive">Archive</option><option value="trash">Trash</option>${(state.localFolders || []).map((f) => `<option value="local-${f.id}">${esc(f.path || f.name)}</option>`).join('')}${state.remoteFolders.map((f) => `<option value="remote:${f.id}">${esc(state.accounts.find((a) => a.id === f.account_id)?.email || 'Account')} / ${esc(f.path)}</option>`).join('')}</select><button class="secondary" id="move-selected">Move</button><button class="secondary" id="restore-selected" hidden>Restore</button><button class="secondary danger" id="delete-selected">Trash</button><button class="secondary" id="clear-selection">Clear</button><select id="selection-tag" aria-label="Tag for selected messages"><option value="">Choose tag…</option>${(state.tagCatalog || []).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select><button class="secondary" id="add-selected-tag">Add tag</button><button class="secondary" id="remove-selected-tag">Remove tag</button></span>`;
     tools.querySelector('#select-all-messages').onchange = (e) => {
+      if (busy) {
+        paint();
+        return;
+      }
       if (e.target.checked) visible.forEach((id) => ids.add(id));
       else ids.clear();
       paint();
@@ -112,9 +152,11 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
         }
         if (busy) return;
         busy = true;
+        const generation = state.generation,
+          tagged = [...ids];
         try {
-          await api('/tags/assign', { method: 'POST', body: { ids: [...ids], tag_id, add } });
-          await refresh();
+          await api('/tags/assign', { method: 'POST', body: { ids: tagged, tag_id, add } });
+          await refresh({ generation, affected: tagged });
           toast(add ? 'Tag added locally.' : 'Tag removed locally.');
         } catch (error) {
           toast(error.message);
@@ -126,7 +168,9 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
     tools.querySelector('#move-selected').onclick = () =>
       run(tools.querySelector('#selection-destination').value);
     tools.querySelector('#restore-selected').onclick = () => run(null, true);
+    tools.querySelector('#delete-selected').onclick = deleteSelected;
     tools.querySelector('#clear-selection').onclick = () => {
+      if (busy) return;
       ids.clear();
       paint();
     };
@@ -202,6 +246,7 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
   return {
     bindRows,
     bindFolders,
+    deleteSelected,
     rowClick: (row, event) => {
       if (event.ctrlKey || event.metaKey || event.shiftKey) {
         select(Number(row.dataset.message), event);

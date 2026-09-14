@@ -68,9 +68,14 @@ const selection = InkwellMessageSelection({
   api,
   esc,
   toast,
-  refresh: async () => {
-    state.selected = null;
+  refresh: async ({ generation = state.generation, affected = null } = {}) => {
     await refreshCounts();
+    if (generation !== state.generation) return;
+    if (affected && state.selected && !affected.includes(state.selected.id)) {
+      await renderMail({ listOnly: true });
+      return;
+    }
+    state.selected = null;
     await renderMail();
   },
 });
@@ -290,7 +295,7 @@ function localBranch(key, button, children = localChildren(key)) {
 function remoteTree() {
   return state.accounts
     .filter((a) => state.remoteFolders.some((f) => f.account_id === a.id))
-    .map((account) => {
+    .map((account, index) => {
       const entries = state.remoteFolders.filter((f) => f.account_id === account.id);
       const seen = new Set();
       const branch = (parent, depth = 0) =>
@@ -309,37 +314,49 @@ function remoteTree() {
                   : button;
               })
               .join('');
-      return `<section class="server-folders" aria-label="${esc(account.email)} server folders">${branch('')}</section>`;
+      return `<section class="server-folders" aria-label="${esc(account.email)} server folders"><details data-account-folder-group="${account.id}" ${collapsedFolders.has('account:' + account.id) ? '' : 'open'}><summary class="folder-account-heading" title="${esc(account.email)}"><span>${account.provider === 'microsoft' ? 'Outlook' : 'Server'}${state.accounts.length > 1 ? ' ' + (index + 1) : ''}</span></summary><p class="folder-group-hint">Cached views · counts from server</p>${branch('')}</details></section>`;
     })
     .join('');
 }
 function navigation() {
-  $('#navigation').innerHTML = folders
-    .map(([id, icon, name], i) => {
-      const local = state.localFolders?.find((f) => 'local-' + f.id === id);
-      const parent = local?.parent;
-      const divider =
-        i === 6
-          ? '<div class="nav-divider"></div>' +
-            (state.localFolders?.length
-              ? '<div id="folder-root-drop">Local folders · top level</div>'
-              : '')
-          : '';
-      if (
-        parent &&
-        (['inbox', 'archive', 'sent', 'drafts', 'trash'].includes(parent) ||
-          state.localFolders.some((f) => 'local-' + f.id === parent) ||
-          state.remoteFolders.some((f) => 'remote:' + f.id === parent))
-      )
-        return divider;
-      const button = `<button class="nav-item ${state.view === id ? 'active' : ''}" data-view="${id}" aria-label="${esc(name)}"><span aria-hidden="true">${icon}</span>${local ? `<span class="folder-name">${esc(local.name)}</span>` : esc(name)}${id === 'inbox' && state.counts.find((c) => c.folder === id)?.unread ? `<span class="nav-count">${state.counts.find((c) => c.folder === id).unread}</span>` : ''}</button>`;
-      return divider + localBranch(id, button);
-    })
-    .join('');
-  const inboxButton = $('#navigation [data-view="inbox"]');
-  (inboxButton?.closest('[data-local-branch="inbox"]') || inboxButton)?.insertAdjacentHTML(
-    'afterend',
-    remoteTree(),
+  $('#navigation').innerHTML =
+    '<div class="folder-group-heading">inkwell · local mail</div>' +
+    folders
+      .map(([id, icon, name], i) => {
+        const local = state.localFolders?.find((f) => 'local-' + f.id === id);
+        const parent = local?.parent;
+        const divider =
+          i === 6
+            ? '<div class="nav-divider"></div>' +
+              (state.localFolders?.length
+                ? '<div id="folder-root-drop">Local folders · top level</div>'
+                : '')
+            : '';
+        if (
+          parent &&
+          (['inbox', 'archive', 'sent', 'drafts', 'trash'].includes(parent) ||
+            state.localFolders.some((f) => 'local-' + f.id === parent) ||
+            state.remoteFolders.some((f) => 'remote:' + f.id === parent))
+        )
+          return divider;
+        const button = `<button class="nav-item ${state.view === id ? 'active' : ''}" data-view="${id}" aria-label="${esc(name)}"><span aria-hidden="true">${icon}</span>${local ? `<span class="folder-name">${esc(local.name)}</span>` : esc(name)}${id === 'inbox' && state.counts.find((c) => c.folder === id)?.unread ? `<span class="nav-count">${state.counts.find((c) => c.folder === id).unread}</span>` : ''}</button>`;
+        return divider + localBranch(id, button);
+      })
+      .join('');
+  const serverTree = remoteTree();
+  if (serverTree)
+    $('#navigation [data-view=calendar]').insertAdjacentHTML(
+      'beforebegin',
+      '<div class="nav-divider"></div>' + serverTree,
+    );
+  $('#navigation [data-view=inbox]').title = 'All cached Inbox mail in inkwell, across accounts';
+  $('#navigation [data-view=drafts]').title = 'Editable drafts saved locally in inkwell';
+  $$('#navigation [data-account-folder-group]').forEach((d) =>
+    d.addEventListener('toggle', () => {
+      const key = 'account:' + d.dataset.accountFolderGroup;
+      if (d.open) collapsedFolders.delete(key);
+      else collapsedFolders.add(key);
+    }),
   );
   $$('#navigation [data-remote-folder]').forEach((b) =>
     on(b, 'click', (event) => {
@@ -722,7 +739,7 @@ async function refreshQuickMail() {
   await renderMail();
   if (focus) document.getElementById(focus)?.focus({ preventScroll: true });
 }
-async function renderMail() {
+async function renderMail({ listOnly = false } = {}) {
   const generation = state.generation;
   const ticket = (state.mailRequest = (state.mailRequest || 0) + 1);
   const catalog = await api('/tags');
@@ -753,6 +770,15 @@ async function renderMail() {
   const messages = Array.isArray(response) ? response : response.messages;
   state.total = Array.isArray(response) ? null : response.total;
   state.messages = messages;
+  if (listOnly && $('#message-list')) {
+    renderMessageList();
+    $('.mail-footer > span').textContent =
+      `${messages.length}${state.total !== null ? ' of ' + state.total : ''} conversations${state.offset ? ' · page ' + (state.offset / 100 + 1) : ''} · ${collection ? 'grouped collection' : 'local mailbox'}`;
+    $('#prev-page').disabled = state.offset === 0;
+    $('#next-page').disabled =
+      state.total !== null ? state.offset + messages.length >= state.total : messages.length < 100;
+    return;
+  }
   const persistentReader = ['classic', 'stacked'].includes(preferences.layout);
   $('#workspace').innerHTML =
     `<div class="mail-shell ${state.selected ? 'has-selection' : ''}"><div id="mail-activity" class="mail-activity" role="progressbar" aria-label="Background activity" aria-hidden="${pendingWork === 0}"><span></span></div>${collection ? `<section class="collection-banner" aria-label="Grouped collection"><div><strong>${esc(state.collection.label)}</strong><p>${collection.total} messages · all local folders and accounts, including Trash</p><div>${collection.folders.map((f) => `<span class="folder-badge">${esc(f.folder)} · ${f.total}</span>`).join('')}</div></div><button class="secondary" id="exit-collection">Back to inbox</button></section>` : ''}<div class="mail-toolbar"><div class="filter-tabs"><button class="filter-tab ${state.filter === 'all' ? 'active' : ''}" data-filter="all">All mail</button><button class="filter-tab ${state.filter === 'unread' ? 'active' : ''}" data-filter="unread">Unread</button></div></div><div class="mail-columns"><div class="message-list" id="message-list"></div><div id="message-resizer" class="pane-resizer" role="separator" aria-label="Resize message list" aria-orientation="vertical" tabindex="0"></div><article class="reader ${state.selected || persistentReader ? '' : 'hidden'}" id="reader"><div class="empty-state reader-placeholder"><div class="empty-icon">▤</div><h2>Select a conversation</h2><p>Your message will appear here. Remote content stays blocked.</p></div></article></div><div class="mail-footer"><span>${messages.length}${state.total !== null ? ' of ' + state.total : ''} conversations${state.offset ? ' · page ' + (state.offset / 100 + 1) : ''} · ${collection ? 'grouped collection' : 'local mailbox'}</span><div><button id="prev-page" ${state.offset === 0 ? 'disabled' : ''}>← Previous</button> <button id="next-page" ${(state.total !== null ? state.offset + messages.length >= state.total : messages.length < 100) ? 'disabled' : ''}>Next →</button></div></div></div><div class="quiet-note"><span>♧</span> A little less noise. A little more room to think.</div>`;
@@ -1714,7 +1740,47 @@ window.InkwellFocusQuickFilter = () => {
   }
   $('#global-search').focus();
 };
+function deleteMailKey(e) {
+  if (
+    e.key !== 'Delete' ||
+    e.repeat ||
+    e.isComposing ||
+    e.ctrlKey ||
+    e.metaKey ||
+    e.altKey ||
+    e.shiftKey ||
+    $('#modal').open ||
+    $('#navigation').classList.contains('folder-dragging')
+  )
+    return false;
+  const target = e.target instanceof Element ? e.target : document.activeElement;
+  if (
+    target.isContentEditable ||
+    target.closest('[contenteditable]:not([contenteditable="false"])')
+  )
+    return false;
+  if (
+    target.closest('input,textarea,select') &&
+    !target.matches('.select-message,#select-all-messages')
+  )
+    return false;
+  if (
+    target !== document.body &&
+    target !== document.documentElement &&
+    !target.closest('#workspace .mail-shell')
+  )
+    return false;
+  if (['settings', 'calendar', 'contacts', 'tags', 'rules'].includes(state.view)) return false;
+  e.preventDefault();
+  void selection.deleteSelected();
+  return true;
+}
+window.InkwellDeleteFromPreview = () => {
+  if (!$('#modal').open && document.activeElement?.matches('#reader iframe.html-message'))
+    void selection.deleteSelected();
+};
 document.addEventListener('keydown', (e) => {
+  if (deleteMailKey(e)) return;
   if (
     (e.ctrlKey || e.metaKey) &&
     e.shiftKey &&

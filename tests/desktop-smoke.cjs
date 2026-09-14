@@ -93,6 +93,30 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
       wc.sendInputEvent({ type: 'keyUp', keyCode: 'K', modifiers: ['control', 'shift'] });
     });
     await expect(window.locator('#global-search')).toBeFocused();
+    await email.getByRole('heading', { name: 'Packaged HTML preview' }).click();
+    await app.evaluate(({ BrowserWindow }) => {
+      const wc = BrowserWindow.getAllWindows()[0].webContents;
+      wc.sendInputEvent({ type: 'keyDown', keyCode: 'Delete' });
+      wc.sendInputEvent({ type: 'keyUp', keyCode: 'Delete' });
+    });
+    await expect
+      .poll(() =>
+        window.evaluate(
+          async (id) => (await (await fetch('/api/messages/' + id)).json()).folder,
+          messageId,
+        ),
+      )
+      .toBe('trash');
+    await window.evaluate(async (id) => {
+      const r = await fetch('/api/messages/restore', {
+        method: 'POST',
+        headers: { 'X-Inkwell': '1', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [id] }),
+      });
+      if (!r.ok) throw Error(await r.text());
+    }, messageId);
+    await sidebarClick(window, '#navigation [data-view=inbox]');
+    await window.locator(`[data-message="${messageId}"] .subject`).click();
     await readerAction(window, 'Not Junk', 'Not Junk');
     await expect(window.locator('#toast')).toContainText('Future imports use rules or Inbox');
     await window.locator('.message-row [data-more]').first().click();

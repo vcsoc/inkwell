@@ -152,6 +152,18 @@ async function launch() {
   window.webContents.on('before-input-event', (event, input) => {
     if (
       input.type === 'keyDown' &&
+      input.key === 'Delete' &&
+      !input.isAutoRepeat &&
+      !input.control &&
+      !input.meta &&
+      !input.alt &&
+      !input.shift
+    ) {
+      // Sandboxed mail frames cannot forward DOM events to the application.
+      window.webContents.executeJavaScript('window.InkwellDeleteFromPreview?.()').catch(() => {});
+    }
+    if (
+      input.type === 'keyDown' &&
       (input.control || input.meta) &&
       input.shift &&
       !input.alt &&

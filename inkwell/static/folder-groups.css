@@ -1,0 +1,30 @@
+.folder-group-heading {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 6px 12px 10px;
+  font-weight: 600;
+}
+#navigation .folder-account-heading {
+  min-height: 44px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 14px;
+  padding: 8px 4px;
+}
+.folder-account-heading > span {
+  min-width: 0;
+}
+.folder-account-heading small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.folder-group-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 4px 10px;
+}
+#navigation .server-folders {
+  margin: 0 0 12px;
+}

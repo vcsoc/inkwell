@@ -1,5 +1,6 @@
 """Atomic local filing and Trash restore. Never calls a mail provider."""
 
+from typing import Annotated
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from . import store
@@ -9,6 +10,13 @@ router = APIRouter(prefix="/api/messages")
 
 class Selection(BaseModel):
     ids: list[int] = Field(min_length=1, max_length=500)
+
+
+class Trash(Selection):
+    ids: list[Annotated[int, Field(strict=True, gt=0, lt=2**63)]] = Field(
+        min_length=1, max_length=500
+    )
+    permanent: bool = Field(default=False, strict=True)
 
 
 class Move(Selection):
@@ -67,6 +75,28 @@ def move(data: Move):
         for row in rows:
             file_message(db, row, folder, remote)
     return {"moved": len(rows)}
+
+
+@router.post("/trash-selection")
+def trash_selection(data: Trash):
+    with store.db() as db:
+        db.execute("BEGIN IMMEDIATE")
+        if any(identifier <= 0 or identifier >= 2**63 for identifier in data.ids):
+            raise HTTPException(422, "Invalid message selection")
+        rows = selected(db, data.ids)
+        if data.permanent:
+            if any(row["folder"] != "trash" for row in rows):
+                raise HTTPException(
+                    409,
+                    "Messages changed location; select only local Trash messages to permanently delete",
+                )
+            for row in rows:
+                db.execute("DELETE FROM messages WHERE id=?", (row["id"],))
+        else:
+            for row in rows:
+                if row["folder"] != "trash":
+                    file_message(db, row, "trash")
+    return {"deleted" if data.permanent else "trashed": len(rows)}
 
 
 @router.post("/restore")
