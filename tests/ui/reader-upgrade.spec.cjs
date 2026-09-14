@@ -208,3 +208,38 @@ test('Theme Studio sample previews colors and sidebar fonts without saving', asy
     fullPage: true,
   });
 });
+
+test('Reader toolbar uses compact SVG controls with working star, move and sender actions', async ({
+  page,
+}, info) => {
+  await page.locator(`[data-message="${id}"]`).click();
+  const toolbar = page.getByRole('group', { name: 'Email actions', exact: true });
+  await expect(toolbar.locator('button')).toHaveCount(14);
+  await expect(toolbar.locator('button svg')).toHaveCount(14);
+  const size = await toolbar
+    .locator('button')
+    .first()
+    .evaluate((b) => parseFloat(getComputedStyle(b).fontSize));
+  expect(size).toBeLessThan(16);
+  await toolbar.getByRole('button', { name: 'Star message', exact: true }).click();
+  await expect(
+    toolbar.getByRole('button', { name: 'Unstar message', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  expect((await request(page, '/messages/' + id)).starred).toBe(1);
+  await toolbar.getByRole('button', { name: 'Copy sender address', exact: true }).click();
+  await expect(page.locator('#modal-body input')).toHaveValue('alex@example.org');
+  await page.locator('#close-modal').click();
+  await toolbar.getByRole('button', { name: 'Add sender to contacts', exact: true }).click();
+  await expect(page.getByLabel('Email', { exact: true })).toHaveValue('alex@example.org');
+  await page.locator('#close-modal').click();
+  const box = await toolbar.boundingBox();
+  expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize().width);
+  await page.screenshot({
+    path: 'test-results/' + info.project.name + '-reader-toolbar.png',
+    fullPage: true,
+  });
+  await toolbar.getByRole('button', { name: 'Move local copy', exact: true }).click();
+  await page.locator('#move-local-form select').selectOption('archive');
+  await page.locator('#move-local-form button[type=submit]').click();
+  await expect.poll(async () => (await request(page, '/messages/' + id)).folder).toBe('archive');
+});

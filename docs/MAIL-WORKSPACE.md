@@ -49,6 +49,10 @@ HTML preview is now the default, with a privacy banner and explicit per-view ima
 
 These are working actions, **not full Outlook menu parity**. Reply all, provider categories, reminders, junk/block rules, original-source viewing, printing, attachment handling, and server folder creation/rename/move/delete remain unimplemented.
 
+## Reader toolbar
+
+The reader uses consistent SVG icons and compact labels (three pixels below the configured base size, minimum 12px). Direct actions include Reply, Forward, archive/restore, mark unread, star/unstar, Move, Tags, Save text, add sender to contacts, copy sender address, reader light/dark, Trash/delete and More. Controls wrap on narrow panes and retain 44px touch targets on phones. Save text exports the readable cached message, not original MIME. Actions remain local except explicitly sending from the composer; no unsupported provider operations are shown as working buttons.
+
 ## Tags and quick filters
 
 Tag Manager sits above Settings and supports reusable colored tags, usage counts, rename, bulk merge/delete, and exact tagged-mail browsing. The message toolbar adds combined quick filters, sorting, cards/table views and pinned filters. Filtering runs before pagination. See [Tags and filters](TAGS-FILTERS.md).

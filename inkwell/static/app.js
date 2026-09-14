@@ -604,7 +604,10 @@ function renderMessageList() {
       if (state.selected?.id === m.id) state.selected.starred = m.starred;
       if (state.view === 'starred' || state.quick?.starred || preferences.mail_sort === 'starred')
         await renderMail();
-      else renderMessageList();
+      else {
+        renderMessageList();
+        if (state.selected?.id === m.id) paintReaderStar($('#reader-star'), m.starred);
+      }
     }),
   );
   if ($('#connect-empty')) on($('#connect-empty'), 'click', () => navigate('settings/mail'));
@@ -847,6 +850,13 @@ async function openMessage(id) {
   renderReader();
   await refreshCounts();
 }
+function paintReaderStar(button, starred) {
+  if (!button) return;
+  button.setAttribute('aria-pressed', String(starred));
+  button.setAttribute('aria-label', starred ? 'Unstar message' : 'Star message');
+  button.title = starred ? 'Unstar message' : 'Star message';
+  button.querySelector('span').textContent = starred ? 'Unstar' : 'Star';
+}
 function renderReader() {
   const m = state.selected;
   if (!m) return;
@@ -893,9 +903,43 @@ function renderReader() {
     readerColors.forEach((name, index) => pane.style.setProperty(name, colors[index]));
   }
   $('#reader').innerHTML =
-    `<div class="reader-actions"><button class="icon-button" id="reader-menu" aria-label="More email actions" aria-haspopup="menu" aria-expanded="false">⋯</button><button class="icon-button" id="reader-back" aria-label="Back to messages">←</button><button class="secondary" id="archive-message">${m.folder === 'trash' ? 'Restore' : m.folder === 'archive' ? 'Move to inbox' : 'Archive'}</button><button class="secondary" id="unread-message">Mark unread</button><button class="secondary" id="reader-appearance" aria-label="Switch reader to ${dark ? 'light' : 'dark'} view">${dark ? '☀ Light view' : '☾ Dark view'}</button><button class="icon-button danger" id="trash-message" aria-label="${m.folder === 'trash' ? 'Permanently delete' : 'Move to trash'}" title="${m.folder === 'trash' ? 'Permanently delete local copy' : 'Move to Trash'}"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button></div><h2>${esc(m.subject || '(No subject)')}</h2><div class="reader-tags">${tagPills(m)}<button class="secondary" id="edit-tags">Tags…</button></div><div class="reader-meta"><div class="avatar">${esc(initials(m.sender))}</div><div><strong>${esc(m.sender)}</strong>${m.demo ? '<span class="badge">SAMPLE</span>' : ''}<small>To ${esc(m.recipient)}</small>${m.cc ? `<small>Cc ${esc(m.cc)}</small>` : ''}${m.bcc ? `<small>Bcc ${esc(m.bcc)}</small>` : ''}<small>${esc(new Date(m.date).toLocaleString())}</small></div></div><div id="message-preview"></div><div class="reader-reply"><button class="primary" id="reply" aria-label="Reply">↩ Reply</button><button class="secondary" id="forward">Forward →</button></div>`;
+    `${InkwellReaderToolbar(m, dark)}<h2>${esc(m.subject || '(No subject)')}</h2><div class="reader-tags">${tagPills(m)}</div><div class="reader-meta"><div class="avatar">${esc(initials(m.sender))}</div><div><strong>${esc(m.sender)}</strong>${m.demo ? '<span class="badge">SAMPLE</span>' : ''}<small>To ${esc(m.recipient)}</small>${m.cc ? `<small>Cc ${esc(m.cc)}</small>` : ''}${m.bcc ? `<small>Bcc ${esc(m.bcc)}</small>` : ''}<small>${esc(new Date(m.date).toLocaleString())}</small></div></div><div id="message-preview"></div>`;
   InkwellPaintTags($('#reader'));
   on($('#edit-tags'), 'click', () => editTags(m));
+  for (const [id, action] of [
+    ['reader-move', 'move'],
+    ['reader-save', 'save'],
+    ['reader-contact', 'contact'],
+    ['reader-copy', 'copy'],
+  ])
+    on($('#' + id), 'click', () =>
+      messageAction(action, m.id).catch((error) => toast(error.message)),
+    );
+  on($('#reader-star'), 'click', async () => {
+    const button = $('#reader-star');
+    button.disabled = true;
+    try {
+      const starred = !m.starred;
+      await api('/messages/' + m.id, { method: 'PATCH', body: { starred } });
+      m.starred = starred;
+      const listed = state.messages.find((row) => row.id === m.id);
+      if (listed) listed.starred = starred;
+      if (state.selected === m) {
+        renderMessageList();
+        paintReaderStar(button, starred);
+      }
+      await refreshCounts();
+      if (
+        state.selected === m &&
+        (state.view === 'starred' || state.quick?.starred || preferences.mail_sort === 'starred')
+      )
+        await renderMail();
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  });
   void InkwellHtmlPreview($('#message-preview'), m, {
     api,
     navigate,
