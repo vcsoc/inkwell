@@ -48,7 +48,7 @@ def init():
         # Version 1: preserve password accounts while adding Microsoft OAuth metadata.
         conn.execute("BEGIN IMMEDIATE")
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        if version > 6:
+        if version > 7:
             raise RuntimeError("This database was created by a newer inkwell version")
         if version < 1:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)")}
@@ -126,6 +126,15 @@ def init():
             conn.execute("ALTER TABLE messages ADD COLUMN local_destination_id INTEGER")
             conn.execute("ALTER TABLE messages ADD COLUMN restore_destination_id INTEGER")
             conn.execute("PRAGMA user_version=6")
+        if version < 7:
+            conn.execute(
+                "CREATE TABLE tag_catalog(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,key TEXT NOT NULL UNIQUE,color TEXT NOT NULL)"
+            )
+            conn.execute("CREATE INDEX tagged_messages ON messages(id) WHERE tags!='[]'")
+            from . import tag_store
+
+            tag_store.migrate(conn)
+            conn.execute("PRAGMA user_version=7")
     if os.name != "nt":
         os.chmod(DATA / "inkwell.db", 0o600)
 
@@ -134,6 +143,9 @@ def init():
 def db():
     conn = sqlite3.connect(DATA / "inkwell.db", timeout=15)
     conn.row_factory = sqlite3.Row
+    conn.create_function(
+        "inkwell_tag_key", 1, lambda value: str(value).strip().casefold(), deterministic=True
+    )
     conn.create_function("inkwell_sender_key", 1, sender_key, deterministic=True)
     conn.create_function("inkwell_domain_key", 1, domain_key, deterministic=True)
     conn.create_function("inkwell_subject_key", 1, subject_key, deterministic=True)

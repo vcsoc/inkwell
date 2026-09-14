@@ -145,6 +145,17 @@ async function launch() {
     if (
       input.type === 'keyDown' &&
       (input.control || input.meta) &&
+      input.shift &&
+      !input.alt &&
+      input.key.toLowerCase() === 'k'
+    ) {
+      event.preventDefault();
+      window.webContents.executeJavaScript('window.InkwellFocusQuickFilter?.()').catch(() => {});
+      return;
+    }
+    if (
+      input.type === 'keyDown' &&
+      (input.control || input.meta) &&
       !input.alt &&
       Object.hasOwn(zoomCommands, input.key)
     ) {

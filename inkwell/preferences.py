@@ -45,6 +45,13 @@ class Preferences(BaseModel):
     message_list_width: int = Field(default=380, ge=220, le=900)
     ui_zoom: int = Field(default=100, ge=75, le=175)
     theme: Theme = Field(default_factory=Theme)
+    mail_view: Literal["cards", "table"] = "cards"
+    mail_sort: Literal[
+        "date", "sender", "recipient", "subject", "unread", "starred", "tags", "imported"
+    ] = "date"
+    mail_order: Literal["asc", "desc"] = "desc"
+    quick_filter_visible: bool = True
+    quick_filter_pinned: bool = False
 
 
 class WorkspacePatch(BaseModel):
@@ -53,6 +60,14 @@ class WorkspacePatch(BaseModel):
     sidebar_width: int | None = Field(default=None, ge=180, le=480)
     message_list_width: int | None = Field(default=None, ge=220, le=900)
     ui_zoom: int | None = Field(default=None, ge=75, le=175)
+    mail_view: Literal["cards", "table"] | None = None
+    mail_sort: (
+        Literal["date", "sender", "recipient", "subject", "unread", "starred", "tags", "imported"]
+        | None
+    ) = None
+    mail_order: Literal["asc", "desc"] | None = None
+    quick_filter_visible: bool | None = None
+    quick_filter_pinned: bool | None = None
 
 
 @router.patch("/workspace")

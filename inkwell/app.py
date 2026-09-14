@@ -12,13 +12,15 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator, model_validator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import (
+    tag_store,
+    mail_filters,
     message_moves,
     ai,
     collections,
@@ -58,6 +60,7 @@ app.include_router(collections.router)
 app.include_router(html_mail.router)
 app.include_router(rules.router)
 app.include_router(message_moves.router)
+app.include_router(tag_store.router)
 app.add_middleware(
     TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]", *EXTRA_HOSTS]
 )
@@ -296,6 +299,8 @@ def messages(
     offset: int = 0,
     remote_folder_id: int | None = None,
     scope: Literal["folder", "subfolders", "all"] = "folder",
+    filters: mail_filters.Filters = Depends(),
+    summary: bool = False,
 ):
     if not re.fullmatch(
         r"(inbox|starred|sent|drafts|archive|trash|remote|local-[1-9][0-9]*)", folder
@@ -324,10 +329,22 @@ def messages(
     if q:
         clause += " AND (subject LIKE ? OR sender LIKE ? OR body LIKE ? OR EXISTS (SELECT 1 FROM json_each(messages.tags) WHERE value LIKE ?))"
         params += [f"%{q[:200]}%"] * 4
-    return rows(
-        f"SELECT id,account_id,remote_folder_id,local_destination_id,local_folder_override,tags,folder,sender,recipient,subject,substr(body,1,180) AS preview,date,unread,starred,demo FROM messages WHERE {clause} ORDER BY date DESC,id DESC LIMIT 100 OFFSET ?",
-        (*params, max(0, offset)),
-    )
+    extra, values = filters.sql()
+    clause = "(" + clause + ")" + extra
+    params += values
+    with store.db() as db:
+        db.execute("BEGIN")
+        result = [
+            dict(row)
+            for row in db.execute(
+                f"SELECT id,account_id,remote_folder_id,local_destination_id,local_folder_override,tags,folder,sender,recipient,subject,substr(body,1,180) AS preview,date,unread,starred,demo FROM messages WHERE {clause} ORDER BY {filters.order()} LIMIT 100 OFFSET ?",
+                (*params, max(0, offset)),
+            )
+        ]
+        if not summary:
+            return result
+        total = db.execute(f"SELECT count(*) FROM messages WHERE {clause}", params).fetchone()[0]
+        return {"messages": result, "total": total}
 
 
 @app.get("/api/counts")
@@ -347,9 +364,7 @@ def message(message_id: int):
 
 @app.get("/api/tags")
 def tags():
-    return rows(
-        "SELECT DISTINCT value AS name FROM messages,json_each(messages.tags) ORDER BY value COLLATE NOCASE LIMIT 200"
-    )
+    return tag_store.catalog()
 
 
 class MessagePatch(BaseModel):
@@ -363,23 +378,12 @@ class MessagePatch(BaseModel):
     def valid_tags(cls, value):
         if value is None:
             return value
-        result = []
-        for tag in value:
-            tag = tag.strip()
-            if not tag or len(tag) > 32 or "," in tag or any(ord(c) < 32 for c in tag):
-                raise ValueError(
-                    "Tags must be 1–32 characters, without commas or control characters"
-                )
-            if tag.casefold() not in {t.casefold() for t in result}:
-                result.append(tag)
-        return result
+        return tag_store.names(value)
 
 
 @app.patch("/api/messages/{message_id}")
 def patch_message(message_id: int, data: MessagePatch):
     fields = data.model_dump(exclude_none=True)
-    if "tags" in fields:
-        fields["tags"] = json.dumps(fields["tags"])
     if "folder" in fields:
         fields["local_folder_override"] = 1
     if fields:
@@ -392,6 +396,8 @@ def patch_message(message_id: int, data: MessagePatch):
                 ).fetchone()
             ):
                 raise HTTPException(422, "Local folder not found")
+            if "tags" in fields:
+                fields["tags"] = json.dumps(tag_store.canonical(conn, fields["tags"]))
             if "folder" in fields:
                 row = conn.execute(
                     "SELECT folder,local_destination_id FROM messages WHERE id=?", (message_id,)

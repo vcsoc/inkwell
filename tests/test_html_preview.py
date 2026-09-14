@@ -108,7 +108,10 @@ def test_tags_are_validated_local_and_survive_message_moves(client):
         == 200
     )
     assert json.loads(client.get(f"/api/messages/{id}").json()["tags"]) == ["Work", "Follow up"]
-    assert client.get("/api/tags").json() == [{"name": "Follow up"}, {"name": "Work"}]
+    assert [t["name"] for t in client.get("/api/tags").json()] == ["Follow up", "Work"]
+    assert all(
+        t["count"] == 1 and t["color"].startswith("#") for t in client.get("/api/tags").json()
+    )
     assert client.get("/api/messages", params={"q": "Follow up"}).json()[0]["id"] == id
     client.patch(f"/api/messages/{id}", json={"folder": "archive"})
     assert json.loads(client.get("/api/messages?folder=archive").json()[0]["tags"]) == [
@@ -118,7 +121,7 @@ def test_tags_are_validated_local_and_survive_message_moves(client):
     for tags in [["x" * 33], ["a,b"], ["\n"], ["tag" + str(i) for i in range(13)]]:
         assert client.patch(f"/api/messages/{id}", json={"tags": tags}).status_code == 422
     client.patch(f"/api/messages/{id}", json={"tags": []})
-    assert client.get("/api/tags").json() == []
+    assert all(t["count"] == 0 for t in client.get("/api/tags").json())
 
 
 def test_workspace_patch_preserves_theme_and_validates_sizes(client):

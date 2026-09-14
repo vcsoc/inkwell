@@ -65,12 +65,15 @@ window.InkwellMessageMenu = (onSelect, onError) => {
     if (!menu.classList.contains('hidden') && !menu.contains(event.target)) close();
   });
   window.addEventListener('resize', () => close());
-  window.addEventListener(
-    'scroll',
-    (event) => {
-      if (!menu.contains(event.target)) close();
-    },
-    true,
-  );
+  // Opening an off-screen row can queue programmatic scroll events. Do not
+  // immediately dismiss the menu for those; dismiss on actual outside scrolling.
+  for (const type of ['wheel', 'touchmove'])
+    window.addEventListener(
+      type,
+      (event) => {
+        if (!menu.contains(event.target)) close();
+      },
+      { capture: true, passive: true },
+    );
   return { show, close };
 };

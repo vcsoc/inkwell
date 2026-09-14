@@ -69,6 +69,8 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
     await expect(window.locator('html')).toHaveCSS('zoom', '1.1');
     await zoomKey('0');
     await expect(window.locator('html')).toHaveCSS('zoom', '1');
+    await app.evaluate(({BrowserWindow})=>{const wc=BrowserWindow.getAllWindows()[0].webContents;wc.sendInputEvent({type:'keyDown',keyCode:'K',modifiers:['control','shift']});wc.sendInputEvent({type:'keyUp',keyCode:'K',modifiers:['control','shift']});});
+    await expect(window.locator('#global-search')).toBeFocused();
     await window.getByRole('button', { name: 'Back to messages' }).click();
     await window.locator('.message-row [data-more]').first().click();
     await expect(window.getByRole('menuitem', { name: 'Reply', exact: true })).toBeVisible();
@@ -147,7 +149,15 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
     expect(preferences.contextIsolation).toBe(true);
     expect(preferences.sandbox).toBe(true);
     await window.locator('#close-modal').click();
+    await window.locator('#tag-manager-link').click();
+    await window.getByLabel('Tag name',{exact:true}).fill('Desktop tag manager');
+    await window.getByLabel('Tag color',{exact:true}).fill('#2664a0');
+    await window.getByRole('button',{name:'Save tag',exact:true}).click();
+    await expect(window.locator('.tag-manager-item .tag-pill')).toHaveCSS('background-color','rgb(38, 100, 160)');
     await window.locator('#navigation [data-view=inbox]').click();
+    await window.locator('#quick-view').selectOption('table');
+    await expect(window.locator('.message-table-header')).toBeVisible();
+    await window.locator('#quick-view').selectOption('cards');
     await window.locator('#heading-compose').click();
     await window.locator('[name=subject]').fill('Desktop close autosave');
     await window.locator('[name=body]').fill('Latest text immediately before closing');

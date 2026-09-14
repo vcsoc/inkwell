@@ -39,6 +39,8 @@ SMTP submission happens before the local Sent insert. The absence of a durable o
 
 Calendar times require timezone-aware API input and are stored in UTC with an IANA recurrence timezone. `calendar_tools.py` uses bounded python-dateutil recurrence rules; `/api/events/occurrences` expands at most 100 days and 5000 visible instances. All-day dates are stored as UTC-midnight date boundaries, with exclusive ends, and displayed without timezone date shifting. Calendar export escapes/folds ICS fields and includes RRULE/date-only values; IANA TZIDs require support in the receiving client. There is no remote calendar ownership, per-instance exception or invitation state.
 
+Schema 7 adds a casefold-normalized tag catalog with colors and usage counts. Tag edits update local message labels transactionally; shared allowlisted filters/sorts are applied before paging in mail and collection queries. See [Tags and filters](TAGS-FILTERS.md).
+
 Schema 6 adds stable draft keys/revisions, local tree destinations, and Trash restore metadata. `/api/messages/move` and `/api/messages/restore` validate and file whole selections atomically without provider calls. Editor exits and native desktop close await draft saves; browser page termination is best effort. The reader serves theme colors in its separate sandboxed HTML document. See [Mail polish](MAIL-POLISH.md).
 
 Schema 5 adds `local_folders`, validated `mail_rules`, and calendar `all_day`, `timezone`, `recurrence` fields. Transport insert transactions run first-match rules only on newly inserted copies. Local overrides prevent later imports or bulk rule application from undoing filing. Folder/rule validation and changes use immediate transactions to avoid orphan destinations. No provider write APIs are added.

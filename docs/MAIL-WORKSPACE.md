@@ -49,6 +49,10 @@ HTML preview is now the default, with a privacy banner and explicit per-view ima
 
 These are working actions, **not full Outlook menu parity**. Reply all/CC/BCC, categories, reminders, junk/block rules, original-source viewing, printing, attachment handling, and server folder creation/rename/move/delete remain unimplemented.
 
+## Tags and quick filters
+
+Tag Manager sits above Settings and supports reusable colored tags, usage counts, rename, bulk merge/delete, and exact tagged-mail browsing. The message toolbar adds combined quick filters, sorting, cards/table views and pinned filters. Filtering runs before pagination. See [Tags and filters](TAGS-FILTERS.md).
+
 ## Server preservation
 
 There is no POP3 transport. IMAP reads Inbox with read-only selection and BODY.PEEK. Microsoft discovery/import uses GET requests. Context-menu message management changes SQLite copies only: it does not move, expunge or delete server messages. Sync does not restore a locally trashed/archived copy to its former local position. Imported read/star state is initially copied from the server; later local changes are not pushed back. Sending is an explicit click on Send message, without a second prompt, using SMTP or Graph, with Graph retaining Microsoft's Sent Items copy.

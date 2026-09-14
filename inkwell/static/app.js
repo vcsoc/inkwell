@@ -299,12 +299,14 @@ function navigation() {
     b.classList.toggle(
       'active',
       b.dataset.view === state.view ||
-        (b.dataset.view === 'inbox' && !['calendar', 'contacts', 'settings'].includes(state.view)),
+        (b.dataset.view === 'inbox' &&
+          !['calendar', 'contacts', 'settings', 'tags'].includes(state.view)),
     ),
   );
   $('#account-status').textContent = state.accounts.length
     ? `${state.accounts.length} connected account${state.accounts.length === 1 ? '' : 's'}`
     : 'No account connected';
+  $('#tag-manager-link').classList.toggle('active', state.view === 'tags');
   selection.bindFolders();
 }
 function installLocalFolders(localFolders) {
@@ -337,7 +339,13 @@ async function navigate(route, { historyMode = 'push' } = {}) {
     return;
   }
   const [requestedView, requestedPage] = route.split('/');
-  const allowedViews = [...folders.map((folder) => folder[0]), 'settings', 'collection', 'remote'];
+  const allowedViews = [
+    ...folders.map((folder) => folder[0]),
+    'settings',
+    'collection',
+    'remote',
+    'tags',
+  ];
   let view = allowedViews.includes(requestedView) ? requestedView : 'inbox';
   if (view === 'collection' && !state.collection) view = 'inbox';
   state.remoteFolder =
@@ -362,7 +370,7 @@ async function navigate(route, { historyMode = 'push' } = {}) {
   InkwellAppearance.apply(preferences.theme);
   applyLayout();
   document.documentElement.dataset.mail = String(
-    !['calendar', 'contacts', 'settings'].includes(view),
+    !['calendar', 'contacts', 'settings', 'tags'].includes(view),
   );
   state.view = view;
   state.selected = null;
@@ -371,7 +379,10 @@ async function navigate(route, { historyMode = 'push' } = {}) {
   $('#search-scope').value = 'folder';
   $('#global-search').value = '';
   state.offset = 0;
-  state.filter = 'all';
+  if (!preferences.quick_filter_pinned) {
+    state.filter = 'all';
+    state.quick = {};
+  }
   state.generation++;
   $('#sidebar').classList.remove('open');
   navigation();
@@ -382,7 +393,9 @@ async function navigate(route, { historyMode = 'push' } = {}) {
       ? state.remoteFolder.name
       : view === 'collection'
         ? 'Grouped mail'
-        : 'Settings');
+        : view === 'tags'
+          ? 'Tag Manager'
+          : 'Settings');
   $('#breadcrumb').textContent =
     view === 'settings' && settingsPage ? 'Settings / ' + settingsPage.name : title;
   document.title =
@@ -401,6 +414,7 @@ async function navigate(route, { historyMode = 'push' } = {}) {
     inbox: 'Good conversations start here.',
     calendar: 'Less juggling. More being present.',
     contacts: 'Keep your favorite connections close.',
+    tags: 'Organize, recolor and manage local message tags.',
     settings: settingsPage?.description || 'Choose a category to make inkwell yours.',
     starred: 'The conversations worth keeping close.',
     sent: 'Your words, out in the world.',
@@ -417,7 +431,7 @@ async function navigate(route, { historyMode = 'push' } = {}) {
       ? '<button class="primary" id="add-event">＋ New event</button>'
       : view === 'contacts'
         ? '<button class="primary" id="add-contact">＋ Add person</button>'
-        : !['settings'].includes(view)
+        : !['settings', 'tags'].includes(view)
           ? '<button class="secondary" id="heading-compose">＋ Compose</button>'
           : '';
   if ($('#add-event')) on($('#add-event'), 'click', () => eventForm());
@@ -427,7 +441,26 @@ async function navigate(route, { historyMode = 'push' } = {}) {
   if (view === 'calendar') await renderCalendar();
   else if (view === 'contacts') await renderContacts();
   else if (view === 'settings') await renderSettings();
-  else await renderMail();
+  else if (view === 'tags') {
+    const generation = state.generation;
+    await InkwellTagManager($('#workspace'), {
+      api,
+      esc,
+      toast,
+      isCurrent: () => state.generation === generation && state.view === 'tags',
+      catalogChanged: (tags) => {
+        state.tagCatalog = tags;
+      },
+      openTag: async (id) => {
+        await navigate('inbox');
+        state.searchScope = 'all';
+        $('#search-scope').value = 'all';
+        state.filter = 'all';
+        state.quick = { tag_id: id };
+        await refreshQuickMail();
+      },
+    });
+  } else await renderMail();
   if (view === 'remote' && state.route === nextRoute) {
     const generation = state.generation;
     api('/remote-folders/' + state.remoteFolder.id + '/sync', { method: 'POST' })
@@ -441,13 +474,29 @@ async function navigate(route, { historyMode = 'push' } = {}) {
     $('#page-title').focus({ preventScroll: true });
   }
 }
+async function refreshQuickMail() {
+  const focus = document.activeElement?.id;
+  state.offset = 0;
+  state.selected = null;
+  state.generation++;
+  await renderMail();
+  if (focus) document.getElementById(focus)?.focus({ preventScroll: true });
+}
 async function renderMail() {
   const generation = state.generation;
+  const ticket = (state.mailRequest = (state.mailRequest || 0) + 1);
+  const catalog = await api('/tags');
+  if (generation !== state.generation || ticket !== state.mailRequest) return;
+  state.tagCatalog = catalog;
+  if (state.quick?.tag_id && !catalog.some((t) => t.id === state.quick.tag_id))
+    state.quick.tag_id = null;
+  const filters = InkwellMailFilters.payload(state, preferences);
   const collection =
     state.view === 'collection'
       ? await api('/collections/query', {
           method: 'POST',
           body: {
+            ...filters,
             kind: state.collection.kind,
             key: state.collection.key,
             q: state.query,
@@ -455,25 +504,27 @@ async function renderMail() {
           },
         })
       : null;
-  const messages = collection
-    ? collection.messages
+  const response = collection
+    ? collection
     : await api(
-        `/messages?folder=${state.view}&q=${encodeURIComponent(state.query)}&offset=${state.offset}&scope=${state.searchScope}${state.remoteFolder ? '&remote_folder_id=' + state.remoteFolder.id : ''}`,
+        `/messages?folder=${state.view}&q=${encodeURIComponent(state.query)}&offset=${state.offset}&scope=${state.searchScope}&summary=true&${new URLSearchParams(filters)}${state.remoteFolder ? '&remote_folder_id=' + state.remoteFolder.id : ''}`,
       );
-  if (generation !== state.generation) return;
+  if (generation !== state.generation || ticket !== state.mailRequest) return;
+  const messages = Array.isArray(response) ? response : response.messages;
+  state.total = Array.isArray(response) ? null : response.total;
   state.messages = messages;
   const persistentReader = ['classic', 'stacked'].includes(preferences.layout);
   $('#workspace').innerHTML =
-    `<div class="mail-shell ${state.selected ? 'has-selection' : ''}"><div id="mail-activity" class="mail-activity" role="progressbar" aria-label="Background activity" aria-hidden="${pendingWork === 0}"><span></span></div>${collection ? `<section class="collection-banner" aria-label="Grouped collection"><div><strong>${esc(state.collection.label)}</strong><p>${collection.total} messages · all local folders and accounts, including Trash</p><div>${collection.folders.map((f) => `<span class="folder-badge">${esc(f.folder)} · ${f.total}</span>`).join('')}</div></div><button class="secondary" id="exit-collection">Back to inbox</button></section>` : ''}<div class="mail-toolbar"><div class="filter-tabs"><button class="filter-tab ${state.filter === 'all' ? 'active' : ''}" data-filter="all">All mail</button><button class="filter-tab ${state.filter === 'unread' ? 'active' : ''}" data-filter="unread">Unread</button></div></div><div class="mail-columns"><div class="message-list" id="message-list"></div><div id="message-resizer" class="pane-resizer" role="separator" aria-label="Resize message list" aria-orientation="vertical" tabindex="0"></div><article class="reader ${state.selected || persistentReader ? '' : 'hidden'}" id="reader"><div class="empty-state reader-placeholder"><div class="empty-icon">▤</div><h2>Select a conversation</h2><p>Your message will appear here. Remote content stays blocked.</p></div></article></div><div class="mail-footer"><span>${messages.length}${collection ? ' of ' + collection.total : ''} conversations${state.offset ? ' · page ' + (state.offset / 100 + 1) : ''} · ${collection ? 'grouped collection' : 'local mailbox'}</span><div><button id="prev-page" ${state.offset === 0 ? 'disabled' : ''}>← Previous</button> <button id="next-page" ${(collection ? state.offset + messages.length >= collection.total : messages.length < 100) ? 'disabled' : ''}>Next →</button></div></div></div><div class="quiet-note"><span>♧</span> A little less noise. A little more room to think.</div>`;
+    `<div class="mail-shell ${state.selected ? 'has-selection' : ''}"><div id="mail-activity" class="mail-activity" role="progressbar" aria-label="Background activity" aria-hidden="${pendingWork === 0}"><span></span></div>${collection ? `<section class="collection-banner" aria-label="Grouped collection"><div><strong>${esc(state.collection.label)}</strong><p>${collection.total} messages · all local folders and accounts, including Trash</p><div>${collection.folders.map((f) => `<span class="folder-badge">${esc(f.folder)} · ${f.total}</span>`).join('')}</div></div><button class="secondary" id="exit-collection">Back to inbox</button></section>` : ''}<div class="mail-toolbar"><div class="filter-tabs"><button class="filter-tab ${state.filter === 'all' ? 'active' : ''}" data-filter="all">All mail</button><button class="filter-tab ${state.filter === 'unread' ? 'active' : ''}" data-filter="unread">Unread</button></div></div><div class="mail-columns"><div class="message-list" id="message-list"></div><div id="message-resizer" class="pane-resizer" role="separator" aria-label="Resize message list" aria-orientation="vertical" tabindex="0"></div><article class="reader ${state.selected || persistentReader ? '' : 'hidden'}" id="reader"><div class="empty-state reader-placeholder"><div class="empty-icon">▤</div><h2>Select a conversation</h2><p>Your message will appear here. Remote content stays blocked.</p></div></article></div><div class="mail-footer"><span>${messages.length}${state.total !== null ? ' of ' + state.total : ''} conversations${state.offset ? ' · page ' + (state.offset / 100 + 1) : ''} · ${collection ? 'grouped collection' : 'local mailbox'}</span><div><button id="prev-page" ${state.offset === 0 ? 'disabled' : ''}>← Previous</button> <button id="next-page" ${(state.total !== null ? state.offset + messages.length >= state.total : messages.length < 100) ? 'disabled' : ''}>Next →</button></div></div></div><div class="quiet-note"><span>♧</span> A little less noise. A little more room to think.</div>`;
   if ($('#exit-collection')) on($('#exit-collection'), 'click', () => navigate('inbox'));
   renderMessageList();
   bindWorkspaceControls();
   if (state.selected) renderReader();
+  InkwellMailFilters.mount({ state, preferences, esc, saveWorkspace, refresh: refreshQuickMail });
   $$('[data-filter]').forEach((b) =>
     on(b, 'click', () => {
       state.filter = b.dataset.filter;
-      $$('[data-filter]').forEach((t) => t.classList.toggle('active', t === b));
-      renderMessageList();
+      return refreshQuickMail();
     }),
   );
   on($('#prev-page'), 'click', async () => {
@@ -488,7 +539,8 @@ async function renderMail() {
   });
 }
 function renderMessageList() {
-  const messages = state.messages.filter((m) => state.filter !== 'unread' || m.unread);
+  const messages = state.messages;
+  $('#message-list').dataset.mailView = preferences.mail_view || 'cards';
   $('#message-list').innerHTML = messages.length
     ? messages
         .map(
@@ -530,13 +582,27 @@ function renderMessageList() {
       await api(`/messages/${m.id}`, { method: 'PATCH', body: { starred: !m.starred } });
       m.starred = !m.starred;
       if (state.selected?.id === m.id) state.selected.starred = m.starred;
-      if (state.view === 'starred') await renderMail();
+      if (state.view === 'starred' || state.quick?.starred || preferences.mail_sort === 'starred')
+        await renderMail();
       else renderMessageList();
     }),
   );
   if ($('#connect-empty')) on($('#connect-empty'), 'click', () => navigate('settings/mail'));
   if ($('#demo-empty')) on($('#demo-empty'), 'click', loadDemo);
+  InkwellPaintTags($('#message-list'));
   selection.bindRows(messages);
+  if (preferences.mail_view === 'table') {
+    $('#message-list').insertAdjacentHTML(
+      'afterbegin',
+      '<div class="message-table-header"><span></span><button data-table-sort="sender">From</button><button data-table-sort="subject">Subject / tags</button><button data-table-sort="date">Date</button><span>★</span><span></span></div>',
+    );
+    $$('[data-table-sort]').forEach((button) =>
+      on(button, 'click', () => {
+        saveWorkspace({ mail_sort: button.dataset.tableSort });
+        return refreshQuickMail();
+      }),
+    );
+  }
 }
 function messageTags(message) {
   try {
@@ -548,13 +614,17 @@ function messageTags(message) {
 }
 function tagPills(message) {
   return messageTags(message)
-    .map((tag) => `<span class="mail-pill tag-pill">${esc(tag)}</span>`)
+    .map(
+      (tag) =>
+        `<span class="mail-pill tag-pill" data-tag-color="${esc(state.tagCatalog?.find((t) => t.name === tag || t.key === tag.toLowerCase())?.color || '#486b54')}">${esc(tag)}</span>`,
+    )
     .join('');
 }
 async function editTags(message) {
   const generation = state.generation;
   const existing = await api('/tags');
   if (generation !== state.generation) return;
+  state.tagCatalog = existing;
   modal(
     'Email tags',
     `<form id="tags-form">${field('Tags (comma-separated)', 'tags', messageTags(message).join(', '), 'text', 'maxlength="406" list="known-tags"')}<datalist id="known-tags">${existing.map((tag) => `<option value="${esc(tag.name)}"></option>`).join('')}</datalist><div class="message-pills" role="group" aria-label="Existing tags">${existing
@@ -745,6 +815,12 @@ async function openMessage(id) {
   if (generation !== state.generation || ticket !== state.messageRequest) return;
   const local = state.messages.find((x) => x.id === id);
   if (local) local.unread = 0;
+  m.unread = 0;
+  if (state.filter === 'unread' || preferences.mail_sort === 'unread') {
+    await refreshCounts();
+    await renderMail();
+    return;
+  }
   $('.mail-shell').classList.add('has-selection');
   $('#reader').classList.remove('hidden');
   renderMessageList();
@@ -798,6 +874,7 @@ function renderReader() {
   }
   $('#reader').innerHTML =
     `<div class="reader-actions"><button class="icon-button" id="reader-menu" aria-label="More email actions" aria-haspopup="menu" aria-expanded="false">⋯</button><button class="icon-button" id="reader-back" aria-label="Back to messages">←</button><button class="secondary" id="archive-message">${m.folder === 'trash' ? 'Restore' : m.folder === 'archive' ? 'Move to inbox' : 'Archive'}</button><button class="secondary" id="unread-message">Mark unread</button><button class="secondary" id="reader-appearance" aria-label="Switch reader to ${dark ? 'light' : 'dark'} view">${dark ? '☀ Light view' : '☾ Dark view'}</button><button class="icon-button danger" id="trash-message" aria-label="${m.folder === 'trash' ? 'Permanently delete' : 'Move to trash'}" title="${m.folder === 'trash' ? 'Permanently delete local copy' : 'Move to Trash'}"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button></div><h2>${esc(m.subject || '(No subject)')}</h2><div class="reader-tags">${tagPills(m)}<button class="secondary" id="edit-tags">Tags…</button></div><div class="reader-meta"><div class="avatar">${esc(initials(m.sender))}</div><div><strong>${esc(m.sender)}</strong>${m.demo ? '<span class="badge">SAMPLE</span>' : ''}<small>To ${esc(m.recipient)}</small><small>${esc(new Date(m.date).toLocaleString())}</small></div></div><div id="message-preview"></div><div class="reader-reply"><button class="primary" id="reply" aria-label="Reply">↩ Reply</button><button class="secondary" id="forward">Forward →</button></div>`;
+  InkwellPaintTags($('#reader'));
   on($('#edit-tags'), 'click', () => editTags(m));
   void InkwellHtmlPreview($('#message-preview'), m, {
     api,
@@ -1185,6 +1262,7 @@ async function askAI(prompt) {
 }
 on($('#compose'), 'click', () => compose());
 on($('#settings'), 'click', () => navigate('settings'));
+on($('#tag-manager-link'), 'click', () => navigate('tags'));
 on($('#menu'), 'click', () => $('#sidebar').classList.toggle('open'));
 on($('#close-modal'), 'click', requestModalClose);
 on($('#modal'), 'click', async (event) => {
@@ -1278,12 +1356,33 @@ on($('#sync'), 'click', async () => {
         .join('\n'),
     );
     await refreshCounts();
-    if (!['settings', 'calendar', 'contacts'].includes(state.view)) await renderMail();
+    if (!['settings', 'calendar', 'contacts', 'tags'].includes(state.view)) await renderMail();
   } finally {
     $('#sync').disabled = false;
   }
 });
+window.InkwellFocusQuickFilter = () => {
+  if ($('#modal').open) return;
+  const quick = $('#quick-filter');
+  if (quick) {
+    quick.hidden = false;
+    $('#quick-filter-toggle').setAttribute('aria-expanded', 'true');
+    saveWorkspace({ quick_filter_visible: true });
+  }
+  $('#global-search').focus();
+};
 document.addEventListener('keydown', (e) => {
+  if (
+    (e.ctrlKey || e.metaKey) &&
+    e.shiftKey &&
+    !e.altKey &&
+    e.key.toLowerCase() === 'k' &&
+    !$('#modal').open
+  ) {
+    e.preventDefault();
+    window.InkwellFocusQuickFilter();
+    return;
+  }
   if (
     /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) ||
     e.ctrlKey ||
@@ -1330,7 +1429,10 @@ async function bootstrap() {
           if (errors.length)
             toast(errors.map((r) => `${r.email}: ${r.error || r.folder_error}`).join('\n'));
           await refreshCounts();
-          if (!['settings', 'calendar', 'contacts'].includes(state.view) && !$('#modal').open)
+          if (
+            !['settings', 'calendar', 'contacts', 'tags'].includes(state.view) &&
+            !$('#modal').open
+          )
             await renderMail();
         })
         .catch((error) => toast(error.message));
@@ -1363,13 +1465,16 @@ async function searchMail() {
     toast('Save or close the open form before searching.');
     return;
   }
-  if (['settings', 'calendar', 'contacts'].includes(state.view)) await navigate('inbox');
+  if (['settings', 'calendar', 'contacts', 'tags'].includes(state.view)) await navigate('inbox');
   if (sequence !== searchSequence) return;
   state.searchScope = scope;
   $('#search-scope').value = scope;
   state.query = query;
   $('#global-search').value = typed;
-  if (!query) state.filter = 'all';
+  if (!query) {
+    state.filter = 'all';
+    state.quick = {};
+  }
   state.offset = 0;
   state.selected = null;
   state.generation++;

@@ -1,0 +1,240 @@
+.tag-pill {
+  background: var(--tag-bg, var(--accent-light));
+  color: var(--tag-fg, var(--ink));
+  border-color: color-mix(in srgb, var(--tag-bg, var(--accent)) 65%, var(--tag-fg, var(--ink)));
+}
+.tag-manager-tools,
+.tag-bulk-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.tag-manager-tools label,
+.tag-bulk-tools label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tag-manager-tools input,
+.tag-manager-tools select,
+.tag-bulk-tools input:not([type='checkbox']) {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 8px;
+  border-radius: 6px;
+  max-width: 100%;
+  min-width: 0;
+}
+.tag-manager-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.tag-manager-layout > .card {
+  margin: 0;
+}
+.tag-manager-layout > * {
+  min-width: 0;
+}
+.tag-manager-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--line);
+  padding: 9px;
+  margin: 6px 0;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.tag-manager-item.selected {
+  background: var(--accent-light);
+  outline: 1px solid var(--accent);
+}
+.tag-manager-item:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.tag-manager-name {
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+.tag-manager-name .tag-pill {
+  white-space: normal;
+}
+.tag-manager-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.tag-letter-group h2 {
+  font-size: 18px;
+  margin: 18px 0 8px;
+}
+.tag-letter-group small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.tag-bulk-tools form {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+#tag-color-preview {
+  margin: 12px 0;
+}
+#tag-manager-link.active {
+  background: var(--accent-light);
+  color: var(--ink);
+}
+[data-layout] .mail-toolbar {
+  height: auto;
+  min-height: 49px;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.mail-toolbar .filter-tabs {
+  height: auto;
+  align-self: stretch;
+}
+.mail-toolbar .filter-tab {
+  min-height: 40px;
+}
+.quick-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+  font-size: 12px;
+}
+.quick-filter[hidden] {
+  display: none;
+}
+.quick-filter label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.quick-filter select {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 6px;
+  max-width: 150px;
+  min-width: 0;
+  font: inherit;
+}
+.quick-filter button {
+  font-size: 12px;
+}
+.quick-filter [aria-pressed='true'] {
+  background: var(--accent-light);
+  border-color: var(--accent);
+}
+.quick-active-note {
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.message-list[data-mail-view='table'] {
+  overflow: auto;
+}
+.message-list[data-mail-view='table'] .message-row,
+.message-table-header {
+  display: grid;
+  grid-template-columns: 28px 150px minmax(220px, 1fr) 90px 32px 32px;
+  gap: 4px 8px;
+  min-width: 660px;
+  padding: 10px 12px;
+}
+.message-table-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  margin: 4px;
+  font-size: 12px;
+}
+.message-table-header button {
+  text-align: left;
+}
+.message-list[data-mail-view='table'] .message-content,
+.message-list[data-mail-view='table'] .message-top {
+  display: contents;
+}
+.message-list[data-mail-view='table'] .avatar,
+.message-list[data-mail-view='table'] .preview,
+.message-list[data-mail-view='table'] .unread-dot {
+  display: none;
+}
+.message-list[data-mail-view='table'] .select-message {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+.message-list[data-mail-view='table'] .sender {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.message-list[data-mail-view='table'] .subject {
+  grid-column: 3;
+  grid-row: 1;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.message-list[data-mail-view='table'] .message-pills {
+  grid-column: 3;
+  grid-row: 2;
+  margin: 0;
+}
+.message-list[data-mail-view='table'] .message-date {
+  grid-column: 4;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+.message-list[data-mail-view='table'] .star-button {
+  grid-column: 5;
+  grid-row: 1 / span 2;
+}
+.message-list[data-mail-view='table'] .message-more {
+  grid-column: 6;
+  grid-row: 1 / span 2;
+}
+@media (max-width: 1050px) {
+  .tag-manager-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .tag-manager-item {
+    gap: 6px;
+    padding: 7px;
+  }
+  .tag-manager-item > .secondary {
+    padding: 7px;
+    font-size: 12px;
+  }
+  .quick-filter select {
+    max-width: 125px;
+  }
+  .quick-filter {
+    gap: 6px;
+  }
+}

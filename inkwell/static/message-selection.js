@@ -94,12 +94,35 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
       tools.className = 'selection-tools';
       document.querySelector('.mail-toolbar').after(tools);
     }
-    tools.innerHTML = `<label class="select-all-label"><input type="checkbox" id="select-all-messages" aria-label="Select all visible messages"><span id="selection-count"></span></label><span class="selection-bulk" hidden><select id="selection-destination" aria-label="Move selected messages to"><option value="inbox">Inbox</option><option value="archive">Archive</option><option value="trash">Trash</option>${(state.localFolders || []).map((f) => `<option value="local-${f.id}">${esc(f.name)}</option>`).join('')}${state.remoteFolders.map((f) => `<option value="remote:${f.id}">${esc(state.accounts.find((a) => a.id === f.account_id)?.email || 'Account')} / ${esc(f.path)}</option>`).join('')}</select><button class="secondary" id="move-selected">Move</button><button class="secondary" id="restore-selected" hidden>Restore</button><button class="secondary" id="clear-selection">Clear</button></span>`;
+    tools.innerHTML = `<label class="select-all-label"><input type="checkbox" id="select-all-messages" aria-label="Select all visible messages"><span id="selection-count"></span></label><span class="selection-bulk" hidden><select id="selection-destination" aria-label="Move selected messages to"><option value="inbox">Inbox</option><option value="archive">Archive</option><option value="trash">Trash</option>${(state.localFolders || []).map((f) => `<option value="local-${f.id}">${esc(f.name)}</option>`).join('')}${state.remoteFolders.map((f) => `<option value="remote:${f.id}">${esc(state.accounts.find((a) => a.id === f.account_id)?.email || 'Account')} / ${esc(f.path)}</option>`).join('')}</select><button class="secondary" id="move-selected">Move</button><button class="secondary" id="restore-selected" hidden>Restore</button><button class="secondary" id="clear-selection">Clear</button><select id="selection-tag" aria-label="Tag for selected messages"><option value="">Choose tag…</option>${(state.tagCatalog || []).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select><button class="secondary" id="add-selected-tag">Add tag</button><button class="secondary" id="remove-selected-tag">Remove tag</button></span>`;
     tools.querySelector('#select-all-messages').onchange = (e) => {
       if (e.target.checked) visible.forEach((id) => ids.add(id));
       else ids.clear();
       paint();
     };
+    for (const [button, add] of [
+      ['add-selected-tag', true],
+      ['remove-selected-tag', false],
+    ])
+      tools.querySelector('#' + button).onclick = async () => {
+        const tag_id = Number(tools.querySelector('#selection-tag').value);
+        if (!tag_id) {
+          toast('Choose a tag first. Create tags in Tag Manager.');
+          return;
+        }
+        if (busy) return;
+        busy = true;
+        try {
+          await api('/tags/assign', { method: 'POST', body: { ids: [...ids], tag_id, add } });
+          await refresh();
+          toast(add ? 'Tag added locally.' : 'Tag removed locally.');
+        } catch (error) {
+          toast(error.message);
+        } finally {
+          busy = false;
+          paint();
+        }
+      };
     tools.querySelector('#move-selected').onclick = () =>
       run(tools.querySelector('#selection-destination').value);
     tools.querySelector('#restore-selected').onclick = () => run(null, true);

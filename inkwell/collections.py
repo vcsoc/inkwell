@@ -3,9 +3,9 @@
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-from . import store
+from . import store, mail_filters
 
 router = APIRouter(prefix="/api/collections")
 Kind = Literal["sender", "organisation", "subject"]
@@ -27,7 +27,7 @@ def descriptor(message_id: int, kind: Kind):
     return {"kind": kind, "key": key, "label": LABELS[kind] + ": " + (key or "(No subject)")}
 
 
-class Query(BaseModel):
+class Query(mail_filters.Filters):
     kind: Kind
     key: str = Field(max_length=2000)
     q: str = Field(default="", max_length=200)
@@ -42,6 +42,9 @@ def query(data: Query):
     if data.q:
         clause += " AND (subject LIKE ? OR sender LIKE ? OR body LIKE ? OR EXISTS (SELECT 1 FROM json_each(messages.tags) WHERE value LIKE ?))"
         params += [f"%{data.q}%"] * 4
+    extra, values = data.sql()
+    clause = "(" + clause + ")" + extra
+    params += values
     with store.db() as db:
         # Keep summary and page results consistent while other clients modify mail.
         db.execute("BEGIN")
@@ -57,7 +60,7 @@ def query(data: Query):
             dict(row)
             for row in db.execute(
                 f"""SELECT id,account_id,remote_folder_id,local_destination_id,local_folder_override,tags,folder,sender,recipient,subject,substr(body,1,180) AS preview,date,unread,starred,demo
-            FROM messages WHERE {clause} ORDER BY date DESC,id DESC LIMIT 100 OFFSET ?""",
+            FROM messages WHERE {clause} ORDER BY {data.order()} LIMIT 100 OFFSET ?""",
                 (*params, data.offset),
             )
         ]
