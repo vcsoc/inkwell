@@ -1,0 +1,89 @@
+#!/bin/sh
+# Inkwell self-contained, per-user Linux installer. No sudo, network or dev runtimes.
+set -eu
+VERSION='@VERSION@'
+EXPECTED_SHA='@SHA256@'
+case "${1:-}" in
+  --help|-h) printf 'inkwell %s Linux x86_64 installer\nUsage: sh %s [--install]\nInstalls under ~/.local/opt/inkwell; preserves ~/.inkwell.\n' "$VERSION" "$0"; exit 0 ;;
+  ''|--install) ;;
+  *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
+esac
+[ "$(uname -s)" = Linux ] && [ "$(uname -m)" = x86_64 ] || { echo 'This installer is for Linux x86_64 only.' >&2; exit 1; }
+[ "$(id -u)" != 0 ] || { echo 'Run this installer as your desktop user, not root.' >&2; exit 1; }
+: "${HOME:?HOME must be set}"
+case "$HOME" in /*) ;; *) echo 'HOME must be absolute.' >&2; exit 1 ;; esac
+# Desktop Exec fields require special escaping for these uncommon home-directory names.
+case "$HOME" in *'"'*|*'\'*|*'%'*|*'`'*|*'$'*|*'
+'*) echo 'Unsupported special character in HOME for desktop shortcut creation.' >&2; exit 1 ;; esac
+ROOT="$HOME/.local/opt/inkwell"
+BIN="$HOME/.local/bin"
+DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
+DESKTOP="$DATA/applications/inkwell.desktop"
+for cmd in tar gzip sha256sum mktemp tail awk; do
+  command -v "$cmd" >/dev/null || { echo "Required system utility missing: $cmd" >&2; exit 1; }
+done
+if [ -e "$ROOT" ] && [ ! -f "$ROOT/.inkwell-managed" ]; then
+  echo "Refusing to overwrite an unmanaged directory: $ROOT" >&2; exit 1
+fi
+if [ -e "$BIN/inkwell" ] && ! grep -q '^# Inkwell managed launcher$' "$BIN/inkwell"; then
+  echo "Refusing to replace an existing unmanaged command: $BIN/inkwell" >&2; exit 1
+fi
+if [ -e "$DESKTOP" ] && ! grep -q '^X-Inkwell-Managed=true$' "$DESKTOP"; then
+  echo "Refusing to replace an unmanaged desktop shortcut: $DESKTOP" >&2; exit 1
+fi
+TMP=$(mktemp -d)
+STAGE=''
+cleanup() { rm -rf "$TMP"; [ -z "$STAGE" ] || rm -rf "$STAGE"; }
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' HUP TERM
+LINE=$(awk '/^__INKWELL_PAYLOAD__$/{print NR + 1; exit}' "$0")
+[ -n "$LINE" ] || { echo 'Installer payload missing.' >&2; exit 1; }
+tail -n +"$LINE" "$0" > "$TMP/payload.tar.gz"
+ACTUAL_SHA=$(sha256sum "$TMP/payload.tar.gz" | awk '{print $1}')
+[ "$ACTUAL_SHA" = "$EXPECTED_SHA" ] || { echo 'Integrity check failed. Installer may be corrupted.' >&2; exit 1; }
+printf 'Installing inkwell %s for %s…\n' "$VERSION" "$(id -un)"
+mkdir -p "$ROOT/releases" "$BIN" "$DATA/applications" "$DATA/icons/hicolor/512x512/apps"
+printf '%s\n' 'Inkwell user installation v1' > "$ROOT/.inkwell-managed"
+printf '%s\n' "$DATA" > "$ROOT/desktop-data-dir"
+STAGE=$(mktemp -d "$ROOT/.stage-XXXXXX")
+tar -xzf "$TMP/payload.tar.gz" -C "$STAGE" --no-same-owner
+[ -x "$STAGE/inkwell" ] && [ -x "$STAGE/resources/inkwell-server/inkwell-server" ] || { echo 'Incomplete app payload.' >&2; exit 1; }
+"$STAGE/resources/inkwell-server/inkwell-server" --help >/dev/null || { echo 'Bundled backend cannot run on this Linux system.' >&2; exit 1; }
+RELEASE="$VERSION-$(printf '%s' "$EXPECTED_SHA" | cut -c1-12)-$(date +%s)-$$"
+mv "$STAGE" "$ROOT/releases/$RELEASE"
+STAGE=''
+printf '%s\n' 'Inkwell user installation v1' > "$ROOT/.inkwell-managed"
+ln -s "releases/$RELEASE" "$ROOT/.current-$$"
+mv -Tf "$ROOT/.current-$$" "$ROOT/current"
+cat > "$BIN/inkwell" <<'LAUNCHER'
+#!/bin/sh
+# Inkwell managed launcher
+exec "$HOME/.local/opt/inkwell/current/inkwell" "$@"
+LAUNCHER
+chmod 755 "$BIN/inkwell"
+cat > "$DESKTOP" <<DESKTOP_ENTRY
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=inkwell
+Comment=Private email, calendar, contacts and AI workspace
+Exec="$BIN/inkwell"
+Icon=inkwell
+Terminal=false
+Categories=Network;Email;Office;Calendar;
+Keywords=Mail;Email;Calendar;Contacts;AI;
+StartupNotify=true
+StartupWMClass=inkwell
+X-Inkwell-Managed=true
+DESKTOP_ENTRY
+chmod 644 "$DESKTOP"
+cp "$ROOT/current/resources/icon-512.png" "$DATA/icons/hicolor/512x512/apps/inkwell.png"
+cp "$ROOT/current/resources/uninstall.sh" "$ROOT/uninstall.sh"
+chmod 755 "$ROOT/uninstall.sh"
+command -v desktop-file-validate >/dev/null && desktop-file-validate "$DESKTOP" || true
+command -v update-desktop-database >/dev/null && update-desktop-database "$DATA/applications" || true
+command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -f -t "$DATA/icons/hicolor" >/dev/null 2>&1 || true
+printf '\nInstalled: %s/current\nLaunch: %s/inkwell (or search inkwell in your app launcher)\nUninstall: %s/uninstall.sh\nYour ~/.inkwell workspace was not changed.\n' "$ROOT" "$BIN" "$ROOT"
+exit 0
+__INKWELL_PAYLOAD__

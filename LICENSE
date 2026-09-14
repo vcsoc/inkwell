@@ -1,0 +1,56 @@
+inkwell Free Use, No Modification, No Resale License
+Version 1.0 — 14 September 2026
+
+Copyright (c) 2026 Chris Visser (vcsoc). All rights reserved.
+
+1. Permission to use
+Subject to these terms, the copyright holder grants you a non-exclusive,
+worldwide, royalty-free license to download, inspect, compile without source
+changes, install, run, and make backup copies of this version of inkwell and its
+original documentation (the "Software"). You may use the unmodified Software
+for personal, educational, nonprofit, or internal business purposes without a
+fee. You may share exact, unmodified copies free of charge, provided this license
+and all copyright and attribution notices accompany every copy.
+
+2. No modification without permission
+You may not alter the Software's source code, create or distribute modified
+versions, or create derivative works without prior written permission from
+Chris Visser. Normal use of supported settings, themes, mail rules, user data,
+and documented configuration interfaces is permitted and is not a prohibited
+modification. Compiling unmodified source and installing its resulting binaries
+is permitted. Changing this license or removing notices is not permitted.
+
+3. No resale or commercial incorporation
+You may not sell, sublicense for a fee, rent, or otherwise charge for the
+Software or copies of it. You may not incorporate, bundle, embed, distribute,
+or provide the Software, in whole or in part, as part of a product or service
+that you sell, license for payment, or make available for a fee, including paid
+hosted access or software-as-a-service, without prior written permission from
+Chris Visser. Standalone internal business use under section 1 is permitted;
+using inkwell to read work email does not itself incorporate it into a product.
+
+4. Separate rights and permissions
+This license covers only material for which Chris Visser holds the necessary
+rights. Third-party components remain governed by their own licenses; nothing
+here restricts rights granted by those licenses. Rights in your own email,
+contacts, events, themes, and other data remain yours. No trademark or
+endorsement rights are granted. Mandatory statutory rights are not restricted.
+This license does not revoke rights validly granted under an earlier license.
+For permissions outside these terms, contact the copyright holder through
+https://github.com/vcsoc/inkwell. Silence is not permission.
+
+5. Termination
+This license terminates automatically if you violate its terms. Upon
+termination, stop using and distributing the Software and delete your copies,
+unless the copyright holder grants written reinstatement. Sections 3, 4, and 6
+survive termination to the extent applicable.
+
+6. Disclaimer and liability
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE SOFTWARE IS PROVIDED
+"AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM, OUT OF, OR IN
+CONNECTION WITH THE SOFTWARE OR ITS USE, WHETHER IN CONTRACT, TORT, OR OTHERWISE.
+
+This is a restrictive source-available license, not an open-source license.

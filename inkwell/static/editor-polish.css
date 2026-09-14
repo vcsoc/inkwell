@@ -1,0 +1,221 @@
+:root {
+  --font-size: 16px;
+  --sidebar-font-size: 16px;
+  --sidebar-font: var(--sans);
+  --space-scale: 1;
+  --sidebar-space-scale: 1;
+  --density-space: 1;
+}
+html[data-density='compact'] {
+  --density-space: 0.35;
+}
+html .sidebar .nav-item,
+html .sidebar .server-folders summary {
+  font-family: var(--sidebar-font);
+  font-size: var(--sidebar-font-size);
+}
+html .sidebar .server-account,
+html .sidebar .profile {
+  font-family: var(--sidebar-font);
+  font-size: calc(var(--sidebar-font-size) - 1px);
+}
+html .sidebar .server-account small,
+html .sidebar .nav-count,
+html .sidebar .remote-folder small {
+  font-size: calc(var(--sidebar-font-size) - 3px);
+}
+html .sidebar .nav-item {
+  min-height: 0;
+  line-height: 1.3;
+  padding: calc(10px * var(--sidebar-space-scale) * var(--density-space))
+    calc(8px * var(--sidebar-space-scale));
+  margin-top: calc(3px * var(--density-space));
+  margin-bottom: calc(3px * var(--density-space));
+}
+html .sidebar .server-folders summary {
+  padding: 0;
+  line-height: 1.3;
+}
+.server-folders summary > .nav-item {
+  display: inline-flex;
+  width: calc(100% - 20px);
+  vertical-align: middle;
+}
+html .server-folders {
+  margin-top: calc(5px * var(--density-space));
+  margin-bottom: calc(10px * var(--density-space));
+  padding-left: calc(8px * var(--sidebar-space-scale));
+}
+html .folder-children {
+  margin-left: calc(12px * var(--sidebar-space-scale));
+  padding-left: calc(4px * var(--sidebar-space-scale));
+}
+html[data-density='compact'] .sidebar {
+  padding: 8px 6px 0;
+}
+html[data-density='compact'] .sidebar .brand {
+  margin-bottom: 8px;
+}
+html[data-density='compact'] .sidebar .compose-button {
+  margin-bottom: 8px;
+  padding: 8px;
+}
+html[data-density='compact'] .sidebar .nav-label {
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+html[data-density='compact'] .server-account {
+  padding: 4px;
+}
+html[data-density='compact'] .server-account small {
+  margin-top: 2px;
+}
+html[data-density='compact'] .nav-divider {
+  margin: 6px 0;
+}
+html .message-row {
+  padding-top: calc(16px * var(--space-scale));
+  padding-bottom: calc(16px * var(--space-scale));
+}
+html[data-density='compact'] .message-row {
+  min-height: 0;
+  padding: calc(6px * var(--space-scale)) calc(10px * var(--space-scale));
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+html[data-density='compact'] .message-row .subject {
+  margin-top: 3px;
+}
+html[data-layout] .message-row .subject,
+html[data-layout] .message-row .sender {
+  font-size: var(--font-size);
+}
+html .preview,
+html .field,
+html .breadcrumb,
+html .global-search input,
+html .global-search select {
+  font-size: calc(var(--font-size) - 1px);
+}
+html .card {
+  padding: calc(24px * var(--space-scale));
+}
+html .reader {
+  padding: calc(24px * var(--space-scale));
+}
+html[data-density='compact'] .card {
+  padding: calc(14px * var(--space-scale));
+}
+html[data-density='compact'] .message-more,
+html[data-density='compact'] .star-button {
+  min-height: 28px;
+}
+@media (pointer: coarse) {
+  html .sidebar .nav-item,
+  html[data-density='compact'] .message-more {
+    min-height: 40px;
+  }
+}
+html .day-number,
+html .calendar-event,
+html .day-label,
+html .message-date,
+html .mail-footer,
+html .notice,
+html .fine-print,
+html .quiet-note {
+  font-size: calc(var(--font-size) - 2px);
+}
+html .sidebar .nav-label,
+html .sidebar .privacy,
+html .sidebar .profile small {
+  font-size: calc(var(--sidebar-font-size) - 3px);
+  font-family: var(--sidebar-font);
+}
+.color-field {
+  min-width: 0;
+}
+.color-picker {
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px;
+}
+.color-picker summary {
+  cursor: pointer;
+  font-size: 14px;
+}
+.color-swatch {
+  display: inline-block;
+  width: 24px;
+  height: 20px;
+  border: 1px solid var(--line);
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.color-picker label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin: 8px 0;
+}
+.color-picker input[type='range'] {
+  width: 100%;
+  min-width: 0;
+}
+.color-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.color-palette button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--muted);
+  border-radius: 4px;
+}
+main:has(#calendar-editor-layout) {
+  container-type: inline-size;
+  container-name: calendarspace;
+}
+#calendar-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  padding: 0 24px 24px;
+  align-items: start;
+}
+#calendar-editor-layout > #workspace {
+  display: none;
+  min-width: 0;
+  padding: 0;
+}
+#calendar-editor-layout > #modal.inline-form {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  min-width: 0;
+}
+@container calendarspace (min-width:1000px) {
+  #calendar-editor-layout {
+    grid-template-columns: minmax(0, 1fr) 380px;
+  }
+  #calendar-editor-layout > #workspace {
+    display: block;
+  }
+  #calendar-editor-layout .calendar-day {
+    min-height: 90px;
+  }
+  #calendar-editor-layout #event-form .field-row {
+    grid-template-columns: 1fr;
+  }
+  #calendar-editor-layout #modal-body {
+    padding: 20px;
+  }
+}
+@media (max-width: 760px) {
+  #calendar-editor-layout {
+    padding: 0 12px 20px;
+  }
+}

@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f6f5f1" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="description"
+      content="Your quieter, local-first workspace for mail, calendar and people."
+    />
+    <link rel="manifest" href="/static/manifest.webmanifest" />
+    <link rel="icon" href="/static/icon-192.png" type="image/png" />
+    <link rel="stylesheet" href="/static/app.css" />
+    <link rel="stylesheet" href="/static/appearance.css" />
+    <link rel="stylesheet" href="/static/layouts.css" />
+    <link rel="stylesheet" href="/static/mail-workspace.css" />
+    <link rel="stylesheet" href="/static/editor-polish.css" />
+    <link rel="stylesheet" href="/static/reader-upgrade.css" />
+    <link rel="stylesheet" href="/static/mail-polish.css" />
+    <link rel="stylesheet" href="/static/calendar-rules.css" />
+    <title>inkwell — A little more focus</title>
+  </head>
+  <body>
+    <div class="app">
+      <nav class="app-rail" aria-label="Applications">
+        <button data-view="inbox" aria-label="Mail" title="Mail">▤</button>
+        <button data-view="calendar" aria-label="Calendar" title="Calendar">▦</button>
+        <button data-view="contacts" aria-label="People" title="People">♙</button>
+        <button data-view="settings" aria-label="Settings" title="Settings">⚙</button>
+      </nav>
+      <aside class="sidebar" id="sidebar">
+        <div
+          id="sidebar-resizer"
+          class="pane-resizer"
+          role="separator"
+          aria-label="Resize folder sidebar"
+          aria-orientation="vertical"
+          tabindex="0"
+        ></div>
+        <a class="brand" href="/" aria-label="inkwell home"
+          ><span class="brand-logo" role="img" aria-label="inkwell"></span
+        ></a>
+        <button class="primary compose-button" id="compose">
+          ＋ <span>New message</span><kbd>C</kbd>
+        </button>
+        <div class="section-label">WORKSPACE</div>
+        <nav id="navigation" aria-label="Workspace"></nav>
+        <div class="sidebar-bottom">
+          <div class="privacy"><span class="status-dot"></span> Local-first. Yours by design.</div>
+          <button class="nav-item" id="settings"><span>⚙</span> Settings & accounts</button>
+          <div class="profile">
+            <div class="avatar">Y</div>
+            <div>
+              <strong>Your workspace</strong><small id="account-status">Ready when you are</small>
+            </div>
+            <span class="profile-more">⌘</span>
+          </div>
+        </div>
+      </aside>
+      <main>
+        <header class="topbar">
+          <button class="icon-button mobile-menu" id="menu" aria-label="Open navigation">☰</button>
+          <div class="breadcrumb">
+            Workspace <span>/</span> <strong id="breadcrumb">Inbox</strong>
+          </div>
+          <form
+            id="global-search-form"
+            class="global-search"
+            role="search"
+            aria-label="Search downloaded email"
+          >
+            <input
+              id="global-search"
+              type="search"
+              aria-label="Search email"
+              placeholder="Search email…"
+              maxlength="200"
+            />
+            <select id="search-scope" aria-label="Search scope">
+              <option value="folder">Current folder</option>
+              <option value="subfolders">Folder + subfolders</option>
+              <option value="all">All folders</option>
+            </select>
+            <button type="submit" class="icon-button" aria-label="Run email search">⌕</button>
+          </form>
+          <div class="top-actions">
+            <span class="today" id="today"></span
+            ><button class="icon-button" id="sync" title="Sync email" aria-label="Sync email">
+              ⟳</button
+            ><button class="assistant-toggle" id="assistant-toggle">
+              ✦ <span>Ask inkwell</span>
+            </button>
+          </div>
+        </header>
+        <section class="page-heading">
+          <div>
+            <div class="eyebrow" id="eyebrow">A LITTLE CLARITY, EVERY DAY</div>
+            <h1 id="page-title" tabindex="-1">Your inbox<span>.</span></h1>
+            <p id="page-description">Good conversations start here.</p>
+          </div>
+          <div id="page-actions"></div>
+        </section>
+        <div id="workspace" class="workspace"></div>
+      </main>
+      <aside class="ai-panel hidden" id="ai-panel" aria-label="AI assistant">
+        <div class="panel-heading">
+          <div><span class="ai-symbol">✦</span><strong>Ask inkwell</strong></div>
+          <button class="icon-button" id="close-ai" aria-label="Close assistant">×</button>
+        </div>
+        <div class="ai-content">
+          <span class="eyebrow">YOUR THOUGHTFUL ASSISTANT</span>
+          <h2>A little help.<br />A lot more headspace.</h2>
+          <p>Draft a thoughtful reply, make sense of a long email, or plan your day.</p>
+          <div class="suggestions">
+            <button data-prompt="Summarize this email and list action items.">
+              Summarize this email ↗</button
+            ><button data-prompt="Draft a concise, friendly reply to this email.">
+              Help me write a reply ↗</button
+            ><button data-prompt="Suggest a balanced plan for my day based on these events.">
+              Help me plan my day ↗
+            </button>
+          </div>
+          <label class="check-label"
+            ><input type="checkbox" id="ai-context" /> Include selected email / calendar</label
+          >
+          <p class="fine-print" id="ai-provider">
+            Configure a provider in Settings. Only your prompt and explicitly selected context are
+            shared.
+          </p>
+          <div id="ai-answer" class="ai-answer" aria-live="polite"></div>
+          <button id="use-ai" class="secondary hidden">Use as a draft</button>
+        </div>
+        <form id="ai-form" class="ai-input">
+          <label class="sr-only" for="ai-prompt">Ask your assistant</label
+          ><textarea
+            id="ai-prompt"
+            placeholder="What’s on your mind?"
+            required
+            maxlength="10000"
+            rows="3"
+          ></textarea
+          ><button class="primary" type="submit" id="ai-submit">Ask assistant ↗</button
+          ><small>Suggestions only. You stay in control.</small>
+        </form>
+      </aside>
+    </div>
+    <nav class="mobile-tabs" aria-label="Main tabs">
+      <button data-view="inbox" aria-label="Mail">▤<span>Mail</span></button
+      ><button data-view="calendar" aria-label="Calendar">▦<span>Calendar</span></button
+      ><button data-view="contacts" aria-label="People">♙<span>People</span></button
+      ><button data-view="settings" aria-label="Settings">⚙<span>Settings</span></button>
+    </nav>
+    <dialog id="modal" aria-labelledby="modal-title">
+      <div class="modal-header">
+        <h2 id="modal-title"></h2>
+        <button class="icon-button" id="close-modal" aria-label="Close dialog">×</button>
+      </div>
+      <div id="modal-body"></div>
+    </dialog>
+    <div
+      id="message-menu"
+      class="message-menu hidden"
+      role="menu"
+      aria-label="Email collection actions"
+    >
+      <button role="menuitem" tabindex="-1" data-collection="sender">Find all by sender</button>
+      <button role="menuitem" tabindex="-1" data-collection="organisation">
+        Find all by organisation
+      </button>
+      <button role="menuitem" tabindex="-1" data-collection="subject">Find all by subject</button>
+      <hr role="separator" />
+      <button role="menuitem" tabindex="-1" data-action="open">Open message / edit draft</button>
+      <button role="menuitem" tabindex="-1" data-action="reply">Reply</button>
+      <button role="menuitem" tabindex="-1" data-action="forward">Forward</button>
+      <button role="menuitem" tabindex="-1" data-action="write">New message to sender</button>
+      <hr role="separator" />
+      <button role="menuitem" tabindex="-1" data-action="tags">Edit tags…</button>
+      <button role="menuitem" tabindex="-1" data-action="read">Mark read (local)</button>
+      <button role="menuitem" tabindex="-1" data-action="unread">Mark unread (local)</button>
+      <button role="menuitem" tabindex="-1" data-action="star">Star (local)</button>
+      <button role="menuitem" tabindex="-1" data-action="unstar">Remove star (local)</button>
+      <button role="menuitem" tabindex="-1" data-action="move">Move local copy…</button>
+      <button role="menuitem" tabindex="-1" data-action="archive">Archive local copy</button>
+      <button role="menuitem" tabindex="-1" data-action="restore" hidden>Restore from Trash</button>
+      <button role="menuitem" tabindex="-1" data-action="trash">Trash local copy</button>
+      <button role="menuitem" tabindex="-1" data-action="delete">
+        Permanently delete local copy…
+      </button>
+      <hr role="separator" />
+      <button role="menuitem" tabindex="-1" data-action="contact">Add sender to People…</button>
+      <button role="menuitem" tabindex="-1" data-action="copy">Copy sender address…</button>
+      <button role="menuitem" tabindex="-1" data-action="save">Save message as text…</button>
+    </div>
+    <div id="toast" class="toast hidden" role="status"></div>
+    <script src="/static/theme-files.js" defer></script>
+    <script src="/static/color-editor.js" defer></script>
+    <script src="/static/appearance.js" defer></script>
+    <script src="/static/message-menu.js" defer></script>
+    <script src="/static/workspace-controls.js" defer></script>
+    <script src="/static/html-preview.js" defer></script>
+    <script src="/static/drafts.js" defer></script>
+    <script src="/static/composer.js" defer></script>
+    <script src="/static/message-selection.js" defer></script>
+    <script src="/static/calendar.js" defer></script>
+    <script src="/static/rules.js" defer></script>
+    <script src="/static/settings.js" defer></script>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

@@ -1,0 +1,73 @@
+.message-menu [hidden] {
+  display: none !important;
+}
+.selection-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  flex-shrink: 0;
+  font-size: 13px;
+}
+.select-all-label,
+.selection-bulk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.selection-tools [hidden] {
+  display: none !important;
+}
+.selection-bulk select {
+  max-width: 220px;
+  min-width: 0;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 7px;
+  border-radius: 6px;
+}
+.select-message,
+#select-all-messages {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  align-self: center;
+}
+.message-row.batch-selected {
+  background: var(--accent-light);
+  box-shadow: inset 3px 0 var(--accent);
+}
+.folder-drop-target {
+  outline: 2px solid var(--accent);
+  background: var(--accent-light) !important;
+}
+.reader {
+  color: var(--ink);
+}
+.reader-actions {
+  flex-wrap: wrap;
+}
+.html-message {
+  background: var(--surface);
+}
+@media (max-width: 760px) {
+  .select-message,
+  #select-all-messages {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+  }
+  .selection-tools {
+    padding: 8px;
+  }
+  .selection-bulk select {
+    max-width: 170px;
+  }
+}

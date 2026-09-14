@@ -1,0 +1,148 @@
+.mail-shell {
+  position: relative;
+}
+.mail-activity {
+  height: 3px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.mail-activity span {
+  display: block;
+  width: 32%;
+  height: 100%;
+  background: color-mix(in srgb, var(--accent) 45%, white);
+  animation: mail-work 1.3s ease-in-out infinite;
+}
+html[data-busy='true'] .mail-activity {
+  opacity: 1;
+}
+@keyframes mail-work {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(420%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mail-activity span {
+    animation: none;
+    width: 100%;
+  }
+}
+.global-search {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 580px;
+  min-width: 150px;
+  margin: 0 18px;
+  gap: 5px;
+}
+.global-search input {
+  width: 100%;
+  min-width: 60px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.global-search select {
+  max-width: 155px;
+  min-width: 0;
+  padding: 8px 3px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 8px;
+}
+.server-folders {
+  margin: 5px 0 10px 12px;
+  border-left: 1px solid var(--line);
+  padding-left: 8px;
+}
+.server-account {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  padding: 8px;
+  color: var(--muted);
+}
+.server-account small {
+  display: block;
+  font-size: 10px;
+  margin-top: 4px;
+}
+.server-folders summary {
+  padding: 8px 4px;
+  font-size: 12px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.folder-children {
+  margin-left: 12px;
+  border-left: 1px solid var(--line);
+  padding-left: 4px;
+}
+.remote-folder.nav-item {
+  min-height: 34px;
+  padding: 8px 4px;
+  gap: 6px;
+  font-size: 12px;
+}
+.folder-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+#navigation {
+  overflow-y: auto;
+  min-height: 0;
+}
+.message-menu {
+  max-height: calc(100dvh - 110px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.message-menu hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 5px 0;
+}
+@media (max-width: 1150px) {
+  .topbar .today {
+    display: none;
+  }
+  .topbar .breadcrumb {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    gap: 5px;
+    padding: 10px 12px;
+  }
+  .global-search {
+    order: 3;
+    max-width: none;
+    flex-basis: 100%;
+    margin: 3px 0 0;
+  }
+  .global-search select {
+    max-width: 140px;
+    font-size: 12px;
+  }
+  .top-actions {
+    margin-left: auto;
+  }
+}

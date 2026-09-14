@@ -1,0 +1,453 @@
+:root {
+  --accent-text: #fff;
+  --danger: #ac4c45;
+  --radius: 10px;
+  --font-size: 14px;
+}
+body {
+  font-size: var(--font-size);
+}
+.toast {
+  pointer-events: none;
+}
+.message-menu {
+  position: fixed;
+  z-index: 1001;
+  width: max-content;
+  min-width: min(360px, calc(100vw - 16px));
+  max-width: calc(100vw - 16px);
+  overflow-x: auto;
+  padding: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px #0003;
+}
+.message-menu button {
+  white-space: nowrap;
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 5px;
+  font-size: var(--font-size);
+}
+.message-menu button:hover,
+.message-menu button:focus {
+  background: var(--accent-light);
+}
+.message-more {
+  align-self: center;
+  min-width: 30px;
+  min-height: 44px;
+  color: var(--muted);
+  font-size: 20px;
+  border-radius: 6px;
+}
+.message-more:hover {
+  background: var(--accent-light);
+}
+.collection-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 15px 20px;
+  flex-shrink: 0;
+  background: var(--accent-light);
+  border-bottom: 1px solid var(--line);
+}
+.collection-banner > div {
+  min-width: 0;
+  flex: 1;
+}
+.collection-banner strong {
+  overflow-wrap: anywhere;
+}
+.collection-banner p {
+  font-size: 12px;
+  margin: 5px 0;
+  color: var(--muted);
+}
+.folder-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-right: 6px;
+  font-size: 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+.field-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+#account-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+#account-form details {
+  margin: 16px 0;
+  font-size: 13px;
+}
+#account-form summary {
+  cursor: pointer;
+}
+.device-code {
+  display: block;
+  font:
+    600 26px ui-monospace,
+    monospace;
+  letter-spacing: 3px;
+  overflow-wrap: anywhere;
+}
+.field,
+.field input,
+.field select,
+.field textarea {
+  min-width: 0;
+}
+button,
+input,
+textarea,
+select {
+  font-family: var(--sans);
+}
+.card,
+.mail-shell,
+dialog,
+.ai-input,
+.account-card {
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-radius: var(--radius);
+}
+.primary:hover {
+  background: var(--accent);
+  filter: brightness(0.9);
+}
+.secondary,
+.field input,
+.field select,
+.field textarea,
+.suggestions button {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line);
+  border-radius: var(--radius);
+}
+.sidebar,
+.ai-panel,
+.mobile-tabs {
+  background: var(--bg);
+}
+.nav-item,
+.profile small,
+.privacy,
+.message-date,
+.preview,
+.reader-meta small,
+.message-body,
+.fine-print,
+.mail-footer,
+.field,
+.quiet-note,
+.day-label,
+.day-number,
+.agenda-row p,
+.contact-card p,
+.ai-content p,
+.ai-input small,
+.breadcrumb,
+.breadcrumb strong {
+  color: var(--muted);
+}
+.nav-item.active,
+.nav-item:hover,
+.nav-count,
+.secondary:hover,
+.icon-button:hover,
+.message-row:hover,
+.message-row.selected,
+.message-row.unread.selected,
+.avatar,
+.message-row .avatar,
+.notice,
+.calendar-event,
+.mobile-tabs button.active {
+  background: var(--accent-light);
+  color: var(--ink);
+}
+.message-row,
+.reader-actions,
+.mail-footer,
+.calendar-day,
+.calendar-grid,
+.calendar-day.outside,
+.agenda-row,
+.modal-header {
+  background: var(--surface);
+  border-color: var(--line);
+}
+.message-row.unread {
+  background: var(--surface);
+}
+.mail-footer,
+.calendar-day.outside {
+  background: var(--bg);
+}
+.reader h2,
+.contact-card h2,
+.agenda-row h3 {
+  color: var(--ink);
+}
+.message-body {
+  color: var(--ink);
+}
+.reader-reply .primary,
+.calendar-day.is-today .day-number {
+  color: var(--accent-text);
+  background: var(--accent);
+}
+.danger {
+  color: var(--danger);
+}
+.notice,
+.assistant-toggle {
+  border-color: var(--line);
+}
+.star-button.on,
+.text-button,
+.assistant-toggle,
+.calendar-header a {
+  color: var(--accent);
+}
+.message-row,
+.day-label,
+.calendar-day,
+.profile,
+.modal-header,
+.mail-toolbar,
+.panel-heading {
+  border-color: var(--line);
+}
+.message-body,
+.field input,
+.field textarea,
+.field select,
+.sender,
+.subject,
+.secondary,
+.primary,
+.nav-item {
+  font-size: var(--font-size);
+}
+.preview,
+.field,
+.reader-meta strong,
+.ai-answer,
+.card p,
+.card li {
+  font-size: calc(var(--font-size) - 1px);
+}
+[data-density='compact'] .message-row {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  min-height: 76px;
+}
+[data-density='compact'] .card {
+  padding: 18px;
+}
+.appearance-card {
+  margin-bottom: 20px;
+}
+.settings-shell {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-right: 16px;
+  border-right: 1px solid var(--line);
+}
+.settings-nav a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--muted);
+}
+.settings-nav a:hover,
+.settings-nav a[aria-current='page'] {
+  background: var(--accent-light);
+  color: var(--ink);
+}
+.settings-nav a[aria-current='page'] {
+  font-weight: 600;
+}
+.settings-content {
+  min-width: 0;
+}
+.settings-content > .card {
+  max-width: 960px;
+}
+.settings-content #privacy-card {
+  margin-top: 0;
+}
+.settings-content ul {
+  color: var(--muted);
+  padding-left: 20px;
+  line-height: 2;
+}
+.settings-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.settings-category {
+  position: relative;
+  text-decoration: none;
+  color: var(--ink);
+  display: block;
+  min-height: 170px;
+}
+.settings-category:hover {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+.settings-category > span:first-child {
+  color: var(--accent);
+  font-size: 23px;
+}
+.settings-category h2 {
+  margin: 10px 0;
+  font-size: 23px;
+}
+.settings-category p {
+  margin: 0;
+  padding-right: 16px;
+}
+.category-arrow {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  color: var(--accent);
+}
+#page-title:focus {
+  outline: none;
+}
+@media (max-width: 1100px) {
+  .settings-shell {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .settings-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 0 0 14px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .settings-nav a {
+    font-size: 12px;
+  }
+}
+@media (max-width: 760px) {
+  .settings-overview {
+    grid-template-columns: 1fr;
+  }
+  .settings-category {
+    min-height: 135px;
+  }
+}
+.theme-colors {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.theme-colors input[type='color'] {
+  height: 46px;
+  width: 100%;
+  padding: 4px;
+  cursor: pointer;
+}
+#theme-import {
+  max-width: 190px;
+  font-size: 11px;
+}
+#theme-contrast,
+#theme-status {
+  margin-top: 14px;
+}
+#modal.inline-form {
+  position: static;
+  inset: auto;
+  width: calc(100% - 76px);
+  max-width: none;
+  max-height: none;
+  height: auto;
+  margin: 0 38px 35px;
+  box-shadow: none;
+  border: 1px solid var(--line);
+  overflow: visible;
+}
+#modal.inline-form .modal-header {
+  position: static;
+}
+main:has(#modal.inline-form[open]) > #workspace {
+  display: none;
+}
+main:has(#modal.inline-form[open]) #page-actions {
+  visibility: hidden;
+}
+@media (max-width: 760px) {
+  html {
+    scroll-padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+  main button,
+  main input,
+  main select,
+  main textarea {
+    scroll-margin-block: 90px;
+  }
+  #event-form .field-row {
+    grid-template-columns: 1fr;
+  }
+  .sidebar.open {
+    background: var(--bg);
+  }
+  .field input,
+  .field select,
+  .field textarea {
+    font-size: max(16px, var(--font-size));
+  }
+  #modal.inline-form {
+    width: calc(100% - 24px);
+    margin: 0 12px 20px;
+    border-radius: var(--radius);
+  }
+  #modal.inline-form .modal-header {
+    padding: 16px;
+  }
+  #modal.inline-form #modal-body {
+    padding: 16px;
+  }
+  .theme-colors {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
