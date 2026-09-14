@@ -93,13 +93,21 @@ async function launch() {
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) =>
     callback(false),
   );
+  const themeResponse = await fetch(origin + '/api/preferences', {
+    headers: { Cookie: `inkwell_session=${cookie}`, Origin: origin },
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!themeResponse.ok) throw new Error('Could not load your saved appearance');
+  const theme = (await themeResponse.json()).theme;
+  if (!/^#[0-9a-f]{6}$/i.test(theme?.background)) throw new Error('Invalid saved background color');
   const window = new BrowserWindow({
     width: 1360,
     height: 900,
     minWidth: 380,
     minHeight: 600,
     title: 'inkwell',
-    backgroundColor: '#f6f5f1',
+    backgroundColor: theme.background,
+    show: false,
     autoHideMenuBar: true,
     icon: path.join(root, 'inkwell/static/icon-512.png'),
     webPreferences: {
@@ -188,6 +196,14 @@ async function launch() {
   });
   window.webContents.on('will-attach-webview', (event) => event.preventDefault());
   await window.loadURL(origin);
+  // The blocking head script must apply the palette before exposing any window content.
+  const paintedBackground = await window.webContents.executeJavaScript(
+    'window.InkwellStartupThemeApplied ? document.querySelector(\'meta[name="theme-color"]\').content : null',
+  );
+  if (!/^#[0-9a-f]{6}$/i.test(paintedBackground || ''))
+    throw new Error('Could not apply your saved appearance');
+  window.setBackgroundColor(paintedBackground);
+  window.show();
   const monitor = setInterval(() => {
     if (failure && !quitting) {
       clearInterval(monitor);

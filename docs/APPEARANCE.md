@@ -1,5 +1,9 @@
 # Layouts, forms and themes
 
+## Startup appearance
+
+The desktop launcher reads the saved background before constructing its hidden window. A parser-blocking, authenticated same-origin theme script applies the validated palette and color scheme before the body is parsed; the window is shown only after that script has run. This avoids a light shell flashing before a saved dark or custom theme. It does not depend on account/folder sync finishing. Theme data is not cached and CSP remains restrictive. Unsaved Theme Studio previews are still discarded, not restored on relaunch.
+
 ## Dedicated Settings pages
 
 Settings opens a category overview, not a scrolling page of forms. Choose a category to open its dedicated page; only that feature's controls are mounted. Use **All settings** to return to the overview or the section navigation to switch pages.

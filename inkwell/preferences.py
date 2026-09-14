@@ -4,6 +4,7 @@ import json
 from typing import Literal
 
 from fastapi import APIRouter
+from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import store
@@ -96,6 +97,16 @@ def get_preferences():
     if "sidebar_font_size" not in theme and theme.get("font_size") == 14:
         theme["font_size"] = 16
     return Preferences.model_validate(value).model_dump()
+
+
+@router.get("/startup.js")
+def startup_theme():
+    # Parser-blocking, same-origin and authenticated; only validated presentation data.
+    theme = json.dumps(get_preferences()["theme"]).replace("<", "\\u003c")
+    return Response(
+        "window.InkwellAppearance.apply(" + theme + ");window.InkwellStartupThemeApplied=true;",
+        media_type="application/javascript",
+    )
 
 
 @router.put("")

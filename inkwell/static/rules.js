@@ -62,7 +62,7 @@ window.InkwellRules = async (
           `<option value="${esc(id)}" ${String(id) === String(value) ? 'selected' : ''}>${esc(label)}</option>`,
       )
       .join('');
-  root.innerHTML = `<section class="card"><h2>Rule Manager</h2><p>First matching enabled rule wins, in the order shown. All conditions can match (AND), or any condition can match (OR). Text matching is case-insensitive. All actions in the matching rule are applied locally. No server mail is moved or deleted.</p><label class="field">Find rules<input type="search" id="rules-search" placeholder="Find a rule…"></label><div id="rules-list"></div><button class="secondary" id="create-rule">Create rule</button><button class="secondary" id="apply-rules">Apply rules to existing imported copies…</button><p class="notice">Imports run rules immediately on new copies. Apply existing skips drafts, sent, Trash and already locally managed copies. Age/read conditions are not a periodic scheduler. Rules with missing folders/tags or overflowing 12 tags are skipped without partial actions.</p></section><section class="card"><form id="local-folder-form">${field('New local folder', 'name', '', 'text', 'required maxlength="80"')}<button class="secondary">Create local folder</button></form></section><section class="card" id="rule-editor"></section>`;
+  root.innerHTML = `<section class="card"><h2>Rule Manager</h2><p>First matching enabled rule wins, in the order shown. All conditions can match (AND), or any condition can match (OR). Text matching is case-insensitive. All actions in the matching rule are applied locally. No server mail is moved or deleted.</p><label class="field">Find rules<input type="search" id="rules-search" placeholder="Find a rule…"></label><div id="rules-list"></div><button class="secondary" id="create-rule">Create rule</button><button class="secondary" id="auto-tag-rule">Create auto-tag rule</button><button class="secondary" id="apply-rules">Apply rules to existing imported copies…</button><p class="notice">Imports run rules immediately on new copies. Apply existing skips drafts, sent, Trash and already locally managed copies. Age/read conditions are not a periodic scheduler. Rules with missing folders/tags or overflowing 12 tags are skipped without partial actions.</p></section><section class="card"><form id="local-folder-form">${field('New local folder', 'name', '', 'text', 'required maxlength="80"')}<button class="secondary">Create local folder</button></form></section><section class="card"><form id="rule-tag-form">${field('New rule tag', 'name', '', 'text', 'required maxlength="32"')}<button class="secondary">Create tag</button></form><p class="fine-print">Auto-tag example: Sender domain is @example.com → Add tag example. Exact domains exclude subdomains and lookalike domains. New imports are tagged immediately. An earlier matching rule takes precedence; add the tag action to that rule instead when appropriate. Tag-only actions leave filing unchanged. Change tag colors in Tag Manager.</p></section><section class="card" id="rule-editor"></section>`;
   root.insertAdjacentHTML(
     'beforeend',
     `<section class="card" id="not-junk-senders"><h2>Not Junk senders</h2><p>Exact sender addresses remembered across this workspace. Their incoming copies use the first applicable non-junk rule, or Inbox. Junk/Trash destinations are skipped. Sender headers can be spoofed; this is local filing, not an authentication guarantee or a change to Outlook spam filtering.</p>${safeSenders.map((s) => `<div class="rule-row"><span>${esc(s.sender_key)}</span><button class="secondary" data-forget-sender="${esc(s.sender_key)}">Forget sender</button></div>`).join('') || '<p>No remembered senders.</p>'}<p class="fine-print">Forgetting affects future imports only; it does not undo earlier filing.</p></section>`,
@@ -99,6 +99,7 @@ window.InkwellRules = async (
         .join('') || '<p>No matching rules.</p>';
   };
   let refreshTargets = () => {},
+    selectCreatedTag = () => {},
     editorEpoch = 0,
     editingId = null,
     listEpoch = 0;
@@ -161,6 +162,11 @@ window.InkwellRules = async (
         .join('');
     };
     refreshTargets = renderActions;
+    selectCreatedTag = (tag, requestedEpoch) => {
+      if (requestedEpoch !== epoch) return;
+      const action = actions.find((a) => a.type === 'add_tag' && !a.value);
+      if (action) action.value = String(tag.id);
+    };
     form.addEventListener('input', (event) => {
       const row = event.target.closest('[data-condition]');
       if (row && event.target.dataset.part === 'value')
@@ -178,7 +184,7 @@ window.InkwellRules = async (
             operator:
               f === 'age_days'
                 ? 'gt'
-                : ['tag', 'unread', 'starred'].includes(f)
+                : ['domain', 'tag', 'unread', 'starred'].includes(f)
                   ? 'is'
                   : 'contains',
             value: ['unread', 'starred'].includes(f) ? 'true' : f === 'age_days' ? '0' : '',
@@ -268,6 +274,35 @@ window.InkwellRules = async (
   root.querySelector('#create-rule').onclick = () => {
     editor();
     root.querySelector('#rule-form [name=name]').focus();
+  };
+  root.querySelector('#auto-tag-rule').onclick = () => {
+    editor({
+      conditions: [{ field: 'domain', operator: 'is', value: '' }],
+      actions: [{ type: 'add_tag', value: '' }],
+    });
+    root.querySelector('#rule-form [name=name]').focus();
+  };
+  root.querySelector('#rule-tag-form').onsubmit = async (event) => {
+    event.preventDefault();
+    const form = event.target,
+      epoch = editorEpoch;
+    form.inert = true;
+    try {
+      const tag = await api('/tags', { method: 'POST', body: { name: form.elements.name.value } });
+      if (!isCurrent() || !root.isConnected) return;
+      const fresh = await api('/tags');
+      if (!isCurrent() || !root.isConnected) return;
+      tags.splice(0, tags.length, ...fresh);
+      selectCreatedTag(tag, epoch);
+      refreshTargets();
+      renderList();
+      form.reset();
+      toast('Tag created. Save the rule to enable automatic tagging.');
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      form.inert = false;
+    }
   };
   root.querySelector('#rules-list').onclick = async (event) => {
     const b = event.target.closest('button');

@@ -50,6 +50,29 @@ test.afterEach(async ({ page }) => {
   await api(page, '/preferences', 'PUT', original);
 });
 
+test('Auto-tag shortcut creates and selects a tag without losing the domain rule', async ({
+  page,
+}) => {
+  if (await page.locator('#menu').isVisible()) await page.locator('#menu').click();
+  await page.locator('#rule-manager-link').click();
+  await page.getByRole('button', { name: 'Create auto-tag rule', exact: true }).click();
+  await page.getByLabel('Rule name', { exact: true }).fill(prefix + ' auto tag');
+  await expect(page.getByLabel('Condition 1 field', { exact: true })).toHaveValue('domain');
+  await expect(page.getByLabel('Condition 1 operator', { exact: true })).toHaveValue('is');
+  await page.getByLabel('Condition 1 value', { exact: true }).fill('@example.com');
+  await page.getByLabel('New rule tag', { exact: true }).fill(prefix);
+  await page.getByRole('button', { name: 'Create tag', exact: true }).click();
+  await expect(page.getByLabel('Action 1 value', { exact: true })).not.toHaveValue('');
+  await expect(page.getByLabel('Rule name', { exact: true })).toHaveValue(prefix + ' auto tag');
+  await expect(page.getByLabel('Condition 1 value', { exact: true })).toHaveValue('@example.com');
+  await page.getByRole('button', { name: 'Save rule', exact: true }).click();
+  await expect(page.locator('#rules-list')).toContainText(prefix + ' auto tag');
+  const rule = (await api(page, '/rules')).find((r) => r.name === prefix + ' auto tag');
+  expect(rule.conditions).toEqual([{ field: 'domain', operator: 'is', value: 'example.com' }]);
+  expect(rule.actions).toHaveLength(1);
+  expect(rule.actions[0].type).toBe('add_tag');
+});
+
 test('Rule Manager builds AND/OR conditions and multiple actions, preserves editing when creating a folder', async ({
   page,
 }, info) => {

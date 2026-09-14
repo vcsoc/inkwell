@@ -19,6 +19,18 @@ The first matching eligible enabled rule wins, in creation order. This is not a 
 
 Legacy rules retain their behavior and appear in the builder. Rule tag references use stable catalog IDs: rename keeps references, merge redirects them, and deleting a referenced tag disables the affected rules. Review those rules before enabling them again. Deleting a rule does not undo earlier actions or delete mail.
 
+## Domain auto-tagging
+
+In Rule Manager, choose **Create auto-tag rule**. This starts a tag-only rule with **Sender domain → is** and **Add tag**, without an implicit move action.
+
+1. Give the rule a name and enter `@example.com` (or `example.com`) as the condition value.
+2. Select the `example` tag. If it does not exist, enter `example` under **New rule tag** and click **Create tag**; the empty Add tag action is selected automatically without discarding the rule edit.
+3. Click **Save rule**.
+
+Every newly imported matching copy receives the tag immediately. Domain matching is exact and case-insensitive: subdomains and lookalikes such as `example.com.evil` do not match. Tag-only actions preserve the message's folder and read state. First-match ordering still applies: an earlier matching rule wins, so add the tag action to that existing rule when appropriate. Rules do not change provider mail or tags, and cannot process messages that have not been imported.
+
+Use **Apply rules to existing imported copies…** for eligible cached messages; its existing exclusions (drafts, sent, Trash and already locally managed copies) remain in force. Creating a tag saves the catalog entry independently of saving a rule. Its color can be changed in Tag Manager.
+
 ## Cc, Bcc and address autocomplete
 
 Compose and Reply include **Cc** and **Bcc** toggles. Fields with recipients are always visible when reopening a draft. Clear a field before hiding it; recipients cannot remain invisibly active behind a collapsed toggle. To/Cc/Bcc are autosaved with the draft, including partial addresses, and retained in the local Sent copy. Reply starts with the original sender in To and empty Cc/Bcc; this is not Reply All.

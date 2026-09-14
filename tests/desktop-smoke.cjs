@@ -7,6 +7,15 @@ const { DatabaseSync } = require('node:sqlite');
 const { settingsSection } = require('./ui/helpers.cjs');
 test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) => {
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'inkwell-desktop-'));
+  const initial = new DatabaseSync(path.join(data, 'inkwell.db'));
+  initial.exec('CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT NOT NULL)');
+  initial.prepare('INSERT INTO settings VALUES (?,?)').run(
+    'preferences',
+    JSON.stringify({
+      theme: { background: '#102030', surface: '#1c2834', text: '#eeeeee', dark: true },
+    }),
+  );
+  initial.close();
   let app;
   t.signal.addEventListener(
     'abort',
@@ -30,6 +39,15 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
     window.setDefaultNavigationTimeout(5000);
     await expect(window.locator('#page-title')).toContainText('Your inbox');
     expect(await app.evaluate(({ app }) => app.getName())).toBe('inkwell');
+    expect(
+      await app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0].getBackgroundColor(),
+      ),
+    ).toMatch(/(?:ff)?102030$/i);
+    await expect(window.locator('body')).toHaveCSS('background-color', 'rgb(16, 32, 48)');
+    await expect
+      .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()))
+      .toBe(true);
     await expect(window.locator('.brand-logo')).toHaveCSS('mask-image', /logo\.png/);
     await expect(window.locator('#modal')).not.toBeVisible();
     await window.getByRole('button', { name: 'Explore demo', exact: true }).click();
@@ -165,8 +183,12 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
     );
     await window.locator('#rule-manager-link').click();
     await expect(window.locator('#not-junk-senders')).toContainText('@');
+    await window.getByRole('button', { name: 'Create auto-tag rule', exact: true }).click();
     await window.getByLabel('Rule name', { exact: true }).fill('Desktop rule');
-    await window.getByLabel('Condition 1 value', { exact: true }).fill('ABC');
+    await window.getByLabel('Condition 1 value', { exact: true }).fill('@example.com');
+    await window
+      .getByLabel('Action 1 value', { exact: true })
+      .selectOption({ label: 'Desktop tag manager' });
     await window.getByRole('button', { name: 'Save rule', exact: true }).click();
     await expect(window.locator('#rules-list')).toContainText('Desktop rule');
     await window.locator('#navigation [data-view=inbox]').click();

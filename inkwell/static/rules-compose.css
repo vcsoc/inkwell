@@ -31,7 +31,8 @@
   min-height: 32px;
   margin: 8px 0;
 }
-.card:has(> #local-folder-form) {
+.card:has(> #local-folder-form),
+.card:has(> #rule-tag-form) {
   margin-top: 18px;
 }
 #rule-editor,
