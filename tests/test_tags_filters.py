@@ -107,6 +107,9 @@ def test_catalog_validation(client, body):
 def test_schema_six_migration_backfills_and_deduplicates_tags(client):
     id = message(client, ["Work"])
     with store.db() as db:
+        db.execute("ALTER TABLE messages DROP COLUMN cc")
+        db.execute("ALTER TABLE messages DROP COLUMN bcc")
+        db.execute("DROP TABLE address_history")
         db.execute("DROP TABLE tag_catalog")
         db.execute("DROP INDEX tagged_messages")
         db.execute(

@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="/static/mail-polish.css" />
     <link rel="stylesheet" href="/static/tag-manager.css" />
     <link rel="stylesheet" href="/static/calendar-rules.css" />
+    <link rel="stylesheet" href="/static/rules-compose.css" />
     <title>inkwell — A little more focus</title>
   </head>
   <body>
@@ -49,6 +50,9 @@
         <nav id="navigation" aria-label="Workspace"></nav>
         <div class="sidebar-bottom">
           <div class="privacy"><span class="status-dot"></span> Local-first. Yours by design.</div>
+          <button class="nav-item" id="rule-manager-link">
+            <span aria-hidden="true">☷</span> Rule Manager
+          </button>
           <button class="nav-item" id="tag-manager-link">
             <span aria-hidden="true">◈</span> Tag Manager
           </button>
@@ -204,11 +208,13 @@
     <script src="/static/workspace-controls.js" defer></script>
     <script src="/static/html-preview.js" defer></script>
     <script src="/static/drafts.js" defer></script>
+    <script src="/static/address-autocomplete.js" defer></script>
     <script src="/static/composer.js" defer></script>
     <script src="/static/message-selection.js" defer></script>
     <script src="/static/calendar.js" defer></script>
     <script src="/static/rules.js" defer></script>
     <script src="/static/settings.js" defer></script>
+    <script src="/static/tag-color-picker.js" defer></script>
     <script src="/static/tag-manager.js" defer></script>
     <script src="/static/quick-filter.js" defer></script>
     <script src="/static/app.js" defer></script>

@@ -46,7 +46,7 @@ For a phone, see [Mobile setup](docs/MOBILE.md). `localhost` on a phone refers t
 | Mobile | Touch-oriented navigation, responsive mail reader, full-screen forms, safe-area support, install manifest, offline connectivity explanation |
 | Email | Multiple IMAP/SMTP accounts, inbox sync, isolated HTML/text previews, opt-in remote images, search, pagination, unread/tag pills, local read/unread, stars, archive/trash, drafts, reply, forward, explicit SMTP sending, draft autosave, local drag-and-drop and Trash restore |
 | Calendar | Themed month grid/agenda, all-day and multi-day events, drag/two-endpoint ranges, timezone-aware daily/weekly/monthly/yearly repeats, whole-series editing, `.ics` export |
-| Mail rules | Immediate local filing on import, sender/domain matching, unread/age exclusions and custom local folders — never server mutations |
+| Mail rules | Dedicated Rule Manager, AND/OR condition builder, multiple local move/read/star/tag actions, existing-mail application and custom folders — never server mutations |
 | People | Create/edit/delete contacts, compose from contact, recipient suggestions |
 | AI | OpenAI, OpenRouter, Anthropic, Gemini and compatible APIs; official Codex CLI subscription bridge; Ollama, LM Studio, llama.cpp and served Unsloth models; explicit context sharing and draft suggestions |
 | Appearance | Saved popup/internal forms; responsive calendar side editor; 16px defaults, separate sidebar font/size, adjustable spacing, in-app RGB/hex colors, four palettes, contrast guidance and YAML/JSON theme import/export |
@@ -94,7 +94,7 @@ Open **Ask inkwell**, write your prompt, and optionally check **Include selected
 ## Limitations / next milestones
 
 - **Not Outlook feature parity:** Microsoft Graph/OAuth supports delegated inbox reading and sending only. No Exchange/EWS, shared mailboxes or enterprise administration. The distributed build includes a public Inkwell application registration; Microsoft or organizational consent policies still apply.
-- No attachments, rich HTML compose, CC/BCC, conversation threading, provider-side rules, signatures, scheduled sending or remote folder management.
+- No attachments, rich HTML compose, Reply All, conversation threading, provider-side rules, signatures, scheduled sending or remote folder management. Compose supports multiple To/Cc/Bcc recipients and local address autocomplete; see [Rule Manager and recipients](docs/RULE-MANAGER-COMPOSE.md).
 - No background IMAP IDLE, periodic polling, SMTP Sent-folder upload or two-way flag sync. Startup and post-Microsoft-connection imports are automatic. SMTP copies are stored locally; providers may separately save their own copies.
 - No CalDAV/CardDAV, per-occurrence exceptions, meeting invites, reminders, push notifications, tasks, calendar import or video-meeting creation.
 - Local deletion is not server deletion. A permanently deleted imported message may return on the next sync.

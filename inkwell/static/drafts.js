@@ -11,6 +11,8 @@ window.InkwellDraftAutosave = ({ form, data, api, toast, onSaved }) => {
     const f = Object.fromEntries(new FormData(form));
     return {
       recipient: f.recipient || '',
+      cc: f.cc || '',
+      bcc: f.bcc || '',
       subject: f.subject || '',
       body: f.body || '',
       account_id: f.account_id ? Number(f.account_id) : null,
@@ -30,7 +32,10 @@ window.InkwellDraftAutosave = ({ form, data, api, toast, onSaved }) => {
           signature = JSON.stringify(content);
         if (
           signature === lastSaved ||
-          (!id && ![content.recipient, content.subject, content.body].some((v) => v.trim()))
+          (!id &&
+            ![content.recipient, content.cc, content.bcc, content.subject, content.body].some((v) =>
+              v.trim(),
+            ))
         )
           return;
         status('Saving draft…');
@@ -65,7 +70,9 @@ window.InkwellDraftAutosave = ({ form, data, api, toast, onSaved }) => {
     const content = values();
     if (
       JSON.stringify(content) === lastSaved ||
-      ![content.recipient, content.subject, content.body].some((v) => v.trim())
+      ![content.recipient, content.cc, content.bcc, content.subject, content.body].some((v) =>
+        v.trim(),
+      )
     )
       return;
     fetch('/api/drafts', {

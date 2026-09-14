@@ -52,7 +52,7 @@ test('calendar and contacts CRUD', async ({ page }, testInfo) => {
   await view(page, 'People');
   await page.getByRole('button', { name: 'Add person' }).click();
   await page.getByRole('textbox', { name: 'Full name' }).fill('UI Test ' + testInfo.project.name);
-  await page.getByRole('textbox', { name: 'Email', exact: true }).fill('ui@example.com');
+  await page.getByRole('combobox', { name: 'Email', exact: true }).fill('ui@example.com');
   await page.getByRole('button', { name: 'Save person', exact: true }).click();
   await expect(page.locator('#modal')).not.toBeVisible();
   const card = page

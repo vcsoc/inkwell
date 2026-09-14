@@ -75,9 +75,10 @@ test('rule editor creates local destinations and saves sender exclusions', async
   await expect(page.locator('#toast')).toContainText('Local folder created');
   folderId = (await api(page, '/local-folders')).find((f) => f.name === name).id;
   await page.getByLabel('Rule name', { exact: true }).fill('Older read sender mail');
-  await page.getByLabel('Match', { exact: true }).selectOption('domain');
-  await page.getByLabel('Sender address or domain').fill('example.org');
-  await page.getByLabel('Move local copy to').selectOption('local-' + folderId);
+  await page.getByLabel('Condition 1 field', { exact: true }).selectOption('domain');
+  await page.getByLabel('Condition 1 operator', { exact: true }).selectOption('is');
+  await page.getByLabel('Condition 1 value', { exact: true }).fill('example.org');
+  await page.getByLabel('Action 1 value', { exact: true }).selectOption('local-' + folderId);
   await page.getByLabel('Exclude unread messages').check();
   await page.getByLabel('Only messages older than days (0 = any age)').fill('7');
   await page.getByRole('button', { name: 'Save rule', exact: true }).click();
@@ -85,9 +86,8 @@ test('rule editor creates local destinations and saves sender exclusions', async
   const saved = (await api(page, '/rules')).find((r) => r.name === 'Older read sender mail');
   ruleId = saved.id;
   expect(saved).toMatchObject({
-    match: 'domain',
-    value: 'example.org',
-    folder: 'local-' + folderId,
+    conditions: [{ field: 'domain', operator: 'is', value: 'example.org' }],
+    actions: [{ type: 'move', value: 'local-' + folderId }],
     exclude_unread: true,
     older_than_days: 7,
   });

@@ -45,9 +45,9 @@ Available actions:
 
 HTML preview is now the default, with a privacy banner and explicit per-view image choices. See [HTML preview security and limits](HTML-PREVIEW.md). Pane widths are adjustable in side-by-side layouts; see [Appearance](APPEARANCE.md).
 
-**Settings → Mail rules** adds automatic local filing by sender/domain, optional unread and age exclusions, and custom local folders. See [Rules and calendar](RULES-CALENDAR.md).
+**Rule Manager** in the sidebar (also under Settings → Mail rules) lists existing inkwell rules and provides an AND/OR condition builder with multiple local move/read/star/tag actions. Compose/Reply support optional Cc/Bcc and shared local address autocomplete. See [Rule Manager and recipients](RULE-MANAGER-COMPOSE.md).
 
-These are working actions, **not full Outlook menu parity**. Reply all/CC/BCC, categories, reminders, junk/block rules, original-source viewing, printing, attachment handling, and server folder creation/rename/move/delete remain unimplemented.
+These are working actions, **not full Outlook menu parity**. Reply all, provider categories, reminders, junk/block rules, original-source viewing, printing, attachment handling, and server folder creation/rename/move/delete remain unimplemented.
 
 ## Tags and quick filters
 

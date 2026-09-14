@@ -2,10 +2,10 @@
 
 ## Import rules
 
-Open **Settings → Mail rules**. Create a local folder first if needed, then create a rule:
+Open **Rule Manager** in the sidebar or **Settings → Mail rules**. The current builder supports AND/OR condition groups and multiple move/read/star/tag actions, including subject matching. See [Rule Manager and recipients](RULE-MANAGER-COMPOSE.md) for the complete controls. The original sender/domain rules remain supported:
 
 - Choose an **exact sender address** or **exact sender domain**. Matching normalizes addresses/domain case and IDNA; a domain rule does not implicitly include subdomains.
-- Choose Inbox, Archive, local Trash or a custom local destination.
+- Choose Inbox, Archive, local Trash, a custom local destination, or a displayed server-folder branch as a local-only view.
 - **Exclude unread messages** restricts the rule to read messages.
 - **Only messages older than days** can be set to `7` to leave messages from the last seven days alone; `0` means any age. The two exclusions can be combined.
 - Save, edit, disable or delete rules. First matching enabled rule wins, in creation order. Up to 100 rules are supported.

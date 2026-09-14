@@ -150,12 +150,31 @@ def update(tag_id: int, data: Tag):
     return {"updated_messages": changed}
 
 
+def rule_references(db, ids, replacement=None):
+    keys = {str(id) for id in ids}
+    for row in db.execute("SELECT id,config FROM mail_rules").fetchall():
+        config = json.loads(row["config"])
+        changed = False
+        for item in config.get("conditions", []) + config.get("actions", []):
+            if (
+                item.get("field") == "tag" or item.get("type") in {"add_tag", "remove_tag"}
+            ) and item.get("value") in keys:
+                if replacement is None:
+                    config["enabled"] = False
+                else:
+                    item["value"] = str(replacement)
+                changed = True
+        if changed:
+            db.execute("UPDATE mail_rules SET config=? WHERE id=?", (json.dumps(config), row["id"]))
+
+
 @router.post("/delete")
 def delete(data: Selection):
     with store.db() as db:
         db.execute("BEGIN IMMEDIATE")
         chosen = selected(db, data.ids)
         changed = rewrite(db, {row["key"] for row in chosen})
+        rule_references(db, data.ids)
         db.executemany("DELETE FROM tag_catalog WHERE id=?", [(row["id"],) for row in chosen])
     return {"updated_messages": changed}
 
@@ -175,6 +194,7 @@ def merge(data: Merge):
             ).lastrowid
             target = db.execute("SELECT * FROM tag_catalog WHERE id=?", (id,)).fetchone()
         changed = rewrite(db, {row["key"] for row in chosen}, target["name"])
+        rule_references(db, data.ids, target["id"])
         db.executemany(
             "DELETE FROM tag_catalog WHERE id=?",
             [(row["id"],) for row in chosen if row["id"] != target["id"]],

@@ -48,7 +48,7 @@ def init():
         # Version 1: preserve password accounts while adding Microsoft OAuth metadata.
         conn.execute("BEGIN IMMEDIATE")
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        if version > 7:
+        if version > 8:
             raise RuntimeError("This database was created by a newer inkwell version")
         if version < 1:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)")}
@@ -135,6 +135,19 @@ def init():
 
             tag_store.migrate(conn)
             conn.execute("PRAGMA user_version=7")
+        if version < 8:
+            conn.execute("ALTER TABLE messages ADD COLUMN cc TEXT NOT NULL DEFAULT ''")
+            conn.execute("ALTER TABLE messages ADD COLUMN bcc TEXT NOT NULL DEFAULT ''")
+            conn.execute(
+                "CREATE TABLE address_history(address TEXT PRIMARY KEY COLLATE NOCASE,name TEXT NOT NULL DEFAULT '',last_used TEXT NOT NULL)"
+            )
+            conn.execute(
+                "CREATE INDEX address_history_recent ON address_history(last_used DESC,address)"
+            )
+            from . import addresses
+
+            addresses.migrate(conn)
+            conn.execute("PRAGMA user_version=8")
     if os.name != "nt":
         os.chmod(DATA / "inkwell.db", 0o600)
 

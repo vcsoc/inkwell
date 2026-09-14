@@ -10,6 +10,7 @@ import secrets
 import threading
 import time
 from datetime import datetime, timezone
+from email.headerregistry import Address
 from pathlib import Path
 from typing import Literal
 from urllib.parse import quote, urlparse
@@ -186,6 +187,9 @@ def poll(flow_id: str):
                         flow["client_id"],
                     ),
                 )
+                from . import addresses
+
+                addresses.remember(db, email, display_name=profile.get("displayName") or email)
                 result = {"account_id": cursor.lastrowid, "email": email}
             flow["completed"] = result
             flow.pop("device_code", None)
@@ -261,7 +265,7 @@ def sync_account(account, folder=None):
         GRAPH
         + "/me/mailFolders/"
         + quote(remote_id, safe="")
-        + "/messages?$top=100&$orderby=receivedDateTime%20desc&$select=id,from,toRecipients,subject,body,receivedDateTime,isRead,flag"
+        + "/messages?$top=100&$orderby=receivedDateTime%20desc&$select=id,from,toRecipients,ccRecipients,bccRecipients,subject,body,receivedDateTime,isRead,flag"
     )
     with client() as http:
         for _ in range(2):
@@ -270,10 +274,26 @@ def sync_account(account, folder=None):
             data = response.json()
             for message in data.get("value", [])[:100]:
                 sender = message.get("from", {}).get("emailAddress", {})
-                sender = f"{sender.get('name', '')} <{sender.get('address', '')}>"
+                try:
+                    sender = str(
+                        Address(
+                            display_name=sender.get("name") or "",
+                            addr_spec=sender.get("address") or "",
+                        )
+                    )
+                except (ValueError, IndexError):
+                    sender = f"{sender.get('name', '')} <{sender.get('address', '')}>"
                 recipient = ", ".join(
                     r.get("emailAddress", {}).get("address", "")
                     for r in message.get("toRecipients", [])
+                )
+                cc = ", ".join(
+                    r.get("emailAddress", {}).get("address", "")
+                    for r in message.get("ccRecipients", [])
+                )
+                bcc = ", ".join(
+                    r.get("emailAddress", {}).get("address", "")
+                    for r in message.get("bccRecipients", [])
                 )
                 body = message.get("body", {})
                 text = body.get("content", "")
@@ -289,8 +309,8 @@ def sync_account(account, folder=None):
                     ).fetchone():
                         raise ValueError("Account disconnected")
                     cursor = db.execute(
-                        """INSERT OR IGNORE INTO messages(account_id,remote_key,sender,recipient,subject,body,date,unread,starred,folder,remote_folder_id)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                        """INSERT OR IGNORE INTO messages(account_id,remote_key,sender,recipient,subject,body,date,unread,starred,folder,remote_folder_id,cc,bcc)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (
                             account["id"],
                             f"{account['id']}:graph:{message['id']}",
@@ -304,8 +324,13 @@ def sync_account(account, folder=None):
                             int(message.get("flag", {}).get("flagStatus") == "flagged"),
                             local_folder,
                             folder["id"] if folder else None,
+                            cc,
+                            bcc,
                         ),
                     )
+                    from . import addresses
+
+                    addresses.remember(db, sender, recipient, cc, bcc)
                     count += cursor.rowcount
                     if cursor.rowcount:
                         from . import rules
@@ -345,7 +370,12 @@ def sync_account(account, folder=None):
     return count
 
 
-def send_mail(account, recipient, subject, body):
+def send_mail(account, recipient, subject, body, cc="", bcc=""):
+    from . import addresses
+
+    def recipients(value):
+        return [{"emailAddress": {"address": address}} for _, address in addresses.parse(value)]
+
     with client() as http:
         result = http.post(
             GRAPH + "/me/sendMail",
@@ -354,7 +384,9 @@ def send_mail(account, recipient, subject, body):
                 "message": {
                     "subject": subject,
                     "body": {"contentType": "Text", "content": body},
-                    "toRecipients": [{"emailAddress": {"address": recipient}}],
+                    "toRecipients": recipients(recipient),
+                    "ccRecipients": recipients(cc),
+                    "bccRecipients": recipients(bcc),
                 },
                 "saveToSentItems": True,
             },

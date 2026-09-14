@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import (
+    addresses,
     tag_store,
     mail_filters,
     message_moves,
@@ -61,6 +62,7 @@ app.include_router(html_mail.router)
 app.include_router(rules.router)
 app.include_router(message_moves.router)
 app.include_router(tag_store.router)
+app.include_router(addresses.router)
 app.add_middleware(
     TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]", *EXTRA_HOSTS]
 )
@@ -216,6 +218,7 @@ def add_account(data: Account):
                 data.smtp_security,
             ),
         )
+        addresses.remember(conn, data.email, display_name=data.name)
         return {"id": cursor.lastrowid}
 
 
@@ -430,7 +433,9 @@ def delete_message(message_id: int):
 
 class Compose(BaseModel):
     account_id: int | None = None
-    recipient: str = Field(default="", max_length=254)
+    recipient: str = Field(default="", max_length=8192)
+    cc: str = Field(default="", max_length=8192)
+    bcc: str = Field(default="", max_length=8192)
     subject: str = Field(default="", max_length=998, pattern=r"^[^\r\n]*$")
     body: str = Field(default="", max_length=500_000)
     draft_id: int | None = None
@@ -442,8 +447,8 @@ def save_composed(data, folder, sender, demo=False):
     with store.db() as conn:
         cursor = conn.execute(
             """INSERT INTO messages
-            (account_id,folder,sender,recipient,subject,body,date,unread,demo)
-            VALUES (?,?,?,?,?,?,?,0,?)""",
+            (account_id,folder,sender,recipient,subject,body,date,unread,demo,cc,bcc)
+            VALUES (?,?,?,?,?,?,?,0,?,?,?)""",
             (
                 data.account_id,
                 folder,
@@ -453,8 +458,11 @@ def save_composed(data, folder, sender, demo=False):
                 data.body,
                 datetime.now(timezone.utc).isoformat(),
                 demo,
+                data.cc,
+                data.bcc,
             ),
         )
+        addresses.remember(conn, sender, data.recipient, data.cc, data.bcc)
         if data.draft_id:
             conn.execute(
                 "DELETE FROM messages WHERE id=? AND folder='drafts' AND (? IS NULL OR draft_revision=?)",
@@ -485,13 +493,14 @@ def save_draft(data: Compose):
         )
         if data.draft_id and not row:
             raise HTTPException(409, "Draft no longer exists; your editor has been kept open")
+        addresses.remember(conn, data.recipient, data.cc, data.bcc)
         if row:
             if row["folder"] != "drafts":
                 raise HTTPException(409, "Draft was sent or moved; your editor has been kept open")
             if data.draft_revision is not None and data.draft_revision != row["draft_revision"]:
                 raise HTTPException(409, "Draft changed elsewhere; your editor has been kept open")
             conn.execute(
-                "UPDATE messages SET account_id=?,recipient=?,subject=?,body=?,date=?,draft_key=COALESCE(draft_key,?),draft_revision=draft_revision+1 WHERE id=?",
+                "UPDATE messages SET account_id=?,recipient=?,subject=?,body=?,date=?,draft_key=COALESCE(draft_key,?),draft_revision=draft_revision+1,cc=?,bcc=? WHERE id=?",
                 (
                     data.account_id,
                     data.recipient,
@@ -499,12 +508,14 @@ def save_draft(data: Compose):
                     data.body,
                     datetime.now(timezone.utc).isoformat(),
                     data.draft_key,
+                    data.cc,
+                    data.bcc,
                     row["id"],
                 ),
             )
             return {"id": row["id"], "draft_revision": row["draft_revision"] + 1}
         cursor = conn.execute(
-            "INSERT INTO messages(account_id,folder,sender,recipient,subject,body,date,unread,draft_key,draft_revision) VALUES (?,'drafts','Me',?,?,?,?,0,?,1)",
+            "INSERT INTO messages(account_id,folder,sender,recipient,subject,body,date,unread,draft_key,draft_revision,cc,bcc) VALUES (?,'drafts','Me',?,?,?,?,0,?,1,?,?)",
             (
                 data.account_id,
                 data.recipient,
@@ -512,6 +523,8 @@ def save_draft(data: Compose):
                 data.body,
                 datetime.now(timezone.utc).isoformat(),
                 data.draft_key,
+                data.cc,
+                data.bcc,
             ),
         )
         return {"id": cursor.lastrowid, "draft_revision": 1}
@@ -528,7 +541,7 @@ def send(data: Compose):
 
 def send_once(data: Compose):
     try:
-        validate_email(data.recipient)
+        data.recipient, data.cc, data.bcc = addresses.normalize(data.recipient, data.cc, data.bcc)
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
     if data.account_id is None:
@@ -547,7 +560,12 @@ def send_once(data: Compose):
             )
     try:
         transport = microsoft if account["provider"] == "microsoft" else mail
-        transport.send_mail(account, data.recipient, data.subject, data.body)
+        if data.cc or data.bcc:
+            transport.send_mail(
+                account, data.recipient, data.subject, data.body, cc=data.cc, bcc=data.bcc
+            )
+        else:
+            transport.send_mail(account, data.recipient, data.subject, data.body)
     except Exception as error:
         raise HTTPException(
             502,
@@ -736,6 +754,7 @@ def add_contact(data: Contact):
             "INSERT INTO contacts(name,email,company,notes) VALUES (?,?,?,?)",
             tuple(data.model_dump().values()),
         )
+        addresses.remember(conn, data.email, display_name=data.name)
         return {"id": c.lastrowid}
 
 
@@ -748,6 +767,7 @@ def update_contact(contact_id: int, data: Contact):
                 (*data.model_dump().values(), contact_id),
             )
         )
+        addresses.remember(conn, data.email, display_name=data.name)
     return {"ok": True}
 
 

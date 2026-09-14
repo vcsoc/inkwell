@@ -69,7 +69,11 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
     await expect(window.locator('html')).toHaveCSS('zoom', '1.1');
     await zoomKey('0');
     await expect(window.locator('html')).toHaveCSS('zoom', '1');
-    await app.evaluate(({BrowserWindow})=>{const wc=BrowserWindow.getAllWindows()[0].webContents;wc.sendInputEvent({type:'keyDown',keyCode:'K',modifiers:['control','shift']});wc.sendInputEvent({type:'keyUp',keyCode:'K',modifiers:['control','shift']});});
+    await app.evaluate(({ BrowserWindow }) => {
+      const wc = BrowserWindow.getAllWindows()[0].webContents;
+      wc.sendInputEvent({ type: 'keyDown', keyCode: 'K', modifiers: ['control', 'shift'] });
+      wc.sendInputEvent({ type: 'keyUp', keyCode: 'K', modifiers: ['control', 'shift'] });
+    });
     await expect(window.locator('#global-search')).toBeFocused();
     await window.getByRole('button', { name: 'Back to messages' }).click();
     await window.locator('.message-row [data-more]').first().click();
@@ -150,24 +154,53 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
     expect(preferences.sandbox).toBe(true);
     await window.locator('#close-modal').click();
     await window.locator('#tag-manager-link').click();
-    await window.getByLabel('Tag name',{exact:true}).fill('Desktop tag manager');
-    await window.getByLabel('Tag color',{exact:true}).fill('#2664a0');
-    await window.getByRole('button',{name:'Save tag',exact:true}).click();
-    await expect(window.locator('.tag-manager-item .tag-pill')).toHaveCSS('background-color','rgb(38, 100, 160)');
+    await window.getByLabel('Tag name', { exact: true }).fill('Desktop tag manager');
+    await window.getByLabel('Choose tag color', { exact: true }).click();
+    await window.getByRole('button', { name: 'Set Tag color to #2664a0', exact: true }).click();
+    await window.getByRole('button', { name: 'Save tag', exact: true }).click();
+    await expect(window.locator('.tag-manager-item .tag-pill')).toHaveCSS(
+      'background-color',
+      'rgb(38, 100, 160)',
+    );
+    await window.locator('#rule-manager-link').click();
+    await window.getByLabel('Rule name', { exact: true }).fill('Desktop rule');
+    await window.getByLabel('Condition 1 value', { exact: true }).fill('ABC');
+    await window.getByRole('button', { name: 'Save rule', exact: true }).click();
+    await expect(window.locator('#rules-list')).toContainText('Desktop rule');
     await window.locator('#navigation [data-view=inbox]').click();
     await window.locator('#quick-view').selectOption('table');
     await expect(window.locator('.message-table-header')).toBeVisible();
     await window.locator('#quick-view').selectOption('cards');
     await window.locator('#heading-compose').click();
     await window.locator('[name=subject]').fill('Desktop close autosave');
+    await window.locator('#toggle-cc').click();
+    await window.getByLabel('Cc', { exact: true }).fill('copy@example.com');
+    await window.locator('#toggle-bcc').click();
+    await window.getByLabel('Bcc', { exact: true }).fill('hidden@example.com');
     await window.locator('[name=body]').fill('Latest text immediately before closing');
-    const closed=app.waitForEvent('close',{timeout:5000});
-    await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].close());
-    await closed;app=null;
-    const saved=new DatabaseSync(path.join(data,'inkwell.db'));
-    expect(saved.prepare("SELECT body FROM messages WHERE folder='drafts' AND subject='Desktop close autosave'").get().body).toBe('Latest text immediately before closing');
+    const closed = app.waitForEvent('close', { timeout: 5000 });
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
+    await closed;
+    app = null;
+    const saved = new DatabaseSync(path.join(data, 'inkwell.db'));
+    expect(
+      saved
+        .prepare(
+          "SELECT body FROM messages WHERE folder='drafts' AND subject='Desktop close autosave'",
+        )
+        .get().body,
+    ).toBe('Latest text immediately before closing');
+    expect(
+      saved
+        .prepare(
+          "SELECT cc,bcc FROM messages WHERE folder='drafts' AND subject='Desktop close autosave'",
+        )
+        .get(),
+    ).toMatchObject({ cc: 'copy@example.com', bcc: 'hidden@example.com' });
     saved.close();
-    console.log('Desktop smoke test passed: backend, session, forms, themes, sandbox and close-time draft autosave.');
+    console.log(
+      'Desktop smoke test passed: backend, session, forms, themes, sandbox and close-time draft autosave.',
+    );
   } finally {
     if (app) await app.close();
     fs.rmSync(data, { recursive: true, force: true });

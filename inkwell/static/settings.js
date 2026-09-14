@@ -91,8 +91,16 @@ window.InkwellSettings = (() => {
       return;
     }
     if (page === 'privacy') {
-      content.innerHTML = `<section class="card" id="privacy-card"><h2>Private by intention.</h2><ul><li>inkwell has no analytics or advertising trackers.</li><li>HTML email is sanitized and sandboxed; remote content starts blocked. Scripts and forms remain disabled. The previous text preview is available in Forms settings.</li><li>Explicitly allowing remote images can reveal your IP address and tell the sender you opened a message. Permission is for the current view only.</li><li>IMAP and SMTP require verified TLS.</li><li>Assistant output is never executed as mail/calendar actions.</li><li>Message bodies are not encrypted at rest. Use full-disk encryption.</li></ul><button class="secondary" id="demo-settings">Explore sample workspace</button><div class="notice">Desktop runs locally. Mobile connects to your private backend over HTTPS. Use the install option in your browser to add inkwell to your home screen.</div><p>Passwords and tokens are encrypted with a key stored beside the database. Protect the entire data directory and any backups.</p></section>`;
+      content.innerHTML = `<section class="card" id="privacy-card"><h2>Private by intention.</h2><ul><li>inkwell has no analytics or advertising trackers.</li><li>HTML email is sanitized and sandboxed; remote content starts blocked. Scripts and forms remain disabled. The previous text preview is available in Forms settings.</li><li>Explicitly allowing remote images can reveal your IP address and tell the sender you opened a message. Permission is for the current view only.</li><li>IMAP and SMTP require verified TLS.</li><li>Assistant output is never executed as mail/calendar actions.</li><li>Message bodies are not encrypted at rest. Use full-disk encryption.</li></ul><p>Address autocomplete is local and remembers valid addresses from saved drafts, sent/imported mail (including Cc/Bcc), contacts and accounts. Clearing history keeps current contact/account suggestions and does not delete messages.</p><button class="secondary" id="clear-address-history">Clear remembered email addresses</button><button class="secondary" id="demo-settings">Explore sample workspace</button><div class="notice">Desktop runs locally. Mobile connects to your private backend over HTTPS. Use the install option in your browser to add inkwell to your home screen.</div><p>Passwords and tokens are encrypted with a key stored beside the database. Protect the entire data directory and any backups.</p></section>`;
       on(content.querySelector('#demo-settings'), 'click', loadDemo);
+      on(content.querySelector('#clear-address-history'), 'click', async () => {
+        try {
+          await api('/addresses', { method: 'DELETE' });
+          toast('Remembered addresses cleared. Current contacts and accounts remain available.');
+        } catch (error) {
+          toast(error.message);
+        }
+      });
       return;
     }
     content.innerHTML = '<div class="skeleton">Loading settings…</div>';

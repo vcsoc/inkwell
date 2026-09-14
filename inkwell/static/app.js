@@ -171,6 +171,7 @@ function modal(title, html, { calendar = false } = {}) {
   state.formCleanup = null;
   $('#modal-title').textContent = title;
   $('#modal-body').innerHTML = html;
+  InkwellAddressAutocomplete($('#modal-body'), api);
   if (!dialog.open) {
     state.formReturnFocus = document.activeElement;
     if (preferences.form_mode === 'inline') {
@@ -300,13 +301,14 @@ function navigation() {
       'active',
       b.dataset.view === state.view ||
         (b.dataset.view === 'inbox' &&
-          !['calendar', 'contacts', 'settings', 'tags'].includes(state.view)),
+          !['calendar', 'contacts', 'settings', 'tags', 'rules'].includes(state.view)),
     ),
   );
   $('#account-status').textContent = state.accounts.length
     ? `${state.accounts.length} connected account${state.accounts.length === 1 ? '' : 's'}`
     : 'No account connected';
   $('#tag-manager-link').classList.toggle('active', state.view === 'tags');
+  $('#rule-manager-link').classList.toggle('active', state.view === 'rules');
   selection.bindFolders();
 }
 function installLocalFolders(localFolders) {
@@ -345,6 +347,7 @@ async function navigate(route, { historyMode = 'push' } = {}) {
     'collection',
     'remote',
     'tags',
+    'rules',
   ];
   let view = allowedViews.includes(requestedView) ? requestedView : 'inbox';
   if (view === 'collection' && !state.collection) view = 'inbox';
@@ -370,7 +373,7 @@ async function navigate(route, { historyMode = 'push' } = {}) {
   InkwellAppearance.apply(preferences.theme);
   applyLayout();
   document.documentElement.dataset.mail = String(
-    !['calendar', 'contacts', 'settings', 'tags'].includes(view),
+    !['calendar', 'contacts', 'settings', 'tags', 'rules'].includes(view),
   );
   state.view = view;
   state.selected = null;
@@ -395,7 +398,9 @@ async function navigate(route, { historyMode = 'push' } = {}) {
         ? 'Grouped mail'
         : view === 'tags'
           ? 'Tag Manager'
-          : 'Settings');
+          : view === 'rules'
+            ? 'Rule Manager'
+            : 'Settings');
   $('#breadcrumb').textContent =
     view === 'settings' && settingsPage ? 'Settings / ' + settingsPage.name : title;
   document.title =
@@ -415,6 +420,7 @@ async function navigate(route, { historyMode = 'push' } = {}) {
     calendar: 'Less juggling. More being present.',
     contacts: 'Keep your favorite connections close.',
     tags: 'Organize, recolor and manage local message tags.',
+    rules: 'Build conditions and actions for your local email copies.',
     settings: settingsPage?.description || 'Choose a category to make inkwell yours.',
     starred: 'The conversations worth keeping close.',
     sent: 'Your words, out in the world.',
@@ -431,7 +437,7 @@ async function navigate(route, { historyMode = 'push' } = {}) {
       ? '<button class="primary" id="add-event">＋ New event</button>'
       : view === 'contacts'
         ? '<button class="primary" id="add-contact">＋ Add person</button>'
-        : !['settings', 'tags'].includes(view)
+        : !['settings', 'tags', 'rules'].includes(view)
           ? '<button class="secondary" id="heading-compose">＋ Compose</button>'
           : '';
   if ($('#add-event')) on($('#add-event'), 'click', () => eventForm());
@@ -441,7 +447,21 @@ async function navigate(route, { historyMode = 'push' } = {}) {
   if (view === 'calendar') await renderCalendar();
   else if (view === 'contacts') await renderContacts();
   else if (view === 'settings') await renderSettings();
-  else if (view === 'tags') {
+  else if (view === 'rules') {
+    const generation = state.generation;
+    await InkwellRules($('#workspace'), {
+      foldersChanged: refreshCounts,
+      api,
+      esc,
+      field,
+      toast,
+      isCurrent: () => state.generation === generation && state.view === 'rules',
+      reload: async () => {
+        await refreshCounts();
+        if (state.generation === generation) await navigate('rules', { historyMode: 'replace' });
+      },
+    });
+  } else if (view === 'tags') {
     const generation = state.generation;
     await InkwellTagManager($('#workspace'), {
       api,
@@ -873,7 +893,7 @@ function renderReader() {
     readerColors.forEach((name, index) => pane.style.setProperty(name, colors[index]));
   }
   $('#reader').innerHTML =
-    `<div class="reader-actions"><button class="icon-button" id="reader-menu" aria-label="More email actions" aria-haspopup="menu" aria-expanded="false">⋯</button><button class="icon-button" id="reader-back" aria-label="Back to messages">←</button><button class="secondary" id="archive-message">${m.folder === 'trash' ? 'Restore' : m.folder === 'archive' ? 'Move to inbox' : 'Archive'}</button><button class="secondary" id="unread-message">Mark unread</button><button class="secondary" id="reader-appearance" aria-label="Switch reader to ${dark ? 'light' : 'dark'} view">${dark ? '☀ Light view' : '☾ Dark view'}</button><button class="icon-button danger" id="trash-message" aria-label="${m.folder === 'trash' ? 'Permanently delete' : 'Move to trash'}" title="${m.folder === 'trash' ? 'Permanently delete local copy' : 'Move to Trash'}"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button></div><h2>${esc(m.subject || '(No subject)')}</h2><div class="reader-tags">${tagPills(m)}<button class="secondary" id="edit-tags">Tags…</button></div><div class="reader-meta"><div class="avatar">${esc(initials(m.sender))}</div><div><strong>${esc(m.sender)}</strong>${m.demo ? '<span class="badge">SAMPLE</span>' : ''}<small>To ${esc(m.recipient)}</small><small>${esc(new Date(m.date).toLocaleString())}</small></div></div><div id="message-preview"></div><div class="reader-reply"><button class="primary" id="reply" aria-label="Reply">↩ Reply</button><button class="secondary" id="forward">Forward →</button></div>`;
+    `<div class="reader-actions"><button class="icon-button" id="reader-menu" aria-label="More email actions" aria-haspopup="menu" aria-expanded="false">⋯</button><button class="icon-button" id="reader-back" aria-label="Back to messages">←</button><button class="secondary" id="archive-message">${m.folder === 'trash' ? 'Restore' : m.folder === 'archive' ? 'Move to inbox' : 'Archive'}</button><button class="secondary" id="unread-message">Mark unread</button><button class="secondary" id="reader-appearance" aria-label="Switch reader to ${dark ? 'light' : 'dark'} view">${dark ? '☀ Light view' : '☾ Dark view'}</button><button class="icon-button danger" id="trash-message" aria-label="${m.folder === 'trash' ? 'Permanently delete' : 'Move to trash'}" title="${m.folder === 'trash' ? 'Permanently delete local copy' : 'Move to Trash'}"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button></div><h2>${esc(m.subject || '(No subject)')}</h2><div class="reader-tags">${tagPills(m)}<button class="secondary" id="edit-tags">Tags…</button></div><div class="reader-meta"><div class="avatar">${esc(initials(m.sender))}</div><div><strong>${esc(m.sender)}</strong>${m.demo ? '<span class="badge">SAMPLE</span>' : ''}<small>To ${esc(m.recipient)}</small>${m.cc ? `<small>Cc ${esc(m.cc)}</small>` : ''}${m.bcc ? `<small>Bcc ${esc(m.bcc)}</small>` : ''}<small>${esc(new Date(m.date).toLocaleString())}</small></div></div><div id="message-preview"></div><div class="reader-reply"><button class="primary" id="reply" aria-label="Reply">↩ Reply</button><button class="secondary" id="forward">Forward →</button></div>`;
   InkwellPaintTags($('#reader'));
   on($('#edit-tags'), 'click', () => editTags(m));
   void InkwellHtmlPreview($('#message-preview'), m, {
@@ -1016,6 +1036,7 @@ async function renderSettings() {
   const generation = state.generation;
   const page = state.settingsPage || 'overview';
   await InkwellSettings.mount($('#workspace'), page, {
+    foldersChanged: refreshCounts,
     api,
     esc,
     field,
@@ -1263,6 +1284,7 @@ async function askAI(prompt) {
 on($('#compose'), 'click', () => compose());
 on($('#settings'), 'click', () => navigate('settings'));
 on($('#tag-manager-link'), 'click', () => navigate('tags'));
+on($('#rule-manager-link'), 'click', () => navigate('rules'));
 on($('#menu'), 'click', () => $('#sidebar').classList.toggle('open'));
 on($('#close-modal'), 'click', requestModalClose);
 on($('#modal'), 'click', async (event) => {
@@ -1356,7 +1378,8 @@ on($('#sync'), 'click', async () => {
         .join('\n'),
     );
     await refreshCounts();
-    if (!['settings', 'calendar', 'contacts', 'tags'].includes(state.view)) await renderMail();
+    if (!['settings', 'calendar', 'contacts', 'tags', 'rules'].includes(state.view))
+      await renderMail();
   } finally {
     $('#sync').disabled = false;
   }
@@ -1430,7 +1453,7 @@ async function bootstrap() {
             toast(errors.map((r) => `${r.email}: ${r.error || r.folder_error}`).join('\n'));
           await refreshCounts();
           if (
-            !['settings', 'calendar', 'contacts', 'tags'].includes(state.view) &&
+            !['settings', 'calendar', 'contacts', 'tags', 'rules'].includes(state.view) &&
             !$('#modal').open
           )
             await renderMail();
@@ -1465,7 +1488,8 @@ async function searchMail() {
     toast('Save or close the open form before searching.');
     return;
   }
-  if (['settings', 'calendar', 'contacts', 'tags'].includes(state.view)) await navigate('inbox');
+  if (['settings', 'calendar', 'contacts', 'tags', 'rules'].includes(state.view))
+    await navigate('inbox');
   if (sequence !== searchSequence) return;
   state.searchScope = scope;
   $('#search-scope').value = scope;

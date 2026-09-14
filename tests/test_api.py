@@ -102,7 +102,7 @@ def test_drafts_and_send(client, monkeypatch):
     )
     assert (
         client.post(
-            "/api/send", json={**payload, "recipient": "a@example.com,b@example.com"}
+            "/api/send", json={**payload, "recipient": "a@example.com,invalid-address"}
         ).status_code
         == 422
     )

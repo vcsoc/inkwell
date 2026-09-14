@@ -6,13 +6,15 @@ Open **Tag Manager** immediately above Settings in the sidebar, or visit `/#/tag
 
 - Alphabetical groups, usage counts, tag search, used/unused filtering, and alphabetical/most-used sorting.
 - Creating reusable tags before assigning them to mail.
-- Editing names and colors, with an in-app hex/RGB/swatches editor and a live pill preview (no native color picker).
+- Editing names and colors, with an in-app palette, saturation/brightness area, hue and hex picker plus a live pill preview (no RGB channel sliders or native color picker). Open **Choose color…** to reveal the picker.
 - Checkbox selection, Shift-click ranges, Ctrl/Command-click selection, and select-visible controls.
 - Bulk replacement/merge into a new or existing tag, removing duplicate labels on each message. An existing destination keeps its spelling and color; a new destination inherits the first selected source's color.
 - Single/bulk deletion, and Delete-key removal when a selected row has keyboard focus. Deletion removes labels, never messages.
 - Opening a tag's messages across all cached folders, including local Drafts and Trash. This is exact tag matching, not subject/body substring searching.
 
 Names are case-insensitive, trimmed, and limited to 32 characters without commas or control characters. Messages have at most 12 tags. Case-only renames update their spelling everywhere. Renaming to a different existing tag is rejected with instructions to use merge. Counts count each message once per tag and include every local folder. Unused catalog entries remain available until explicitly deleted.
+
+Rule references follow tag renames and merges; deleting a referenced tag disables the affected rules. See [Rule Manager and recipients](RULE-MANAGER-COMPOSE.md).
 
 Changes are local, atomic SQLite transactions: no provider categories or server messages are changed. Global rename/merge/delete includes Drafts and Trash. Selecting multiple messages also exposes Add tag / Remove tag controls; a missing message or exceeded tag limit rejects the whole batch. Existing message tags are migrated into the catalog with deterministic default colors. Pills use contrasting black or white text; the strict application CSP is retained by applying validated colors through trusted JavaScript style properties.
 

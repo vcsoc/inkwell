@@ -5,7 +5,7 @@ window.InkwellComposer = (
 ) => {
   modal(
     data.folder === 'drafts' ? 'Your draft' : 'A new conversation',
-    `<form id="compose-form" class="compose-form"><label class="field">From<select name="account_id"><option value="">Draft only / choose an account</option>${state.accounts.map((a) => `<option value="${a.id}">${esc(a.name)} &lt;${esc(a.email)}&gt;</option>`).join('')}</select></label>${field('To', 'recipient', data.recipient || '', 'email', 'maxlength="254" list="contact-emails" placeholder="someone@example.com"')}<datalist id="contact-emails">${state.contacts.map((c) => `<option value="${esc(c.email)}">${esc(c.name)}</option>`).join('')}</datalist>${field('Subject', 'subject', data.subject || '', 'text', 'maxlength="998" placeholder="What’s on your mind?"')}${textarea('Message', 'body', data.body || '', 'maxlength="500000" placeholder="Hello there…"')}<p id="draft-status" class="fine-print" role="status">Drafts save automatically when you type or leave this editor.</p><p class="fine-print">Send message sends immediately, without another confirmation. Drafts remain local.</p><div class="form-actions"><button type="button" class="secondary danger" id="delete-draft">Delete draft</button><button type="button" class="secondary" id="save-draft">Save draft</button><button class="primary" type="submit" ${state.accounts.length ? '' : 'disabled'}>Send message ↗</button></div></form>`,
+    `<form id="compose-form" class="compose-form"><label class="field">From<select name="account_id"><option value="">Draft only / choose an account</option>${state.accounts.map((a) => `<option value="${a.id}">${esc(a.name)} &lt;${esc(a.email)}&gt;</option>`).join('')}</select></label><div class="compose-recipient-toggles"><button class="secondary" type="button" id="toggle-cc" aria-controls="compose-cc" aria-expanded="${!!data.cc}">${data.cc ? 'Hide Cc' : 'Cc'}</button><button class="secondary" type="button" id="toggle-bcc" aria-controls="compose-bcc" aria-expanded="${!!data.bcc}">${data.bcc ? 'Hide Bcc' : 'Bcc'}</button></div>${field('To', 'recipient', data.recipient || '', 'text', 'data-email-addresses inputmode="email" maxlength="8192" placeholder="someone@example.com, another@example.com"')}<div id="compose-cc" ${data.cc ? '' : 'hidden'}>${field('Cc', 'cc', data.cc || '', 'text', 'data-email-addresses inputmode="email" maxlength="8192" placeholder="Copy recipients"')}</div><div id="compose-bcc" ${data.bcc ? '' : 'hidden'}>${field('Bcc', 'bcc', data.bcc || '', 'text', 'data-email-addresses inputmode="email" maxlength="8192" placeholder="Hidden copy recipients"')}</div>${field('Subject', 'subject', data.subject || '', 'text', 'maxlength="998" placeholder="What’s on your mind?"')}${textarea('Message', 'body', data.body || '', 'maxlength="500000" placeholder="Hello there…"')}<p id="draft-status" class="fine-print" role="status">Drafts save automatically when you type or leave this editor.</p><p class="fine-print">Send message sends immediately, without another confirmation. Drafts remain local.</p><div class="form-actions"><button type="button" class="secondary danger" id="delete-draft">Delete draft</button><button type="button" class="secondary" id="save-draft">Save draft</button><button class="primary" type="submit" ${state.accounts.length ? '' : 'disabled'}>Send message ↗</button></div></form>`,
   );
   const form = document.querySelector('#compose-form'),
     dialog = document.querySelector('#modal');
@@ -13,6 +13,26 @@ window.InkwellComposer = (
     data.account_id || (data.folder === 'drafts' ? '' : state.accounts[0]?.id || '');
   const controller = InkwellDraftAutosave({ form, data, api, toast, onSaved: refreshCounts });
   state.composer = controller;
+  form.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && event.target.tagName === 'INPUT' && !event.defaultPrevented) {
+      event.preventDefault();
+      if (event.target.name === 'subject') form.elements.body.focus();
+      else form.elements.subject.focus();
+    }
+  });
+  for (const key of ['cc', 'bcc'])
+    form.querySelector('#toggle-' + key).onclick = () => {
+      const wrapper = form.querySelector('#compose-' + key),
+        button = form.querySelector('#toggle-' + key);
+      if (!wrapper.hidden && form.elements[key].value.trim()) {
+        toast('Clear ' + (key === 'cc' ? 'Cc' : 'Bcc') + ' recipients before hiding this field.');
+        return;
+      }
+      wrapper.hidden = !wrapper.hidden;
+      button.setAttribute('aria-expanded', String(!wrapper.hidden));
+      button.textContent = (!wrapper.hidden ? 'Hide ' : '') + (key === 'cc' ? 'Cc' : 'Bcc');
+      if (!wrapper.hidden) form.elements[key].focus();
+    };
   const finish = async () => {
     controller.stop();
     if (state.composer === controller) state.composer = null;
@@ -53,7 +73,10 @@ window.InkwellComposer = (
       try {
         await controller.flush();
         const payload = controller.values();
-        if (!payload.recipient || !payload.account_id)
+        if (
+          ![payload.recipient, payload.cc, payload.bcc].some((v) => v.trim()) ||
+          !payload.account_id
+        )
           throw Error('Choose an account and enter a recipient before sending.');
         await api('/send', { method: 'POST', body: payload });
         await finish();

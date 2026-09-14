@@ -11,7 +11,7 @@ from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 
 from .store import db, unseal
-from . import rules
+from . import rules, addresses
 
 
 class TextExtractor(HTMLParser):
@@ -114,8 +114,8 @@ def sync_account(account):
             with db() as conn:
                 cursor = conn.execute(
                     """INSERT OR IGNORE INTO messages
-                    (account_id,remote_key,sender,recipient,subject,body,date,unread,html_body)
-                    VALUES (?,?,?,?,?,?,?,?,?)""",
+                    (account_id,remote_key,sender,recipient,subject,body,date,unread,html_body,cc,bcc)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                     (
                         account["id"],
                         key,
@@ -126,7 +126,12 @@ def sync_account(account):
                         date,
                         int(b"\\Seen" not in metadata),
                         body_html(msg),
+                        str(msg.get("Cc", "")),
+                        str(msg.get("Bcc", "")),
                     ),
+                )
+                addresses.remember(
+                    conn, *[str(msg.get(key, "")) for key in ("From", "To", "Cc", "Bcc")]
                 )
                 count += cursor.rowcount
                 if cursor.rowcount:
@@ -138,10 +143,13 @@ def sync_account(account):
     return count
 
 
-def send_mail(account, recipient, subject, body):
+def send_mail(account, recipient, subject, body, cc="", bcc=""):
     message = EmailMessage()
     message["From"] = account["email"]
-    message["To"] = recipient
+    if recipient:
+        message["To"] = recipient
+    if cc:
+        message["Cc"] = cc
     message["Subject"] = subject
     from email.utils import formatdate, make_msgid
 
@@ -162,4 +170,10 @@ def send_mail(account, recipient, subject, body):
             client.starttls(context=context)
             client.ehlo()
         client.login(account["username"], unseal(account["secret"]))
-        client.send_message(message)
+        if bcc:
+            envelope = [
+                address for field in (recipient, cc, bcc) for _, address in addresses.parse(field)
+            ]
+            client.send_message(message, to_addrs=list(dict.fromkeys(envelope)))
+        else:
+            client.send_message(message)

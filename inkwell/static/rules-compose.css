@@ -1,0 +1,207 @@
+.rule-builder-row {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.rule-builder-row label {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 150px;
+  min-width: 0;
+}
+.rule-builder-row input,
+.rule-builder-row select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+#rule-form .check-label {
+  font-size: 14px;
+  min-height: 32px;
+  margin: 8px 0;
+}
+.card:has(> #local-folder-form) {
+  margin-top: 18px;
+}
+#rule-editor {
+  margin-top: 18px;
+}
+#rule-editor h3 {
+  margin-top: 22px;
+}
+#rules-list .rule-row {
+  flex-wrap: wrap;
+}
+#rules-list .rule-row > div {
+  flex: 1 1 260px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+#rules-list small {
+  color: var(--muted);
+}
+#apply-rules {
+  margin: 10px 0 10px 8px;
+}
+.tag-color-picker {
+  margin-bottom: 18px;
+}
+.tag-color-picker summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.tag-picker-swatch {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.tag-color-controls {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+#rules-list + button {
+  margin-top: 10px;
+}
+#local-folder-form {
+  margin-top: 12px;
+}
+.tag-color-plane {
+  position: relative;
+  min-height: 150px;
+  border-radius: 8px;
+  overflow: hidden;
+  touch-action: none;
+  cursor: crosshair;
+  background-image:
+    linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent);
+  border: 1px solid var(--line);
+}
+.tag-color-point {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 0 0 1px black;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.tag-color-picker .tag-color-hue {
+  appearance: none;
+  width: 100%;
+  height: 20px;
+  border-radius: 12px;
+  padding: 0;
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+.tag-color-hue::-webkit-slider-thumb {
+  appearance: none;
+  width: 22px;
+  height: 26px;
+  border-radius: 8px;
+  background: white;
+  border: 2px solid #222;
+  cursor: ew-resize;
+}
+.tag-color-hue::-moz-range-thumb {
+  width: 20px;
+  height: 24px;
+  border-radius: 8px;
+  background: white;
+  border: 2px solid #222;
+}
+.tag-palette {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(34px, 1fr));
+  gap: 6px;
+}
+.tag-palette button {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.tag-palette button[aria-pressed='true'] {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.tag-color-picker small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+.compose-recipient-toggles {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.compose-form [hidden] {
+  display: none !important;
+}
+.address-field {
+  position: relative;
+}
+.address-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1002;
+  max-height: 190px;
+  overflow: auto;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px #0003;
+}
+.address-suggestions[hidden] {
+  display: none;
+}
+.address-suggestions button {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  padding: 9px 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: max(13px, calc(var(--font-size, 16px) - 2px));
+  border-radius: 0;
+}
+.address-suggestions button:hover,
+.address-suggestions [aria-selected='true'] {
+  background: var(--accent-light);
+}
+.address-suggestions small {
+  color: var(--muted);
+}
+.message-menu button,
+[role='menu'],
+[role='menu'] [role='menuitem'] {
+  font-size: max(12px, calc(var(--font-size, 16px) - 2px));
+}
+@media (max-width: 700px) {
+  .rule-builder-row label {
+    flex-basis: 100%;
+  }
+  .tag-palette button {
+    min-height: 44px;
+  }
+}
