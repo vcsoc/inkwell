@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { settingsSection } = require('./helpers.cjs');
 const pages = [
+  ['shortcuts', 'Shortcuts', '#shortcut-form'],
   ['rules', 'Mail rules', '#rule-form'],
   ['layout', 'Layout', '#layout-settings'],
   ['forms', 'Forms', '#form-mode-settings'],
@@ -13,7 +14,7 @@ const pages = [
 test('settings hub links mount only their dedicated feature page', async ({ page }, info) => {
   await page.goto('/#/settings');
   await expect(page.locator('#page-title')).toHaveText('Settings.');
-  await expect(page.locator('.settings-category')).toHaveCount(7);
+  await expect(page.locator('.settings-category')).toHaveCount(pages.length);
   await expect(page.locator('#settings-content form')).toHaveCount(0);
   await page
     .locator('.settings-overview')
@@ -30,7 +31,7 @@ test('settings hub links mount only their dedicated feature page', async ({ page
     expect(await page.evaluate(() => scrollY)).toBe(0);
   }
   await settingsSection(page, 'All settings');
-  await expect(page.locator('.settings-category')).toHaveCount(7);
+  await expect(page.locator('.settings-category')).toHaveCount(pages.length);
   await page.screenshot({
     path: `test-results/${info.project.name}-settings-pages.png`,
     fullPage: true,

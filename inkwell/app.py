@@ -416,7 +416,7 @@ def messages(
         result = [
             dict(row)
             for row in db.execute(
-                f"SELECT id,account_id,remote_folder_id,local_destination_id,local_folder_override,tags,folder,sender,recipient,subject,substr(body,1,180) AS preview,date,unread,starred,demo FROM messages WHERE {clause} ORDER BY {filters.order()} LIMIT 100 OFFSET ?",
+                f"SELECT id,account_id,remote_folder_id,local_destination_id,local_folder_override,tags,folder,sender,recipient,subject,substr(body,1,180) AS preview,date,unread,starred,flagged,demo FROM messages WHERE {clause} ORDER BY {filters.order()} LIMIT 100 OFFSET ?",
                 (*params, max(0, offset)),
             )
         ]
@@ -466,6 +466,7 @@ class MessagePatch(BaseModel):
     folder: str | None = Field(default=None, pattern=r"^(inbox|archive|trash|local-[1-9][0-9]*)$")
     unread: bool | None = None
     starred: bool | None = None
+    flagged: bool | None = None
     tags: list[str] | None = Field(default=None, max_length=12)
 
     @field_validator("tags")

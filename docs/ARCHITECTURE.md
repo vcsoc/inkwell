@@ -33,6 +33,8 @@ Mobile is explicitly a connected PWA, not an Electron or Python mobile port. HTT
 
 ## Data and synchronization semantics
 
+Schema 14 adds local flags and durable per-folder Graph delta/next-page state with hashed pagination-cycle detection. Downloads commit before checkpoints and resume without an overall historical-message cap. See [Background sync](BACKGROUND-SYNC.md). Native minimized-window timers continue checking; browser timing remains subject to throttling. Shortcuts are allowlisted preference data, dispatched by context, with narrowly validated trusted-main-frame native forwarding. Date filters compare integer-microsecond timestamps against inclusive local-day bounds before pagination; see [Keyboard and mailbox controls](SHORTCUTS-DATES-FLAGS.md).
+
 An imported email has a remote identity `(account ID, INBOX, UIDVALIDITY, UID)`. Unique remote keys make repeated syncs idempotent for retained local messages. IMAP read-only mode and BODY.PEEK avoid marking remote mail read. Imports are limited to the latest 200 UIDs and 10 MB per message. Schema 4 adds nullable `html_body` (NULL means not yet fetched) and JSON `tags`. HTML is kept alongside text, sanitized by nh3 on preview, and rendered in an opaque-origin iframe with script-free CSP and sandbox. Image origins are enumerated without fetching; explicit per-view HTTPS image opt-in is carried in the preview URL and constrained by both sanitization and CSP. Localhost/private literal addresses and nonstandard ports are rejected; this is not a DNS-aware network firewall. Attachments/CID images are not exposed. Folder, tag, star and unread mutations affect only SQLite. Existing IMAP cache entries lacking HTML are read-only re-fetched once; Graph imports refresh HTML without changing local overrides/tags.
 
 SMTP submission happens before the local Sent insert. The absence of a durable outbox means network ambiguity or a local database failure after submission cannot be resolved automatically. This is documented rather than concealed by automatic retry. A future outbox needs immutable operation IDs, explicit uncertain states and provider reconciliation. Replies currently quote text rather than setting RFC threading headers.
@@ -72,7 +74,7 @@ API tests exercise authentication, Origin/Host/CSP, credential encryption, CRUD,
 ## Next architectural steps
 
 1. Built-in Microsoft application registration, OAuth for other providers and OS credential vaults.
-2. Durable sync cursors, tombstones and an outbox state machine.
+2. Durable local-deletion tombstones and an outbox state machine (Graph sync cursors are implemented).
 3. Attachment storage/limits/scanning, CID images and safe outbound email-link handling.
 4. CalDAV/CardDAV or Graph adapters, per-occurrence exceptions and invite lifecycle.
 5. Split client views into ES modules as features expand; localization and automated accessibility checks.

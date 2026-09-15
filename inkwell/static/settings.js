@@ -2,6 +2,12 @@
 window.InkwellSettings = (() => {
   const pages = [
     {
+      id: 'shortcuts',
+      name: 'Shortcuts',
+      icon: '⌨',
+      description: 'Customize keyboard navigation and mail shortcuts.',
+    },
+    {
       id: 'rules',
       name: 'Mail rules',
       icon: '⇢',
@@ -80,6 +86,10 @@ window.InkwellSettings = (() => {
           return navigate(link.dataset.category);
         }),
       );
+      return;
+    }
+    if (page === 'shortcuts') {
+      InkwellHotkeys.mount(content, { preferences, savePreferences, toast, esc });
       return;
     }
     if (['layout', 'forms', 'theme'].includes(page)) {

@@ -24,6 +24,12 @@ function saveWorkspace(patch) {
 }
 const bindWorkspaceControls = InkwellWorkspaceControls(() => preferences, saveWorkspace);
 function applyLayout() {
+  const keys = preferences.shortcuts || InkwellHotkeys.defaults;
+  window.inkwellShortcuts?.configure(keys);
+  $('#sync').title = 'Sync email' + (keys.sync ? ' (' + keys.sync + ')' : '');
+  if (keys.sync)
+    $('#sync').setAttribute('aria-keyshortcuts', keys.sync.replace('Ctrl+', 'Control+'));
+  else $('#sync').removeAttribute('aria-keyshortcuts');
   document.documentElement.style.setProperty(
     '--sidebar-width',
     (preferences.sidebar_width || 260) + 'px',
@@ -306,7 +312,7 @@ function remoteTree() {
               .map((folder) => {
                 if (seen.has(folder.id)) return '';
                 seen.add(folder.id);
-                const button = `<button class="nav-item remote-folder ${state.remoteFolder?.id === folder.id && state.view === 'remote' ? 'active' : ''}" data-remote-folder="${folder.id}" title="${esc(folder.path)} · ${folder.cached_total ?? 0} cached · ${folder.total_count} on server · ${folder.unread_count || 0} unread on server" aria-label="${esc(folder.path)}"><span aria-hidden="true">▱</span><span class="folder-name">${esc(folder.name)}</span><small>${(folder.cached_unread ?? folder.unread_count) || ''}</small></button>`;
+                const button = `<button class="nav-item remote-folder ${state.remoteFolder?.id === folder.id && state.view === 'remote' ? 'active' : ''}" data-remote-folder="${folder.id}" title="${esc(folder.path)} · ${folder.cached_total ?? 0} cached · ${folder.total_count} server items (may include non-mail) · ${folder.unread_count || 0} unread items on server" aria-label="${esc(folder.path)}"><span aria-hidden="true">▱</span><span class="folder-name">${esc(folder.name)}</span><small>${(folder.cached_unread ?? folder.unread_count) || ''}</small></button>`;
                 const children =
                   branch(folder.remote_id, depth + 1) + localChildren('remote:' + folder.id);
                 return children
@@ -318,7 +324,67 @@ function remoteTree() {
     })
     .join('');
 }
+let navigationKey = '';
+function paintNavigation() {
+  for (const b of $$('#navigation [data-view]'))
+    b.classList.toggle('active', b.dataset.view === state.view);
+  for (const b of $$('#navigation [data-remote-folder]')) {
+    const f = state.remoteFolders.find((f) => f.id === Number(b.dataset.remoteFolder));
+    b.classList.toggle('active', state.view === 'remote' && state.remoteFolder?.id === f?.id);
+    if (f) {
+      b.querySelector('small').textContent = (f.cached_unread ?? f.unread_count) || '';
+      b.title = `${f.path} · ${f.cached_total ?? 0} cached · ${f.total_count} server items (may include non-mail) · ${f.unread_count || 0} unread items on server`;
+    }
+  }
+  const inbox = $('#navigation [data-view=inbox]'),
+    unread = state.counts.find((c) => c.folder === 'inbox')?.unread || 0;
+  let count = inbox?.querySelector('.nav-count');
+  if (unread && !count) {
+    count = document.createElement('span');
+    count.className = 'nav-count';
+    inbox.append(count);
+  }
+  if (count) {
+    count.textContent = unread || '';
+    count.hidden = !unread;
+  }
+  $$('.mobile-tabs button, .app-rail button').forEach((b) =>
+    b.classList.toggle(
+      'active',
+      b.dataset.view === state.view ||
+        (b.dataset.view === 'inbox' &&
+          !['calendar', 'contacts', 'settings', 'tags', 'rules'].includes(state.view)),
+    ),
+  );
+  $('#tag-manager-link').classList.toggle('active', state.view === 'tags');
+  $('#rule-manager-link').classList.toggle('active', state.view === 'rules');
+}
+$('#navigation').addEventListener('dblclick', (event) => {
+  if (event.button !== 0) return;
+  const summary = event.target.closest('summary');
+  if (!summary || summary.parentElement.tagName !== 'DETAILS') return;
+  event.preventDefault();
+  event.stopPropagation();
+  summary.parentElement.open = !summary.parentElement.open;
+});
 function navigation() {
+  const key = JSON.stringify([
+    state.localFolders,
+    state.accounts.map((a) => [a.id, a.email, a.provider]),
+    state.remoteFolders.map((f) => [
+      f.id,
+      f.account_id,
+      f.remote_id,
+      f.parent_remote_id,
+      f.name,
+      f.path,
+    ]),
+  ]);
+  if (key === navigationKey && $('#navigation').children.length) {
+    paintNavigation();
+    return;
+  }
+  navigationKey = key;
   $('#navigation').innerHTML = folders
     .map(([id, icon, name], i) => {
       const local = state.localFolders?.find((f) => 'local-' + f.id === id);
@@ -638,6 +704,13 @@ async function navigate(route, { historyMode = 'push' } = {}) {
   state.searchScope = 'folder';
   $('#search-scope').value = 'all';
   $('#global-search').value = '';
+  state.dateFrom = state.dateTo = '';
+  state.dateSearch = false;
+  $('#search-date-from').value = '';
+  $('#search-date-to').value = '';
+  $('#search-date-from').setCustomValidity('');
+  $('#search-date-to').setCustomValidity('');
+  paintDateSearch();
   state.offset = 0;
   if (!preferences.quick_filter_pinned) {
     state.filter = 'all';
@@ -686,7 +759,7 @@ async function navigate(route, { historyMode = 'push' } = {}) {
     trash: 'Local trash. Your server mailbox is unchanged.',
     collection: state.collection?.label || 'Associated messages across your workspace.',
     remote: state.remoteFolder
-      ? `${state.remoteFolder.path} · ${state.remoteFolder.total_count} messages on server · newest 200 cached on opening`
+      ? `${state.remoteFolder.path} · ${state.remoteFolder.total_count} server items · available mail downloads in the background`
       : '',
   }[view];
   $('#page-actions').innerHTML =
@@ -890,12 +963,33 @@ function renderMessageList() {
   if ($('#connect-empty')) on($('#connect-empty'), 'click', () => navigate('settings/mail'));
   if ($('#demo-empty')) on($('#demo-empty'), 'click', loadDemo);
   InkwellPaintTags($('#message-list'));
+  for (const row of $$('[data-message]')) {
+    const message = messages.find((m) => m.id === Number(row.dataset.message));
+    row.classList.toggle('flagged-message', !!message.flagged);
+    const flag = document.createElement('button');
+    flag.type = 'button';
+    flag.className = 'flag-button';
+    flag.dataset.flag = message.id;
+    flag.innerHTML =
+      '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 21V3h14l-3 5 3 5H5"/></svg>';
+    row.querySelector('.message-more').before(flag);
+    paintFlagButton(flag, !!message.flagged);
+    on(flag, 'click', async (event) => {
+      event.stopPropagation();
+      flag.disabled = true;
+      try {
+        await setMessageFlag(message.id, !message.flagged);
+      } finally {
+        flag.disabled = false;
+      }
+    });
+  }
   InkwellHighlight($('#message-list'), state.query);
   selection.bindRows(messages);
   if (preferences.mail_view === 'table') {
     $('#message-list').insertAdjacentHTML(
       'afterbegin',
-      '<div class="message-table-header"><span></span><button data-table-sort="sender">From</button><button data-table-sort="subject">Subject / tags</button><button data-table-sort="date">Date</button><span>★</span><span></span></div>',
+      '<div class="message-table-header"><span></span><button data-table-sort="sender">From</button><button data-table-sort="subject">Subject / tags</button><button data-table-sort="date">Date</button><span>★</span><span>⚑</span><span></span></div>',
     );
     $$('[data-table-sort]').forEach((button) =>
       on(button, 'click', () => {
@@ -976,6 +1070,7 @@ async function editTags(message) {
 async function messageAction(action, id) {
   const generation = state.generation;
   if (action === 'open') return openMessage(id);
+  if (action === 'flag' || action === 'unflag') return setMessageFlag(id, action === 'flag');
   if (action === 'save-eml') return InkwellDownloadEmail(id);
   if (action === 'apply-rule') {
     const seed = await api('/rules/from-message/' + id);
@@ -1156,6 +1251,28 @@ async function openMessage(id) {
   renderReader();
   await refreshCounts();
 }
+function paintFlagButton(button, flagged) {
+  button.setAttribute('aria-pressed', String(flagged));
+  button.setAttribute('aria-label', flagged ? 'Unflag message' : 'Flag message');
+  button.title = (flagged ? 'Unflag' : 'Flag') + ' message (local)';
+}
+async function setMessageFlag(id, flagged) {
+  await api('/messages/' + id, { method: 'PATCH', body: { flagged } });
+  state.mailRequest = (state.mailRequest || 0) + 1;
+  const listed = state.messages.find((m) => m.id === id);
+  if (listed) listed.flagged = flagged;
+  if (state.selected?.id === id) {
+    state.selected.flagged = flagged;
+    const pill = $('#reader-flag-status');
+    if (pill) pill.hidden = !flagged;
+  }
+  const row = $(`[data-message="${id}"]`);
+  if (row) {
+    row.classList.toggle('flagged-message', flagged);
+    const button = row.querySelector('[data-flag]');
+    if (button) paintFlagButton(button, flagged);
+  }
+}
 async function setReaderStar(m, starred) {
   const button = $('#reader-star');
   if (button?.disabled) return;
@@ -1234,6 +1351,12 @@ function renderReader() {
   $('.reader-tools-dock')?.replaceChildren();
   $('#reader').innerHTML =
     `${InkwellReaderToolbar(m, dark, canMarkNotJunk(m))}<h2>${esc(m.subject || '(No subject)')}</h2><div class="reader-tags">${tagPills(m)}</div><div class="reader-meta"><div class="avatar">${esc(initials(m.sender))}</div><div><strong>${esc(m.sender)}</strong>${m.demo ? '<span class="badge">SAMPLE</span>' : ''}<small>To ${esc(m.recipient)}</small>${m.cc ? `<small>Cc ${esc(m.cc)}</small>` : ''}${m.bcc ? `<small>Bcc ${esc(m.bcc)}</small>` : ''}<small>${esc(new Date(m.date).toLocaleString())}</small></div></div><div id="message-preview"></div>`;
+  const flagStatus = document.createElement('span');
+  flagStatus.id = 'reader-flag-status';
+  flagStatus.className = 'mail-pill flagged-pill';
+  flagStatus.textContent = 'Flagged';
+  flagStatus.hidden = !m.flagged;
+  $('#reader .reader-tags').prepend(flagStatus);
   InkwellPaintTags($('#reader'));
   on($('#edit-tags'), 'click', () => editTags(m));
   for (const [id, action] of [
@@ -1336,6 +1459,7 @@ function renderReader() {
 }
 let notJunkPolling = false;
 const backgroundSync = InkwellBackgroundSync({
+  hasAccounts: () => state.routerReady && state.accounts.length > 0,
   api,
   toast,
   refresh: async () => {
@@ -1349,7 +1473,7 @@ const backgroundSync = InkwellBackgroundSync({
   },
 });
 async function pollNotJunkMail() {
-  if (notJunkPolling || !state.routerReady || !state.accounts.length || pendingWork) return;
+  if (notJunkPolling || !state.routerReady || !state.accounts.length) return;
   notJunkPolling = true;
   try {
     if (!(await api('/not-junk-senders')).length) return;
@@ -1463,10 +1587,11 @@ async function renderSettings() {
       if (state.generation === generation) await renderSettings();
     },
     savePreferences: async (value) => {
-      preferences = await api('/preferences', {
-        method: 'PUT',
-        body: { ...preferences, ...value },
+      preferences = await api(value.shortcuts ? '/preferences/workspace' : '/preferences', {
+        method: value.shortcuts ? 'PATCH' : 'PUT',
+        body: value.shortcuts ? { shortcuts: value.shortcuts } : { ...preferences, ...value },
       });
+      window.inkwellShortcuts?.configure(preferences.shortcuts || InkwellHotkeys.defaults);
       if (state.generation === generation) {
         InkwellAppearance.apply(preferences.theme);
         applyLayout();
@@ -1686,7 +1811,6 @@ async function askAI(prompt) {
     $('#ai-submit').disabled = false;
   }
 }
-on($('#compose'), 'click', () => compose());
 on($('#settings'), 'click', () => navigate('settings'));
 on($('#tag-manager-link'), 'click', () => navigate('tags'));
 on($('#rule-manager-link'), 'click', () => navigate('rules'));
@@ -1796,7 +1920,7 @@ window.InkwellSyncMail = async () => {
     toast(error.message);
   } finally {
     $('#sync').disabled = false;
-    if (state.accounts.length && !backgroundSync.active) void backgroundSync.start(true);
+    if (state.accounts.length) void backgroundSync.start(true);
   }
 };
 on($('#sync'), 'click', window.InkwellSyncMail);
@@ -1849,41 +1973,118 @@ window.InkwellDeleteFromPreview = () => {
   if (!$('#modal').open && document.activeElement?.matches('#reader iframe.html-message'))
     void selection.deleteSelected();
 };
+let arrowSequence = 0;
+function arrowNavigate(direction) {
+  const target = document.activeElement;
+  const visible = (selector) =>
+    $$(selector).filter((e) => e.getClientRects().length && !e.disabled);
+  const step = (items) => {
+    if (!items.length) return false;
+    let i = items.indexOf(target);
+    i =
+      i < 0
+        ? 0
+        : Math.max(
+            0,
+            Math.min(items.length - 1, i + (direction === 'up' || direction === 'left' ? -1 : 1)),
+          );
+    items[i].focus();
+    return true;
+  };
+  if (target.closest('#sidebar')) {
+    if (direction === 'up' || direction === 'down')
+      return step(
+        visible('#sidebar button,#navigation summary').filter(
+          (e) => e.tagName !== 'SUMMARY' || !e.querySelector('button'),
+        ),
+      );
+    const summary = target.closest('summary'),
+      branch = summary?.parentElement;
+    if (direction === 'right') {
+      if (branch?.tagName === 'DETAILS') {
+        if (!branch.open) branch.open = true;
+        else
+          branch
+            .querySelector(':scope > .folder-children button,:scope > .server-folders button')
+            ?.focus();
+      } else $('#message-list [data-message]')?.focus();
+    } else if (branch?.open) branch.open = false;
+    else
+      target
+        .closest('.folder-children')
+        ?.parentElement.querySelector(':scope > summary button')
+        ?.focus();
+    return true;
+  }
+  const mail = !['settings', 'calendar', 'contacts', 'tags', 'rules'].includes(state.view);
+  if (mail) {
+    if (direction === 'left') {
+      if (target.closest('#reader')) {
+        $(`[data-message="${state.selected?.id}"]`)?.focus();
+        return true;
+      }
+      if (
+        !$('#sidebar').classList.contains('open') &&
+        getComputedStyle($('#menu')).display !== 'none'
+      )
+        $('#menu').click();
+      $('#navigation .nav-item.active')?.focus();
+      return true;
+    }
+    if (direction === 'right') {
+      const reader = $('#reader');
+      if (reader) {
+        reader.tabIndex = -1;
+        reader.focus();
+      }
+      return true;
+    }
+    if (target.closest('#reader')) return false;
+    const current = Number(target.closest('[data-message]')?.dataset.message) || state.selected?.id;
+    let index = state.messages.findIndex((m) => m.id === current);
+    index =
+      index < 0
+        ? 0
+        : Math.max(0, Math.min(state.messages.length - 1, index + (direction === 'up' ? -1 : 1)));
+    const message = state.messages[index];
+    if (!message) return false;
+    const sequence = ++arrowSequence;
+    return openMessage(message.id).then(() => {
+      if (sequence === arrowSequence)
+        $(`[data-message="${message.id}"]`)?.focus({ preventScroll: false });
+    });
+  }
+  return step(visible('#workspace a[href],#workspace button'));
+}
+InkwellHotkeys.install({
+  getPreferences: () => preferences,
+  isModal: () => $('#modal').open,
+  toast,
+  actions: {
+    sync: () => window.InkwellSyncMail(),
+    compose: () => compose(),
+    search: () => $('#global-search').focus(),
+    quick_filter: () => window.InkwellFocusQuickFilter(),
+    delete: (e, preview) =>
+      preview
+        ? window.InkwellDeleteFromPreview()
+        : deleteMailKey({
+            key: 'Delete',
+            target: e.target,
+            preventDefault: () => {},
+            repeat: false,
+          }),
+    up: () => arrowNavigate('up'),
+    down: () => arrowNavigate('down'),
+    left: () => arrowNavigate('left'),
+    right: () => arrowNavigate('right'),
+    zoom_in: () => window.InkwellAdjustZoom(10),
+    zoom_out: () => window.InkwellAdjustZoom(-10),
+    zoom_reset: () => window.InkwellAdjustZoom(0),
+  },
+});
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'F9' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !e.isComposing) {
-    e.preventDefault();
-    if (!e.repeat) void window.InkwellSyncMail();
-    return;
-  }
-  if (deleteMailKey(e)) return;
-  if (
-    (e.ctrlKey || e.metaKey) &&
-    e.shiftKey &&
-    !e.altKey &&
-    e.key.toLowerCase() === 'k' &&
-    !$('#modal').open
-  ) {
-    e.preventDefault();
-    window.InkwellFocusQuickFilter();
-    return;
-  }
-  if (
-    /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) ||
-    e.ctrlKey ||
-    e.metaKey ||
-    e.altKey ||
-    $('#modal').open
-  )
-    return;
-  if (e.key === 'c') {
-    e.preventDefault();
-    compose();
-  }
-  if (e.key === '/') {
-    e.preventDefault();
-    $('#global-search')?.focus();
-  }
-  if (e.key === 'Escape') {
+  if (e.key === 'Escape' && !$('#modal').open && !e.defaultPrevented) {
     $('#ai-panel').classList.add('hidden');
     $('#sidebar').classList.remove('open');
   }
@@ -1945,8 +2146,28 @@ async function bootstrap() {
 }
 let globalSearchTimer,
   searchSequence = 0;
+function paintDateSearch() {
+  for (const side of ['from', 'to']) {
+    const input = $('#search-date-' + side);
+    $('#clear-date-' + side).disabled = !input.value && !input.validity.badInput;
+  }
+}
 async function searchMail() {
   const sequence = searchSequence;
+  const from = $('#search-date-from').value,
+    to = $('#search-date-to').value,
+    dateSearch = !!state.dateSearch;
+  $('#search-date-from').setCustomValidity('');
+  $('#search-date-to').setCustomValidity('');
+  if (!$('#search-date-from').checkValidity() || !$('#search-date-to').checkValidity()) {
+    toast('Choose valid dates. The previous filter is unchanged.');
+    return;
+  }
+  if (from && to && from > to) {
+    $('#search-date-to').setCustomValidity('From date must not be after To date');
+    toast('From date must not be after To date. The previous filter is unchanged.');
+    return;
+  }
   const typed = $('#global-search').value;
   const query = typed.trim().length >= 2 ? typed.trim() : '';
   const scope = $('#search-scope').value;
@@ -1957,26 +2178,41 @@ async function searchMail() {
   if (['settings', 'calendar', 'contacts', 'tags', 'rules'].includes(state.view))
     await navigate('inbox');
   if (sequence !== searchSequence) return;
-  state.searchScope = query ? scope : 'folder';
+  state.dateFrom = from;
+  state.dateTo = to;
+  state.dateSearch = dateSearch;
+  $('#search-date-from').value = from;
+  $('#search-date-to').value = to;
+  paintDateSearch();
+  state.searchScope = query || dateSearch || from || to ? scope : 'folder';
   $('#search-scope').value = scope;
   state.query = query;
   $('#global-search').value = typed;
-  if (!query) {
+  if (!query && !from && !to && !dateSearch) {
     state.filter = 'all';
     state.quick = {};
   }
   state.offset = 0;
-  state.selected = null;
   const generation = ++state.generation;
-  await renderMail();
+  await renderMail({ listOnly: true });
   if (generation !== state.generation || sequence !== searchSequence) return;
   const searchKind = /^tags?:/i.test(query) ? 'Tag' : 'Mail and tag';
   $('#page-description').textContent = query
     ? scope === 'all'
       ? `${searchKind} search across all cached folders, including Junk.`
       : `${searchKind} search: ${$('#search-scope').selectedOptions[0].textContent} (cached mail).`
-    : 'Showing downloaded messages in this folder.';
-  if (query && state.view === 'collection')
+    : state.searchScope === 'all'
+      ? 'Showing all downloaded messages.'
+      : 'Showing downloaded messages in this folder.';
+  if (from || to)
+    $('#page-description').textContent +=
+      ` Dates: ${from || 'any start'} through ${to || 'any end'}, inclusive (your local time).`;
+  else if (dateSearch && !query)
+    $('#page-description').textContent =
+      scope === 'all'
+        ? 'Showing all downloaded messages.'
+        : 'Showing downloaded messages in this scope.';
+  if (state.view === 'collection')
     $('#page-description').textContent += ' Within the current collection.';
   if (
     query &&
@@ -1986,6 +2222,20 @@ async function searchMail() {
       (state.quick?.tag_state && state.quick.tag_state !== 'all'))
   )
     $('#page-description').textContent += ' Active quick filters also apply.';
+}
+for (const side of ['from', 'to']) {
+  const apply = () => {
+    paintDateSearch();
+    state.dateSearch = true;
+    clearTimeout(globalSearchTimer);
+    searchSequence++;
+    return searchMail();
+  };
+  on($('#search-date-' + side), 'change', apply);
+  on($('#clear-date-' + side), 'click', () => {
+    $('#search-date-' + side).value = '';
+    return apply();
+  });
 }
 on($('#global-search-form'), 'submit', async (event) => {
   event.preventDefault();

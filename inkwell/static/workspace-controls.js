@@ -103,16 +103,6 @@ window.InkwellWorkspaceControls = (getPreferences, save) => {
     const value = delta === 0 ? 100 : (getPreferences().ui_zoom || 100) + delta;
     save({ ui_zoom: Math.max(75, Math.min(175, value)) });
   };
-  document.addEventListener('keydown', (event) => {
-    if (
-      !(event.ctrlKey || event.metaKey) ||
-      event.altKey ||
-      !['+', '=', '-', '0'].includes(event.key)
-    )
-      return;
-    event.preventDefault();
-    window.InkwellAdjustZoom(event.key === '0' ? 0 : event.key === '-' ? -10 : 10);
-  });
   return () => {
     scaleLayout();
     bind(document.querySelector('#sidebar-resizer'), 'sidebar_width', 180, 480);

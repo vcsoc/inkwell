@@ -49,7 +49,7 @@ def init():
         # Version 1: preserve password accounts while adding Microsoft OAuth metadata.
         conn.execute("BEGIN IMMEDIATE")
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        if version > 13:
+        if version > 14:
             raise RuntimeError("This database was created by a newer inkwell version")
         if version < 1:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)")}
@@ -191,6 +191,16 @@ def init():
                 )
                 conn.execute("UPDATE mail_rules SET position=id")
             conn.execute("PRAGMA user_version=13")
+        if version < 14:
+            if "flagged" not in {r["name"] for r in conn.execute("PRAGMA table_info(messages)")}:
+                conn.execute("ALTER TABLE messages ADD COLUMN flagged INTEGER NOT NULL DEFAULT 0")
+            conn.execute("""CREATE TABLE IF NOT EXISTS mail_sync_state(
+                folder_id INTEGER PRIMARY KEY REFERENCES remote_folders(id) ON DELETE CASCADE,
+                next_url TEXT,delta_url TEXT,updated TEXT NOT NULL DEFAULT '')""")
+            conn.execute("""CREATE TABLE IF NOT EXISTS mail_sync_pages(
+                folder_id INTEGER NOT NULL REFERENCES remote_folders(id) ON DELETE CASCADE,
+                digest TEXT NOT NULL,PRIMARY KEY(folder_id,digest)) WITHOUT ROWID""")
+            conn.execute("PRAGMA user_version=14")
         # Repair derived keys from old unquoted Graph display names, without changing
         # message contents, filing, or sender decisions. Idempotent; no schema change.
         conn.execute("""UPDATE messages SET sender_key=inkwell_sender_key(sender),
@@ -204,6 +214,9 @@ def init():
 def db():
     conn = sqlite3.connect(DATA / "inkwell.db", timeout=15)
     conn.row_factory = sqlite3.Row
+    from .mail_filters import timestamp
+
+    conn.create_function("inkwell_timestamp", 1, timestamp, deterministic=True)
     conn.create_function("inkwell_search_key", 1, search_key, deterministic=True)
     conn.create_function(
         "inkwell_tag_key", 1, lambda value: str(value).strip().casefold(), deterministic=True

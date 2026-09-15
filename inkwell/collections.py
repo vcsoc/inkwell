@@ -60,7 +60,7 @@ def query(data: Query):
         messages = [
             dict(row)
             for row in db.execute(
-                f"""SELECT id,account_id,remote_folder_id,local_destination_id,local_folder_override,tags,folder,sender,recipient,subject,substr(body,1,180) AS preview,date,unread,starred,demo
+                f"""SELECT id,account_id,remote_folder_id,local_destination_id,local_folder_override,tags,folder,sender,recipient,subject,substr(body,1,180) AS preview,date,unread,starred,flagged,demo
             FROM messages WHERE {clause} ORDER BY {data.order()} LIMIT 100 OFFSET ?""",
                 (*params, data.offset),
             )

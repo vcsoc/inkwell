@@ -27,6 +27,7 @@
     <link rel="stylesheet" href="/static/folder-menu.css" />
     <link rel="stylesheet" href="/static/folder-drag.css" />
     <link rel="stylesheet" href="/static/folder-groups.css" />
+    <link rel="stylesheet" href="/static/mail-controls.css" />
     <script src="/static/appearance.js"></script>
     <script src="/api/preferences/startup.js"></script>
     <title>inkwell — A little more focus</title>
@@ -78,9 +79,6 @@
         <a class="brand" href="/" aria-label="inkwell home"
           ><span class="brand-logo" role="img" aria-label="inkwell"></span
         ></a>
-        <button class="primary compose-button" id="compose">
-          ＋ <span>New message</span><kbd>C</kbd>
-        </button>
         <nav id="navigation" aria-label="Workspace"></nav>
         <div class="sidebar-bottom">
           <div class="privacy"><span class="status-dot"></span> Local-first. Yours by design.</div>
@@ -120,6 +118,46 @@
               title="Search downloaded message text, addresses and tags. Use tag:Work for tags only."
               maxlength="200"
             />
+            <div class="search-dates" role="group" aria-label="Message date range">
+              <div class="search-date">
+                <label for="search-date-from">From</label>
+                <span
+                  ><input
+                    type="date"
+                    id="search-date-from"
+                    aria-label="From date"
+                    max="9999-12-31"
+                  /><button
+                    type="button"
+                    id="clear-date-from"
+                    aria-label="Clear from date"
+                    title="Clear from date"
+                    disabled
+                  >
+                    ×
+                  </button></span
+                >
+              </div>
+              <div class="search-date">
+                <label for="search-date-to">To</label>
+                <span
+                  ><input
+                    type="date"
+                    id="search-date-to"
+                    aria-label="To date"
+                    max="9999-12-31"
+                  /><button
+                    type="button"
+                    id="clear-date-to"
+                    aria-label="Clear to date"
+                    title="Clear to date"
+                    disabled
+                  >
+                    ×
+                  </button></span
+                >
+              </div>
+            </div>
             <select id="search-scope" aria-label="Search scope">
               <option value="folder">Current folder</option>
               <option value="subfolders">Folder + subfolders</option>
@@ -227,6 +265,8 @@
       <button role="menuitem" tabindex="-1" data-action="read">Mark read (local)</button>
       <button role="menuitem" tabindex="-1" data-action="unread">Mark unread (local)</button>
       <button role="menuitem" tabindex="-1" data-action="star">Star (local)</button>
+      <button role="menuitem" tabindex="-1" data-action="flag">Flag message (local)</button>
+      <button role="menuitem" tabindex="-1" data-action="unflag">Unflag message (local)</button>
       <button role="menuitem" tabindex="-1" data-action="unstar">Remove star (local)</button>
       <button role="menuitem" tabindex="-1" data-action="move">Move local copy…</button>
       <button role="menuitem" tabindex="-1" data-action="archive">Archive local copy</button>
@@ -272,6 +312,7 @@
     <script src="/static/tag-manager.js" defer></script>
     <script src="/static/quick-filter.js" defer></script>
     <script src="/static/reader-toolbar.js" defer></script>
+    <script src="/static/shortcuts.js" defer></script>
     <script src="/static/background-sync.js" defer></script>
     <script src="/static/app.js" defer></script>
   </body>

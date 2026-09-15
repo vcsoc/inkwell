@@ -1,5 +1,5 @@
 'use strict';
-window.InkwellBackgroundSync = ({ api, refresh, toast }) => {
+window.InkwellBackgroundSync = ({ api, refresh, toast, hasAccounts = () => false }) => {
   let active = false,
     timer = null,
     last = '',
@@ -13,12 +13,17 @@ window.InkwellBackgroundSync = ({ api, refresh, toast }) => {
   const apply = async (status) => {
     active = status.active;
     document.documentElement.dataset.syncing = String(active);
-    badge.hidden = !active && !status.errors.length;
-    badge.textContent = active
-      ? `Syncing ${status.current || 'mail'} · ${status.done}/${status.total} folders · ${status.added} new`
-      : status.errors.length
-        ? `Sync finished with ${status.errors.length} issue(s). F9 retries.`
-        : '';
+    badge.hidden = !active && !status.errors.length && !status.pending;
+    badge.textContent =
+      status.retry_at > Date.now() / 1000
+        ? `Microsoft requested a pause · automatic retry after ${new Date(status.retry_at * 1000).toLocaleTimeString()}`
+        : active
+          ? `Syncing ${status.current || 'mail'} · ${status.done}/${status.total} folders · ${status.added} new`
+          : status.errors.length
+            ? `Sync finished with ${status.errors.length} issue(s). Sync retries.`
+            : status.pending
+              ? `Downloading remaining history · ${status.pending} folders · resumes automatically`
+              : '';
     badge.title = status.errors.map((e) => `${e.name}: ${e.error}`).join('\n');
     const revision = status.id + ':' + status.revision;
     if (revision !== last) {
@@ -39,7 +44,7 @@ window.InkwellBackgroundSync = ({ api, refresh, toast }) => {
       polling = false;
     }
   };
-  return {
+  const controller = {
     get active() {
       return active;
     },
@@ -52,4 +57,8 @@ window.InkwellBackgroundSync = ({ api, refresh, toast }) => {
     },
     poll,
   };
+  setInterval(() => {
+    if (hasAccounts() && !active && !polling) void controller.start();
+  }, 15000);
+  return controller;
 };

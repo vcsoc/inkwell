@@ -218,6 +218,18 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
     } else {
       await window.locator('#settings').click();
     }
+    await settingsSection(window,'Shortcuts');
+    const shortcutInput=window.locator('[data-shortcut-capture="sync"]');await shortcutInput.focus();
+    const nativeFunctionKey=key=>app.evaluate(({BrowserWindow},keyCode)=>{const wc=BrowserWindow.getAllWindows()[0].webContents;wc.sendInputEvent({type:'keyDown',keyCode});wc.sendInputEvent({type:'keyUp',keyCode});},key);
+    await nativeFunctionKey('F8');await expect(shortcutInput).toHaveValue('F8');
+    await nativeFunctionKey('F9');await expect(shortcutInput).toHaveValue('F9');
+    await nativeFunctionKey('F8');await window.getByRole('button',{name:'Save shortcuts',exact:true}).click();await expect(window.locator('#shortcut-status')).toContainText('saved');
+    await sidebarClick(window,'#navigation [data-view=inbox]');await window.locator(`[data-message="${messageId}"] .subject`).click();await email.getByRole('heading',{name:'Packaged HTML preview'}).click();
+    await window.evaluate(()=>{window.__originalSync=window.InkwellSyncMail;window.__shortcutCalls=0;window.InkwellSyncMail=()=>window.__shortcutCalls++;});
+    await nativeFunctionKey('F9');expect(await window.evaluate(()=>window.__shortcutCalls)).toBe(0);
+    await nativeFunctionKey('F8');await expect.poll(()=>window.evaluate(()=>window.__shortcutCalls)).toBe(1);
+    await window.evaluate(()=>window.InkwellSyncMail=window.__originalSync);
+    await window.locator('#settings').click();await settingsSection(window,'Shortcuts');await window.getByRole('button',{name:'Reset defaults',exact:true}).click();await expect(window.locator('#shortcut-status')).toContainText('saved');
     await settingsSection(window, 'Mail accounts');
     await app.evaluate(({ shell }) => {
       globalThis.inkwellTestExternalURLs = [];

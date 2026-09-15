@@ -8,6 +8,11 @@ window.InkwellMailFilters = {
       ...(state.quick?.tag_id ? { tag_id: state.quick.tag_id } : {}),
       sort_by: preferences.mail_sort || 'date',
       sort_order: preferences.mail_order || 'desc',
+      ...(state.dateFrom ? { date_from: state.dateFrom } : {}),
+      ...(state.dateTo ? { date_to: state.dateTo } : {}),
+      ...(state.dateFrom || state.dateTo
+        ? { date_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' }
+        : {}),
     };
   },
   mount({ state, preferences, esc, saveWorkspace, refresh }) {

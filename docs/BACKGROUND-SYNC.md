@@ -1,13 +1,29 @@
 # Background mailbox downloads
 
-`POST /api/sync/jobs` starts or joins a shared job; `GET /api/sync/jobs` reports its ID, active state, current folder, completed/total folder visits, newly imported messages, revision and bounded errors. `?full=true` clears the in-process completed-folder set before a new job. Requests do not restart an already active job. Both endpoints retain the normal session/origin protections.
+`POST /api/sync/jobs` starts or joins the shared job; `GET /api/sync/jobs` returns its ID, active state, current folder, completed/total visits, newly imported messages, pending work, revision and bounded errors. Both retain the normal session/origin protections. Checkpoint URLs are private database state, not API status fields.
 
-The existing quick Inbox/current-folder sync remains available. The app starts the all-folder job after startup/manual quick sync and checks again approximately every two minutes while open. F9 requests a full pass after the quick pull. The status below the page heading reports progress; failure details are in its tooltip. New pages refresh cached counts/list rows without replacing a reader, its toolbar, or an open editor.
+## Timing and completeness
 
-One daemon worker holds the existing transport lock, discovers Microsoft folders and snapshots every folder (including nested folders). It uses GET-only Graph retrieval and does not modify server messages, folders or read flags. OAuth token refresh remains a separate authorization operation. A failed folder does not stop other folders; failed discovery retains and checks the cached tree. Disconnected/replaced account identities are rechecked before importing. Token refresh writes are conditional on the credentials not having changed concurrently.
+The quick Inbox/current-folder pull remains available. After startup/manual quick sync, Outlook downloads run in the background. While an app is open, automatic checks are requested about every **15 seconds**. Native desktop timers remain active when minimized; browsers, sleep, connectivity, provider latency and throttling can delay checks. This is polling, **not push or a delivery-time guarantee**. Folder discovery normally refreshes about once a minute; manual Sync requests discovery sooner.
 
-Initial backfill follows up to 5,000 validated pages per folder, at most 100 messages per page. Repeated/untrusted pagination URLs and the safety ceiling report failure. Imported pages stay cached when a later page fails. Existing immutable provider IDs deduplicate copies and preserve local filing/read/star choices. Existing incoming-rule and Not Junk protections remain active; provider Drafts/Sent remain snapshots, not editable drafts or incoming-rule candidates.
+The default **F9** shortcut requests a quick pull and a full background scan. When idle, full scanning resets completed checkpoints but retains unfinished history. During an active job it requests a fresh-mail check without restarting the download. Shortcuts are customizable in Settings. Progress and errors appear beneath the page heading. Updates preserve the reader DOM, position, permissions and open editors.
 
-After a folder completes, automatic passes fetch its most recent 200 messages. F9 requests a new full rescan when idle. This is not Graph delta synchronization: older server moves may need F9, server deletions do not erase downloaded copies, and local changes are not sent back. On backend restart the in-memory completion set resets; a new full pass resumes by duplicate-safe rescan, not a persisted cursor. Quitting signals cancellation between pages; a network request already in flight can finish before shutdown. No service runs after the backend exits.
+## Resumable Graph synchronization
 
-Backfill consumes network bandwidth and local disk space. HTML/text limits still apply and attachments/original MIME are not fetched. Generic IMAP remains Inbox-only. No provider calendar/contact sync or server-folder management is added.
+One daemon worker holds the existing transport lock and visits folders round-robin, one delta page per visit. It covers discovered Microsoft folders and subfolders, not only Inbox. A shared HTTP connection pool avoids a new TLS connection for each folder page.
+
+Schema **14** adds `mail_sync_state` with per-folder next-page/delta links and `mail_sync_pages` with page-link hashes for cycle detection. Message copies commit before their checkpoint, so interruption can repeat a page but cannot checkpoint unimported messages. Immutable IDs deduplicate repeated copies. A job yields after 128 page visits; unfinished cursors resume on later passes, including after restart. **There is no total mailbox-message or historical-page cap.** Every returned page item is processed, even if a provider returns more than the requested page size.
+
+While historical scans are unfinished, bounded quick recent-mail checks run between rounds (and at the next job's start); these do not replace or truncate the historical delta scan. Completed folders use their delta checkpoints instead of a newest-200-only refresh. Large backfills and unusually high arrival volumes can still delay some messages.
+
+Nullable Drafts fields and malformed sender headers do not abort an otherwise readable message import. Partial delta entries are fetched by ID before updating cached content and headers. Server Drafts/Sent remain snapshots, not editable local drafts or incoming-rule candidates.
+
+Repeated or untrusted Graph links report errors without discarding cached mail. Expired checkpoints and detected pagination cycles schedule a fresh scan. Failed pages retain their previous cursor. Automatic jobs honor provider retry delays for 429/503 responses. Failed discovery retains the cached tree. Disconnected/replaced account identities are checked before importing; refresh-token writes remain conditional on unchanged credentials.
+
+## Preservation and limits
+
+Graph retrieval is GET-only. OAuth token refresh is a separate authorization operation. No server messages, read flags or folders are modified. Local filing, read/star/flag choices and tags are retained. Provider removal events **do not erase cached copies**. There are no durable local-deletion tombstones: a full rescan or later server change may download a locally deleted copy again.
+
+Outlook folder totals count **items**, which may include non-mail objects. They need not equal the message endpoint's count or the cached message count. Navigation badges count cached unread messages; tooltips distinguish server item totals. A count difference alone is not proof of missing email.
+
+Quitting signals cancellation between pages; an in-flight request may finish before shutdown. No service remains after the backend exits. Backfill consumes bandwidth and disk space. Cached HTML/text limits still apply; attachments/original MIME are not fetched. Generic IMAP remains Inbox-only. Provider calendar/contact synchronization and server-folder management are not added.

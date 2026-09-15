@@ -1,6 +1,6 @@
 'use strict';
 // Source and installed desktop launcher. Backend stays loopback-only and dies with the app.
-const { app, BrowserWindow, dialog, session, shell } = require('electron');
+const { app, BrowserWindow, dialog, session, shell, ipcMain } = require('electron');
 const { spawn } = require('node:child_process');
 const { randomBytes } = require('node:crypto');
 const net = require('node:net');
@@ -116,6 +116,7 @@ async function launch() {
       contextIsolation: true,
       sandbox: true,
       webSecurity: true,
+      backgroundThrottling: false,
     },
   });
   const cleanupExports = require('./file-export.cjs')(window, {
@@ -154,59 +155,83 @@ async function launch() {
       });
   });
   // Fixed trusted commands only; also works while the script-free email frame has focus.
-  const zoomCommands = {
-    '+': 'window.InkwellAdjustZoom?.(10)',
-    '=': 'window.InkwellAdjustZoom?.(10)',
-    '-': 'window.InkwellAdjustZoom?.(-10)',
-    0: 'window.InkwellAdjustZoom?.(0)',
+  let capturingShortcut = false;
+  let nativeKeys = {
+    sync: 'F9',
+    quick_filter: 'Ctrl+Shift+K',
+    zoom_in: 'Ctrl+=',
+    zoom_out: 'Ctrl+-',
+    zoom_reset: 'Ctrl+0',
   };
+  const configureKeys = (event, values) => {
+    if (
+      window.isDestroyed() ||
+      window.webContents.isDestroyed() ||
+      event.sender !== window.webContents ||
+      event.senderFrame?.frameTreeNodeId !== window.webContents.mainFrame.frameTreeNodeId ||
+      !values ||
+      typeof values !== 'object'
+    )
+      return;
+    const next = {};
+    for (const action of Object.keys(nativeKeys)) {
+      const key = values[action];
+      if (
+        typeof key !== 'string' ||
+        key.length > 40 ||
+        !/^(?:(?:Ctrl\+)?(?:Alt\+)?(?:Shift\+)?(?:[A-Z0-9/=\-]|F(?:[1-9]|1[0-2])|Delete|ArrowUp|ArrowDown|ArrowLeft|ArrowRight))?$/.test(
+          key,
+        )
+      )
+        return;
+      next[action] = key;
+    }
+    nativeKeys = next;
+  };
+  const captureKeys = (event, value) => {
+    if (
+      !window.isDestroyed() &&
+      !window.webContents.isDestroyed() &&
+      event.sender === window.webContents &&
+      event.senderFrame?.frameTreeNodeId === window.webContents.mainFrame.frameTreeNodeId &&
+      typeof value === 'boolean'
+    )
+      capturingShortcut = value;
+  };
+  ipcMain.on('inkwell-shortcut-capture', captureKeys);
+  window.on('closed', () => ipcMain.removeListener('inkwell-shortcut-capture', captureKeys));
+  ipcMain.on('inkwell-configure-shortcuts', configureKeys);
+  window.on('closed', () => ipcMain.removeListener('inkwell-configure-shortcuts', configureKeys));
   window.webContents.on('before-input-event', (event, input) => {
-    if (
-      input.type === 'keyDown' &&
-      input.key === 'F9' &&
-      !input.control &&
-      !input.meta &&
-      !input.alt &&
-      !input.shift &&
-      !input.isComposing
-    ) {
-      event.preventDefault();
-      if (!input.isAutoRepeat)
-        window.webContents.executeJavaScript('void window.InkwellSyncMail?.()').catch(() => {});
-      return;
-    }
-    if (
-      input.type === 'keyDown' &&
-      input.key === 'Delete' &&
-      !input.isAutoRepeat &&
-      !input.control &&
-      !input.meta &&
-      !input.alt &&
-      !input.shift
-    ) {
-      // Sandboxed mail frames cannot forward DOM events to the application.
-      window.webContents.executeJavaScript('window.InkwellDeleteFromPreview?.()').catch(() => {});
-    }
-    if (
-      input.type === 'keyDown' &&
-      (input.control || input.meta) &&
-      input.shift &&
-      !input.alt &&
-      input.key.toLowerCase() === 'k'
-    ) {
-      event.preventDefault();
-      window.webContents.executeJavaScript('window.InkwellFocusQuickFilter?.()').catch(() => {});
-      return;
-    }
-    if (
-      input.type === 'keyDown' &&
-      (input.control || input.meta) &&
-      !input.alt &&
-      Object.hasOwn(zoomCommands, input.key)
-    ) {
-      event.preventDefault();
-      window.webContents.executeJavaScript(zoomCommands[input.key]).catch(() => {});
-    }
+    if (input.type !== 'keyDown' || input.isComposing) return;
+    const key = String(input.key).slice(0, 40),
+      plus = key === '+';
+    const combo = [
+      input.control || input.meta ? 'Ctrl' : '',
+      input.alt ? 'Alt' : '',
+      input.shift && !plus ? 'Shift' : '',
+      plus ? '=' : key.length === 1 ? key.toUpperCase() : key,
+    ]
+      .filter(Boolean)
+      .join('+');
+    const data = {
+      key,
+      ctrlKey: !!input.control,
+      metaKey: !!input.meta,
+      altKey: !!input.alt,
+      shiftKey: !!input.shift,
+    };
+    const global =
+      !capturingShortcut &&
+      Object.values(nativeKeys).includes(combo) &&
+      (/^F\d+$/.test(key) || input.control || input.meta || input.alt);
+    if (global) event.preventDefault();
+    if (input.isAutoRepeat) return;
+    window.webContents
+      .executeJavaScript(
+        `void window.${global ? 'InkwellNativeShortcut' : 'InkwellShortcutFromPreview'}?.(${JSON.stringify(data)})`,
+      )
+      .catch(() => {});
   });
   const externalTargets = new Set([
     'https://microsoft.com/devicelogin',

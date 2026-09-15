@@ -4,6 +4,8 @@ No client secret or Microsoft password is collected. Public app registration is 
 """
 
 import json
+from contextlib import nullcontext
+from email.errors import HeaderParseError
 import os
 import re
 import secrets
@@ -247,7 +249,18 @@ def access_token(account):
 
 
 def sync_account(
-    account, folder=None, trusted_only=False, *, max_pages=2, on_page=None, cancel=None
+    account,
+    folder=None,
+    trusted_only=False,
+    *,
+    max_pages=2,
+    on_page=None,
+    cancel=None,
+    start_url=None,
+    delta=False,
+    on_cursor=None,
+    stop_when_known=False,
+    http_client=None,
 ):
     from .mail import TextExtractor
     from .message_keys import sender_key
@@ -279,7 +292,23 @@ def sync_account(
         + quote(remote_id, safe="")
         + "/messages?$top=100&$orderby=receivedDateTime%20desc&$select=id,from,toRecipients,ccRecipients,bccRecipients,subject,body,receivedDateTime,isRead,flag"
     )
-    with client() as http:
+    if delta:
+        url = url.replace("/messages?$top=100&", "/messages/delta?")
+        headers["Prefer"] += ", odata.maxpagesize=100"
+    if start_url:
+        url = start_url
+
+    def validate_url(value):
+        parsed = urlparse(value)
+        if (
+            parsed.scheme != "https"
+            or parsed.netloc != "graph.microsoft.com"
+            or not parsed.path.startswith("/v1.0/me/")
+        ):
+            raise ValueError("Unexpected Graph pagination URL")
+
+    validate_url(url)
+    with nullcontext(http_client) if http_client is not None else client() as http:
         seen = set()
         for _ in range(max_pages):
             if cancel is not None and cancel.is_set():
@@ -292,8 +321,32 @@ def sync_account(
             response = http.get(url, headers=headers)
             response.raise_for_status()
             data = response.json()
-            for message in data.get("value", [])[:100]:
-                sender = message.get("from", {}).get("emailAddress", {})
+            known = False
+            for message in data.get("value", []):
+                if "@removed" in message:
+                    continue
+                if delta and not all(
+                    k in message
+                    for k in (
+                        "body",
+                        "subject",
+                        "from",
+                        "toRecipients",
+                        "ccRecipients",
+                        "bccRecipients",
+                        "receivedDateTime",
+                        "isRead",
+                        "flag",
+                    )
+                ):
+                    detail = http.get(
+                        GRAPH + "/me/messages/" + quote(message["id"], safe=""), headers=headers
+                    )
+                    if detail.status_code == 404:
+                        continue
+                    detail.raise_for_status()
+                    message = detail.json()
+                sender = (message.get("from") or {}).get("emailAddress") or {}
                 try:
                     sender = str(
                         Address(
@@ -301,27 +354,31 @@ def sync_account(
                             addr_spec=sender.get("address") or "",
                         )
                     )
-                except (ValueError, IndexError):
+                except (ValueError, IndexError, HeaderParseError):
                     name = quote_display_name(str(sender.get("name") or ""))
                     sender = f'"{name}" <{sender.get("address", "")}>'
+                if sender == "<>":
+                    sender = "(Unknown sender)"
                 if trusted_only and sender_key(sender) not in trusted:
                     continue
                 recipient = ", ".join(
-                    r.get("emailAddress", {}).get("address", "")
-                    for r in message.get("toRecipients", [])
+                    (r.get("emailAddress") or {}).get("address") or ""
+                    for r in (message.get("toRecipients") or [])
                 )
                 cc = ", ".join(
-                    r.get("emailAddress", {}).get("address", "")
-                    for r in message.get("ccRecipients", [])
+                    (r.get("emailAddress") or {}).get("address") or ""
+                    for r in (message.get("ccRecipients") or [])
                 )
                 bcc = ", ".join(
-                    r.get("emailAddress", {}).get("address", "")
-                    for r in message.get("bccRecipients", [])
+                    (r.get("emailAddress") or {}).get("address") or ""
+                    for r in (message.get("bccRecipients") or [])
                 )
-                body = message.get("body", {})
-                text = body.get("content", "")
-                html_body = text[:500000] if body.get("contentType", "").lower() == "html" else ""
-                if body.get("contentType", "").lower() == "html":
+                body = message.get("body") or {}
+                text = body.get("content") or ""
+                html_body = (
+                    text[:500000] if (body.get("contentType") or "").lower() == "html" else ""
+                )
+                if (body.get("contentType") or "").lower() == "html":
                     extractor = TextExtractor()
                     extractor.feed(text)
                     text = "".join(extractor.parts)
@@ -354,7 +411,7 @@ def sync_account(
                             message.get("receivedDateTime")
                             or datetime.now(timezone.utc).isoformat(),
                             int(not message.get("isRead", False)),
-                            int(message.get("flag", {}).get("flagStatus") == "flagged"),
+                            int((message.get("flag") or {}).get("flagStatus") == "flagged"),
                             local_folder,
                             folder["id"] if folder else None,
                             cc,
@@ -363,21 +420,41 @@ def sync_account(
                     )
                     from . import addresses
 
-                    addresses.remember(db, sender, recipient, cc, bcc)
+                    if cursor.rowcount:
+                        addresses.remember(db, sender, recipient, cc, bcc)
+                    else:
+                        known = True
                     count += cursor.rowcount
                     if cursor.rowcount:
                         from . import rules
 
                         rules.apply(db, cursor.lastrowid)
                     db.execute(
-                        "UPDATE messages SET html_body=?,body=? WHERE account_id=? AND remote_key=?",
+                        "UPDATE messages SET html_body=?,body=? WHERE account_id=? AND remote_key=? AND draft_key IS NULL AND (html_body IS NOT ? OR body IS NOT ?)",
                         (
                             html_body,
                             text[:500000],
                             account["id"],
                             f"{account['id']}:graph:{message['id']}",
+                            html_body,
+                            text[:500000],
                         ),
                     )
+                    if delta:
+                        db.execute(
+                            """UPDATE messages SET sender=?,recipient=?,cc=?,bcc=?,subject=?,date=coalesce(?,date)
+                          WHERE account_id=? AND remote_key=? AND draft_key IS NULL""",
+                            (
+                                sender,
+                                recipient,
+                                cc,
+                                bcc,
+                                message.get("subject") or "(no subject)",
+                                message.get("receivedDateTime"),
+                                account["id"],
+                                f"{account['id']}:graph:{message['id']}",
+                            ),
+                        )
                     if folder:
                         db.execute(
                             """UPDATE messages SET remote_folder_id=?,folder=CASE WHEN local_folder_override=0 AND folder IN ('inbox','remote') THEN ? ELSE folder END
@@ -392,7 +469,14 @@ def sync_account(
             if on_page is not None:
                 on_page(count - before)
             url = data.get("@odata.nextLink")
-            if not url:
+            checkpoint = data.get("@odata.deltaLink")
+            if url:
+                validate_url(url)
+            if checkpoint:
+                validate_url(checkpoint)
+            if on_cursor is not None:
+                on_cursor(url, checkpoint)
+            if not url or (stop_when_known and known):
                 break
             # Never forward the bearer token to an arbitrary nextLink host/path.
             parsed = urlparse(url)

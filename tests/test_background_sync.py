@@ -38,25 +38,26 @@ def test_worker_downloads_every_folder_and_child_then_uses_incremental_checks(cl
     calls = []
 
     def sync(a, f, **kw):
-        calls.append((f["remote_id"], kw["max_pages"]))
+        calls.append((f["remote_id"], kw["max_pages"], kw["start_url"]))
         kw["on_page"](1)
+        kw["on_cursor"](None, "https://graph.microsoft.com/v1.0/me/" + f["remote_id"])
         return 1
 
     job = setup(monkeypatch, sync)
     job.start()
     status = finish(job)
-    assert {f for f, _ in calls} == {"Inbox", "Parent", "Nested", "Archive"}
+    assert {f for f, _, _ in calls} == {"Inbox", "Parent", "Nested", "Archive"}
     assert status["total"] == status["done"] == status["added"] == 4
     assert not status["errors"] and not status["active"]
-    assert all(p == 5000 for _, p in calls)
+    assert all(p == 1 and url is None for _, p, url in calls)
     calls.clear()
     job.start()
     finish(job)
-    assert all(p == 2 for _, p in calls)
+    assert all(p == 1 and url for _, p, url in calls)
     calls.clear()
     job.start(full=True)
     finish(job)
-    assert all(p == 5000 for _, p in calls)
+    assert all(p == 1 and url is None for _, p, url in calls)
 
 
 def test_worker_coalesces_requests_and_holds_shared_transport_lock(client, monkeypatch):
@@ -66,6 +67,7 @@ def test_worker_coalesces_requests_and_holds_shared_transport_lock(client, monke
     def sync(a, f, **kw):
         entered.set()
         assert release.wait(1)
+        kw["on_cursor"](None, "https://graph.microsoft.com/v1.0/me/" + f["remote_id"])
         return 0
 
     job = setup(monkeypatch, sync)
@@ -91,6 +93,7 @@ def test_failure_does_not_skip_other_folders_and_failed_folder_retries_backfill(
         if f["remote_id"] == "Parent":
             raise ValueError("private token must not escape")
         kw["on_page"](1)
+        kw["on_cursor"](None, "https://graph.microsoft.com/v1.0/me/" + f["remote_id"])
         return 1
 
     job = setup(monkeypatch, sync)

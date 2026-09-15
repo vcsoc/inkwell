@@ -5,7 +5,8 @@ from typing import Literal
 
 from fastapi import APIRouter
 from fastapi.responses import Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from .shortcuts import DEFAULTS as SHORTCUTS, validate as validate_shortcuts
 
 from . import store
 
@@ -39,6 +40,8 @@ class Theme(BaseModel):
 
 class Preferences(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    shortcuts: dict[str, str] = Field(default_factory=lambda: dict(SHORTCUTS))
+    _shortcuts = field_validator("shortcuts")(validate_shortcuts)
     form_mode: Literal["popup", "inline"] = "popup"
     layout: Literal["focus", "classic", "stacked", "list"] = "focus"
     preview_mode: Literal["html", "text"] = "html"
@@ -57,6 +60,13 @@ class Preferences(BaseModel):
 
 class WorkspacePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    shortcuts: dict[str, str] | None = None
+
+    @field_validator("shortcuts")
+    @classmethod
+    def valid_shortcuts(cls, value):
+        return validate_shortcuts(value) if value is not None else value
+
     preview_mode: Literal["html", "text"] | None = None
     sidebar_width: int | None = Field(default=None, ge=180, le=480)
     message_list_width: int | None = Field(default=None, ge=220, le=900)

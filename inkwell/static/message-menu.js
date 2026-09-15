@@ -37,7 +37,7 @@ window.InkwellMessageMenu = (onSelect, onError) => {
   menu.append(main);
   const groups = [
     ['filing', 'File', ['move', 'archive', 'restore', 'trash', 'delete']],
-    ['mark', 'Mark', ['read', 'unread', 'star', 'unstar']],
+    ['mark', 'Mark', ['read', 'unread', 'flag', 'unflag', 'star', 'unstar']],
     ['find', 'Find related', ['sender', 'organisation', 'subject']],
     ['more', 'More actions', ['write', 'contact', 'copy', 'save', 'save-eml', 'appearance']],
   ];
