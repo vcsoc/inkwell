@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { DatabaseSync } = require('node:sqlite');
+const { sidebarClick } = require('./helpers.cjs');
 const path = require('node:path'),
   os = require('node:os');
 let prefix, original, ids, subject;
@@ -56,6 +57,8 @@ test.afterEach(async ({ page }) => {
   }
   const tags = (await api(page, '/tags')).filter((t) => t.name.startsWith(prefix));
   if (tags.length) await api(page, '/tags/delete', 'POST', { ids: tags.map((t) => t.id) });
+  for (const folder of await api(page, '/local-folders'))
+    if (folder.name.startsWith(prefix)) await api(page, '/local-folders/' + folder.id, 'DELETE');
   await api(page, '/preferences', 'PUT', original);
 });
 test('Apply rule prefills sender, subject, domain and TLD and applies only this copy', async ({
@@ -96,7 +99,7 @@ test('Retrying a failed selected-message application does not create duplicate r
   await page.getByLabel('Rule name', { exact: true }).fill(prefix + ' retry');
   await page.getByLabel('Action 1 type', { exact: true }).selectOption('star');
   let attempts = 0;
-  await page.route('**/api/rules/*/apply-message', (route) =>
+  await page.route('**/api/rules/run', (route) =>
     ++attempts === 1
       ? route.fulfill({ status: 500, json: { detail: 'Temporary failure' } })
       : route.continue(),
@@ -108,6 +111,134 @@ test('Retrying a failed selected-message application does not create duplicate r
   await expect(page.locator('#toast')).toContainText('saved and applied');
   expect((await api(page, '/rules')).filter((r) => r.name === prefix + ' retry')).toHaveLength(1);
   expect((await api(page, '/messages/' + ids[0])).starred).toBe(1);
+});
+
+test('Opening Rule Manager remembers the reader message and its current folder', async ({
+  page,
+}) => {
+  const folder = (await api(page, '/local-folders', 'POST', { name: prefix + ' current' })).id;
+  await api(page, '/messages/' + ids[0], 'PATCH', { folder: 'local-' + folder });
+  await page.reload();
+  await sidebarClick(page, `#navigation [data-view="local-${folder}"]`);
+  await page.locator(`[data-message="${ids[0]}"] .subject`).click();
+  await expect(page.locator('#reader')).toContainText(subject);
+  await sidebarClick(page, '#rule-manager-link');
+  await expect(page.getByLabel('Rule run scope')).toHaveValue('message');
+  await page.getByLabel('Rule run scope').selectOption('folder');
+  await expect(page.getByLabel('Folder to process')).toHaveValue('local-' + folder);
+  await page.locator('#create-rule').click();
+  await page.getByLabel('Rule name', { exact: true }).fill(prefix + ' current rule');
+  await page.getByLabel('Condition 1 value', { exact: true }).fill(prefix);
+  await page.getByLabel('Action 1 type', { exact: true }).selectOption('star');
+  await page.getByRole('button', { name: 'Save and run', exact: true }).click();
+  await expect(page.locator('#rule-run-status')).toContainText('1 local copies matched');
+  expect((await api(page, '/messages/' + ids[0])).starred).toBe(1);
+  expect((await api(page, '/messages/' + ids[1])).starred).toBe(0);
+});
+
+test('Save and run supports a chosen folder, all folders, and rerunning a saved rule', async ({
+  page,
+}) => {
+  await api(page, '/messages/' + ids[1], 'PATCH', { folder: 'archive' });
+  await page.locator(`[data-more="${ids[0]}"]`).click();
+  await page.getByRole('menuitem', { name: 'Apply rule…', exact: true }).click();
+  await page.getByLabel('Rule name', { exact: true }).fill(prefix + ' scopes');
+  await page.getByLabel('Condition 1 field', { exact: true }).selectOption('subject');
+  await page.getByLabel('Condition 1 operator', { exact: true }).selectOption('contains');
+  await page.getByLabel('Condition 1 value', { exact: true }).fill(prefix);
+  await page.getByLabel('Action 1 type', { exact: true }).selectOption('star');
+  await page.getByLabel('Rule run scope').selectOption('folder');
+  await page.getByLabel('Folder to process').selectOption('inbox');
+  await page.getByRole('button', { name: 'Save and run', exact: true }).click();
+  await expect(page.locator('#rule-run-status')).toContainText('1 local copies matched');
+  expect((await api(page, '/messages/' + ids[0])).starred).toBe(1);
+  expect((await api(page, '/messages/' + ids[1])).starred).toBe(0);
+  await page.getByLabel('Rule run scope').selectOption('all');
+  await page.getByRole('button', { name: 'Save and run', exact: true }).click();
+  await expect(page.locator('#rule-run-status')).toContainText('2 local copies matched');
+  expect((await api(page, '/messages/' + ids[1])).starred).toBe(1);
+  await api(page, '/messages/' + ids[1], 'PATCH', { starred: false });
+  await page.getByLabel('Rule name', { exact: true }).fill(prefix + ' unsaved');
+  await page.getByRole('button', { name: 'Run saved rule', exact: true }).click();
+  await expect(page.locator('#toast')).toContainText('2 local copies matched');
+  await expect(page.getByLabel('Rule name', { exact: true })).toHaveValue(prefix + ' unsaved');
+  expect((await api(page, '/messages/' + ids[1])).starred).toBe(1);
+});
+
+test('Rule priorities move without losing editor changes, with drag previews and keyboard alternatives', async ({
+  page,
+}) => {
+  const created = [];
+  for (let i = 0; i < 3; i++)
+    created.push(
+      (
+        await api(page, '/rules', 'POST', {
+          name: prefix + ' priority ' + i,
+          conditions: [{ field: 'subject', operator: 'contains', value: prefix }],
+          actions: [{ type: 'star' }],
+        })
+      ).id,
+    );
+  await page.goto('/#/rules');
+  await page.locator(`[data-edit-rule="${created[0]}"]`).click();
+  await page.getByLabel('Rule name', { exact: true }).fill(prefix + ' unsaved');
+  const control = page.locator(`[data-rule-down="${created[0]}"]`);
+  expect((await control.boundingBox()).height).toBeGreaterThanOrEqual(
+    test.info().project.name === 'mobile' ? 44 : 32,
+  );
+  await control.click();
+  await expect(page.locator(`[data-edit-rule="${created[0]}"] strong`)).toContainText('2.');
+  await expect(page.getByLabel('Rule name', { exact: true })).toHaveValue(prefix + ' unsaved');
+  const target = page.locator(`[data-rule-entry="${created[1]}"]`),
+    box = await target.boundingBox();
+  const data = await page.evaluateHandle(() => new DataTransfer());
+  await page
+    .locator(`[data-edit-rule="${created[2]}"]`)
+    .dispatchEvent('dragstart', { dataTransfer: data });
+  await target.dispatchEvent('dragover', { dataTransfer: data, clientY: box.y + 1 });
+  await expect(target).toHaveClass(/rule-drop-before/);
+  await page.keyboard.press('Escape');
+  await expect(target).not.toHaveClass(/rule-drop-before/);
+  await page
+    .locator(`[data-edit-rule="${created[2]}"]`)
+    .dispatchEvent('dragstart', { dataTransfer: data });
+  await target.dispatchEvent('dragover', { dataTransfer: data, clientY: box.y + 1 });
+  expect(
+    (await api(page, '/rules')).filter((r) => created.includes(r.id)).map((r) => r.id),
+  ).toEqual([created[1], created[0], created[2]]);
+  await target.dispatchEvent('drop', { dataTransfer: data, clientY: box.y + 1 });
+  await expect(page.locator(`[data-edit-rule="${created[2]}"] strong`)).toContainText('1.');
+  await expect(page.getByLabel('Rule name', { exact: true })).toHaveValue(prefix + ' unsaved');
+  await page.reload();
+  await expect(page.locator(`[data-edit-rule="${created[2]}"] strong`)).toContainText('1.');
+});
+
+test('Stop processing is saved and all-rule runs honor it', async ({ page }) => {
+  const first = (
+    await api(page, '/rules', 'POST', {
+      name: prefix + ' stop',
+      conditions: [{ field: 'subject', operator: 'contains', value: prefix }],
+      actions: [{ type: 'star' }],
+    })
+  ).id;
+  await api(page, '/rules', 'POST', {
+    name: prefix + ' later',
+    conditions: [{ field: 'subject', operator: 'contains', value: prefix }],
+    actions: [{ type: 'unstar' }],
+  });
+  await page.goto('/#/rules');
+  await page.locator(`[data-edit-rule="${first}"]`).click();
+  await page.getByLabel('Rule run scope').selectOption('all');
+  await page.locator('#apply-rules').click();
+  await expect(page.locator('#rule-run-status')).toContainText('2 local copies matched');
+  expect((await api(page, '/messages/' + ids[0])).starred).toBe(1);
+  await page
+    .getByRole('checkbox', { name: 'Stop processing further rules after this rule matches' })
+    .uncheck();
+  await page.getByRole('button', { name: 'Save rule', exact: true }).click();
+  await expect(page.locator('#toast')).toContainText('Rule saved');
+  await page.locator('#apply-rules').click();
+  await expect.poll(async () => (await api(page, '/messages/' + ids[0])).starred).toBe(0);
 });
 
 test('Grouped menu stays compact and submenus fit the viewport with keyboard and touch back', async ({

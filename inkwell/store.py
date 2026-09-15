@@ -49,7 +49,7 @@ def init():
         # Version 1: preserve password accounts while adding Microsoft OAuth metadata.
         conn.execute("BEGIN IMMEDIATE")
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        if version > 12:
+        if version > 13:
             raise RuntimeError("This database was created by a newer inkwell version")
         if version < 1:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)")}
@@ -182,6 +182,15 @@ def init():
             conn.execute("""WITH ranked AS (SELECT id,ROW_NUMBER() OVER (ORDER BY name,id)-1 AS rank FROM local_folders)
                 UPDATE local_folders SET position=(SELECT rank FROM ranked WHERE ranked.id=local_folders.id)""")
             conn.execute("PRAGMA user_version=12")
+        if version < 13:
+            if "position" not in {
+                row["name"] for row in conn.execute("PRAGMA table_info(mail_rules)")
+            }:
+                conn.execute(
+                    "ALTER TABLE mail_rules ADD COLUMN position INTEGER NOT NULL DEFAULT 0"
+                )
+                conn.execute("UPDATE mail_rules SET position=id")
+            conn.execute("PRAGMA user_version=13")
         # Repair derived keys from old unquoted Graph display names, without changing
         # message contents, filing, or sender decisions. Idempotent; no schema change.
         conn.execute("""UPDATE messages SET sender_key=inkwell_sender_key(sender),

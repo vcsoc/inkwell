@@ -8,7 +8,7 @@ Open **Rule Manager** in the sidebar or **Settings → Mail rules**. The current
 - Choose Inbox, Archive, local Trash, a custom local destination, or a displayed server-folder branch as a local-only view.
 - **Exclude unread messages** restricts the rule to read messages.
 - **Only messages older than days** can be set to `7` to leave messages from the last seven days alone; `0` means any age. The two exclusions can be combined.
-- Save, edit, disable or delete rules. First matching enabled rule wins, in creation order. Up to 100 rules are supported.
+- Save, edit, disable or delete rules. Rules run in saved priority order, stopping after a matching rule only when its Stop option is enabled. See [Rule execution](RULE-EXECUTION.md) for scoped manual runs and ordering. Up to 100 rules are supported.
 
 Both IMAP and Microsoft imports apply rules inside the same SQLite transaction as the newly copied message, before it becomes visible to the UI. No server folders/messages/read flags are changed, and no extra provider write permission is requested. Custom folders are local and appear in the sidebar; they are also available in the message menu's Move local copy action.
 

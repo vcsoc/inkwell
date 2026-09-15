@@ -41,7 +41,7 @@ test.beforeEach(async ({ page }) => {
         `
 from inkwell import store
 with store.db() as db:
- c=db.execute("INSERT INTO messages(sender,recipient,subject,body,html_body,date,unread) VALUES (?,?,?,?,?,?,1)", ('Alex <alex@example.org>','me@example.org','Secure HTML fixture','Safe text alternative.','<h1>Safe HTML fixture</h1><p style=\"color:red\">Readable formatting</p><script>top.compromised=true</script><img src=\"https://images.example.org/pixel.png\" onerror=\"top.compromised=true\"><iframe src=\"https://evil.example/frame\"></iframe><a href=\"https://evil.example/link\">Disabled navigation</a><div style=\"background-image:url(https://evil.example/css)\">No CSS tracking</div>', '2099-01-01T12:00:00+00:00'))
+ c=db.execute("INSERT INTO messages(sender,recipient,subject,body,html_body,date,unread) VALUES (?,?,?,?,?,?,1)", ('Alex <alex@example.org>','me@example.org','Secure HTML fixture','Safe text alternative. https://example.org/text','<h1>Safe HTML fixture</h1><p style=\"color:red\">Readable formatting</p><script>top.compromised=true</script><img src=\"https://images.example.org/pixel.png\" onerror=\"top.compromised=true\"><iframe src=\"https://evil.example/frame\"></iframe><a href=\"https://evil.example/link\">Disabled navigation</a><div style=\"background-image:url(https://evil.example/css)\">No CSS tracking</div>', '2099-01-01T12:00:00+00:00'))
  print(c.lastrowid)
 `,
       ],
@@ -106,6 +106,54 @@ test('HTML is sandboxed, no remote fetch until explicit permission, and reopenin
   });
 });
 
+test('Enabling reader links opens an isolated browser tab without loading tracking images', async ({
+  page,
+}) => {
+  const urls = [],
+    headers = [];
+  await page.context().route('https://**/*', (route) => {
+    urls.push(route.request().url());
+    headers.push(route.request().headers());
+    return route.fulfill({ contentType: 'text/html', body: '<h1>External site</h1>' });
+  });
+  await page.locator(`[data-message="${id}"]`).click();
+  const frame = page.frameLocator('.html-message');
+  await expect(frame.locator('a[href]')).toHaveCount(0);
+  await page.getByLabel('Enable text links', { exact: true }).check();
+  await expect(frame.getByRole('link', { name: 'Disabled navigation' })).toHaveAttribute(
+    'href',
+    'https://evil.example/link',
+  );
+  await expect(frame.locator('script,img[src],iframe')).toHaveCount(0);
+  expect(urls).toEqual([]);
+  const pending = page.waitForEvent('popup');
+  await frame.getByRole('link', { name: 'Disabled navigation' }).click();
+  const popup = await pending;
+  await expect(popup.getByRole('heading')).toHaveText('External site');
+  expect(await popup.evaluate(() => window.opener === null)).toBe(true);
+  expect(headers[0].referer).toBeUndefined();
+  expect(urls).toEqual(['https://evil.example/link']);
+  await popup.close();
+  await page.getByLabel('Enable text links', { exact: true }).uncheck();
+  await expect(frame.locator('a[href]')).toHaveCount(0);
+  await expect(page.locator('.html-message')).toHaveAttribute('sandbox', '');
+  expect(await page.evaluate(() => window.compromised)).toBeUndefined();
+});
+
+test('Text preview links are opt-in and reset when reopening the reader', async ({ page }) => {
+  await page.locator(`[data-message="${id}"]`).click();
+  await page.getByLabel('Remote content options').selectOption('text');
+  await expect(page.locator('.message-body a')).toHaveCount(0);
+  await page.getByLabel('Enable text links', { exact: true }).check();
+  await expect(page.locator('.message-body a')).toHaveAttribute('href', 'https://example.org/text');
+  await expect(page.locator('.message-body a')).toHaveAttribute('rel', 'noopener noreferrer');
+  await page.getByLabel('Enable text links', { exact: true }).uncheck();
+  await expect(page.locator('.message-body a')).toHaveCount(0);
+  await page.reload();
+  await page.locator(`[data-message="${id}"]`).click();
+  await expect(page.getByLabel('Enable text links', { exact: true })).not.toBeChecked();
+});
+
 test('unread and editable reusable tags appear as pills; text preview preference persists', async ({
   page,
 }) => {
@@ -141,7 +189,9 @@ test('unread and editable reusable tags appear as pills; text preview preference
   await page.goto('/#/inbox');
   await row.click();
   await expect(page.locator('.html-message')).toHaveCount(0);
-  await expect(page.locator('.message-body')).toHaveText('Safe text alternative.');
+  await expect(page.locator('.message-body')).toHaveText(
+    'Safe text alternative. https://example.org/text',
+  );
   await expect(page.locator('#reader .tag-pill')).toHaveText(['Project', 'Follow up']);
 });
 

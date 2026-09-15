@@ -111,4 +111,4 @@ def test_schema_upgrade_keeps_ids_and_high_water_mark(client):
     assert create(client, "New") > 50
     store.init()
     with store.db() as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 12
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 13

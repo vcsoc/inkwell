@@ -86,7 +86,7 @@ test('Rule Manager builds AND/OR conditions and multiple actions, preserves edit
     throw Error('Refuse unsafe fixture');
   const db = new DatabaseSync(path.join(process.env.INKWELL_UI_DATA, 'inkwell.db'));
   db.prepare(
-    "UPDATE messages SET folder='inbox',unread=1,local_folder_override=0,remote_key=? WHERE id=?",
+    "UPDATE messages SET folder='inbox',draft_revision=0,draft_key=NULL,unread=1,local_folder_override=0,remote_key=? WHERE id=?",
   ).run('fixture:' + message, message);
   db.close();
   await page.goto('/#/rules');

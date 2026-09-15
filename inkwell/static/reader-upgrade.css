@@ -1,3 +1,17 @@
+.email-link-control {
+  min-height: 34px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.email-link-control + .fine-print {
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+@media (pointer: coarse), (max-width: 700px) {
+  .email-link-control {
+    min-height: 44px;
+  }
+}
 .pane-resizer {
   display: none;
   touch-action: none;

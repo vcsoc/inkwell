@@ -5,7 +5,33 @@ const path = require('node:path');
 const { test } = require('node:test');
 const { DatabaseSync } = require('node:sqlite');
 const { settingsSection, readerAction, sidebarClick } = require('./ui/helpers.cjs');
-test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) => {
+test(
+  'External email URL validation rejects local, executable and credential-bearing URLs',
+  { timeout: 1000 },
+  () => {
+    const allowed = require('../desktop/email-links.cjs');
+    const origin = 'http://127.0.0.1:8080';
+    for (const url of ['https://example.org/path?q=1#part', 'http://example.org/path'])
+      expect(allowed(url, origin)).toBe(true);
+    for (const url of [
+      'javascript:alert(1)',
+      'file:///tmp/test',
+      'data:text/html,bad',
+      'https://user:pass@example.org',
+      'http://127.1',
+      'http://0x7f000001',
+      'https://localhost',
+      'https://a.local',
+      'https://a.internal',
+      'https://[::1]',
+      'https://8.8.8.8',
+      'https://example.org:444',
+      'https://example.org/\\\\bad',
+    ])
+      expect(allowed(url, origin)).toBe(false);
+  },
+);
+test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) => {
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'inkwell-desktop-'));
   const initial = new DatabaseSync(path.join(data, 'inkwell.db'));
   initial.exec('CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT NOT NULL)');
@@ -67,7 +93,7 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
     database
       .prepare('UPDATE messages SET html_body=? WHERE id=?')
       .run(
-        '<h1>Packaged HTML preview</h1><img src="https://images.example.org/pixel.png">',
+        '<h1>Packaged HTML preview</h1><a href="https://example.org/native-link">Browser link</a><img src="https://images.example.org/pixel.png">',
         messageId,
       );
     database.close();
@@ -75,6 +101,23 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
     const email = window.frameLocator('.html-message');
     await expect(email.getByRole('heading', { name: 'Packaged HTML preview' })).toBeVisible();
     await expect(email.locator('[src],script')).toHaveCount(0);
+    await app.evaluate(({ shell }) => {
+      global.savedOpenExternal = shell.openExternal;
+      shell.openExternal = async (url) => {
+        global.openedEmailURL = url;
+      };
+    });
+    await window.getByLabel('Enable text links', { exact: true }).check();
+    await email.getByRole('link', { name: 'Browser link' }).click();
+    await expect
+      .poll(() => app.evaluate(() => global.openedEmailURL))
+      .toBe('https://example.org/native-link');
+    expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
+    await app.evaluate(({ shell }) => {
+      shell.openExternal = global.savedOpenExternal;
+    });
+    await window.getByLabel('Enable text links', { exact: true }).uncheck();
+    await expect(email.locator('a[href]')).toHaveCount(0);
     await email.getByRole('heading', { name: 'Packaged HTML preview' }).click();
     // CDP keyboard injection bypasses Electron's before-input-event; use native input.
     const zoomKey = (key) =>
@@ -256,6 +299,12 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 15000 }, async (t) 
       .getByRole('button', { name: 'Save and apply to this message', exact: true })
       .click();
     await expect(window.locator('#toast')).toContainText('saved and applied');
+    await window
+      .getByRole('button', { name: 'Edit Desktop context rule', exact: true })
+      .dragTo(window.locator('.rule-entry').first(), { targetPosition: { x: 15, y: 2 } });
+    await expect(window.locator('#rules-list .rule-choice').first()).toContainText(
+      'Desktop context rule',
+    );
     await sidebarClick(window, '#navigation [data-view=inbox]');
     await expect(window.locator('#search-scope')).toHaveValue('all');
     expect(

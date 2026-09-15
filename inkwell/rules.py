@@ -162,6 +162,7 @@ class Rule(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=100)
     enabled: bool = True
+    stop_processing: bool = True
     mode: Literal["all", "any"] = "all"
     conditions: list[Condition] = Field(default_factory=list, max_length=20)
     actions: list[Action] = Field(default_factory=list, max_length=20)
@@ -228,7 +229,7 @@ def validate_rule(data, db, resources=True):
 def list_rules():
     with store.db() as db:
         result = []
-        for row in db.execute("SELECT * FROM mail_rules ORDER BY id"):
+        for row in db.execute("SELECT * FROM mail_rules ORDER BY position,id"):
             rule = Rule.model_validate_json(row["config"])
             problem = ""
             try:
@@ -248,7 +249,8 @@ def create(data: Rule):
             raise HTTPException(422, "Maximum 100 import rules")
         return {
             "id": db.execute(
-                "INSERT INTO mail_rules(config) VALUES (?)", (data.model_dump_json(),)
+                "INSERT INTO mail_rules(config,position) VALUES (?,(SELECT COALESCE(MAX(position),-1)+1 FROM mail_rules))",
+                (data.model_dump_json(),),
             ).lastrowid
         }
 
@@ -275,8 +277,106 @@ def delete(id: int):
 def configured_rules(db):
     return [
         Rule.model_validate_json(row["config"])
-        for row in db.execute("SELECT config FROM mail_rules ORDER BY id")
+        for row in db.execute("SELECT config FROM mail_rules ORDER BY position,id")
     ]
+
+
+class ReorderRules(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: int = Field(gt=0, lt=2**63, strict=True)
+    target_id: int = Field(gt=0, lt=2**63, strict=True)
+    placement: Literal["before", "after"] = "before"
+
+
+@router.post("/rules/reorder")
+def reorder_rules(data: ReorderRules):
+    with store.db() as db:
+        db.execute("BEGIN IMMEDIATE")
+        ids = [r["id"] for r in db.execute("SELECT id FROM mail_rules ORDER BY position,id")]
+        if data.id not in ids or data.target_id not in ids:
+            raise HTTPException(404, "Rule no longer exists; refresh the rule list")
+        if data.id != data.target_id:
+            ids.remove(data.id)
+            index = ids.index(data.target_id) + (data.placement == "after")
+            ids.insert(index, data.id)
+            for position, id in enumerate(ids):
+                db.execute("UPDATE mail_rules SET position=? WHERE id=?", (position, id))
+    return {"ids": ids}
+
+
+class RunRules(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    rule_id: int | None = Field(default=None, gt=0, lt=2**63, strict=True)
+    scope: Literal["message", "folder", "all"] = "all"
+    message_id: int | None = Field(default=None, gt=0, lt=2**63, strict=True)
+    folder: str = Field(default="inbox", max_length=80)
+
+
+@router.post("/rules/run")
+def run_rules(data: RunRules):
+    from . import not_junk
+
+    with store.db() as db:
+        db.execute("BEGIN IMMEDIATE")
+        if data.rule_id is not None:
+            row = db.execute("SELECT config FROM mail_rules WHERE id=?", (data.rule_id,)).fetchone()
+            if not row:
+                raise HTTPException(404, "Rule not found")
+            configured = [Rule.model_validate_json(row["config"])]
+            if not configured[0].enabled:
+                raise HTTPException(422, "Enable this rule before running it")
+            validate_rule(configured[0], db)
+        else:
+            configured = configured_rules(db)
+        if data.scope == "message":
+            if data.message_id is None:
+                raise HTTPException(422, "Choose a current message")
+            candidates = list(db.execute("SELECT id FROM messages WHERE id=?", (data.message_id,)))
+            if not candidates:
+                raise HTTPException(404, "Message not found")
+        elif data.scope == "folder":
+            if (
+                re.fullmatch(r"(local-|remote:)[0-9]+", data.folder)
+                and int(re.split("[-:]", data.folder)[1]) >= 2**63
+            ):
+                raise HTTPException(422, "Invalid folder identifier")
+            if data.folder in ("inbox", "archive", "trash", "sent", "drafts"):
+                candidates = list(
+                    db.execute("SELECT id FROM messages WHERE folder=?", (data.folder,))
+                )
+            elif re.fullmatch(r"local-[1-9][0-9]*", data.folder):
+                message_moves.destination(db, data.folder)
+                candidates = list(
+                    db.execute("SELECT id FROM messages WHERE folder=?", (data.folder,))
+                )
+            elif re.fullmatch(r"remote:[1-9][0-9]*", data.folder):
+                _, remote = message_moves.destination(db, data.folder)
+                candidates = list(
+                    db.execute(
+                        "SELECT id FROM messages WHERE folder IN ('inbox','remote') AND CASE WHEN local_folder_override=1 THEN local_destination_id ELSE remote_folder_id END=?",
+                        (remote,),
+                    )
+                )
+            else:
+                raise HTTPException(422, "Choose a cached folder")
+        else:
+            candidates = list(db.execute("SELECT id FROM messages ORDER BY id"))
+        eligible = matched = 0
+        now = datetime.now(timezone.utc)
+        for candidate in candidates:
+            m = db.execute("SELECT * FROM messages WHERE id=?", (candidate["id"],)).fetchone()
+            if not not_junk.incoming(db, m):
+                continue
+            eligible += 1
+            matched += apply(
+                db, m["id"], now, configured, force=True, safe_sender=not_junk.remembered(db, m)
+            )
+    return {
+        "matched": matched,
+        "scanned": len(candidates),
+        "eligible": eligible,
+        "skipped": len(candidates) - eligible,
+    }
 
 
 def sender_tld(domain):
@@ -389,7 +489,7 @@ def apply(db, message_id, now=None, configured=None, force=False, safe_sender=Fa
     from . import not_junk
 
     m = db.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
-    if not m:
+    if not m or not not_junk.incoming(db, m):
         return False
     if not force and not_junk.remembered(db, m):
         if not not_junk.incoming(db, m):
@@ -402,6 +502,7 @@ def apply(db, message_id, now=None, configured=None, force=False, safe_sender=Fa
         return False
     now = now or datetime.now(timezone.utc)
     cache = {}
+    applied = False
     for rule in configured:
         if not rule.enabled or (rule.exclude_unread and m["unread"]):
             continue
@@ -450,11 +551,15 @@ def apply(db, message_id, now=None, configured=None, force=False, safe_sender=Fa
         if destination:
             message_moves.file_message(db, m, *destination)
         db.execute(
-            "UPDATE messages SET tags=?,unread=?,starred=?,local_folder_override=1 WHERE id=?",
+            "UPDATE messages SET tags=?,unread=?,starred=?,local_destination_id=CASE WHEN local_folder_override=0 THEN remote_folder_id ELSE local_destination_id END,local_folder_override=1 WHERE id=?",
             (json.dumps(tags), unread, starred, message_id),
         )
-        return True
-    return False
+        applied = True
+        if rule.stop_processing:
+            break
+        m = db.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
+        cache = {}
+    return applied
 
 
 @router.post("/rules/apply")

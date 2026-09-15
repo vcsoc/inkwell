@@ -86,6 +86,7 @@ await fs.writeFile(
   ),
 );
 await fs.copyFile(path.join(root, 'desktop/main.cjs'), path.join(source, 'desktop/main.cjs'));
+await fs.copyFile(path.join(root, 'desktop/email-links.cjs'), path.join(source, 'desktop/email-links.cjs'));
 await fs.copyFile(
   path.join(root, 'inkwell/static/icon-512.png'),
   path.join(source, 'inkwell/static/icon-512.png'),

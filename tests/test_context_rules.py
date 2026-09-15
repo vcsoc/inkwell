@@ -109,7 +109,7 @@ def test_selected_rule_overflow_is_atomic_and_schema_nine_upgrade_preserves_mail
         db.execute("PRAGMA user_version=9")
     store.init()
     with store.db() as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 12
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 13
     result = client.get(f"/api/messages/{id}").json()
     assert (
         result["folder"] == "inbox"

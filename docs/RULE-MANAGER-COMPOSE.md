@@ -17,7 +17,7 @@ Choose **All (AND)** or **Any (OR)** beside Conditions. Up to 20 conditions and 
 
 Actions: move locally, mark read/unread, star/unstar, add/remove a catalog tag. All actions belong to the same rule; the arrow button moves an action earlier. Contradictory flag/tag actions execute in their displayed order, so the last applicable action wins. At most one move action is allowed. Destinations include local folders and displayed server-folder branches, but filing into a branch changes only the local view, not provider membership.
 
-The first matching eligible enabled rule wins, in creation order. This is not a chain of all matching rules. Existing age/read exclusions remain additional AND restrictions. Actions are planned before writing: missing resources or a final tag count above 12 skip the rule without partial changes. Applying to existing copies skips Drafts, Sent, Trash and copies already locally managed (manually or by a previous rule). There is no periodic ageing scheduler, automatic sending, destructive delete action, or server-side rule management. Conditions inspect cached metadata/content, not authenticated sender identity.
+Rules run in user-defined priority order. A matching rule stops later rules only when **Stop processing further rules** is enabled (the default). See [Rule execution and priority](RULE-EXECUTION.md) for scoped Save and run, Run saved rule, Run all enabled rules, and drag/move ordering. Existing age/read exclusions remain additional AND restrictions. Actions are planned before writing: missing resources or a final tag count above 12 skip the rule without partial changes. Explicit scoped runs include already managed incoming copies, while protecting drafts and known sent copies. There is no periodic ageing scheduler, automatic sending, destructive delete action, or server-side rule management. Conditions inspect cached metadata/content, not authenticated sender identity.
 
 Legacy rules retain their behavior and appear in the builder. Rule tag references use stable catalog IDs: rename keeps references, merge redirects them, and deleting a referenced tag disables the affected rules. Review those rules before enabling them again. Deleting a rule does not undo earlier actions or delete mail.
 
@@ -27,7 +27,7 @@ Choose **Apply rule…** from an email's context menu or reader More menu. The e
 
 **TLD** means the final DNS label: `.ca`, `.com`, or `.uk` for `example.co.uk`. It is not the registrable domain or a public-suffix lookup. Leading dots and letter case are normalized; `co.uk` is rejected as a TLD value. TLD conditions support is/is not and do not match missing domains or IP literals. These broad conditions do not authenticate sender identity.
 
-- **Save rule** stores the configuration for future imports, subject to normal first-match priority.
+- **Save rule** stores the configuration for future imports, subject to saved priority and Stop settings.
 - **Save and apply to this message** saves it, then explicitly runs only that selected rule on the selected cached incoming copy, even if it was already locally filed. It does not run other rules or apply to every matching cached message. Conditions, enabled state, exclusions, resource validation, tag limits and Not Junk protection still apply. Drafts and known sent copies are protected. A nonmatching rule leaves the copy unchanged.
 - Saving and application are separate operations. If application fails, the saved rule remains visible and the editor retains its ID and edits; retry updates it rather than creating a duplicate. The message changes themselves are transactional.
 
@@ -41,7 +41,7 @@ In Rule Manager, choose **Auto-tag** (accessible name: Create auto-tag rule). Th
 2. Select the `example` tag. If it does not exist, expand **Tags and folders**, enter `example` under **New rule tag** and click **Create tag**; the empty Add tag action is selected automatically without discarding the rule edit.
 3. Click **Save rule**.
 
-Every newly imported matching copy receives the tag immediately. Domain matching is exact and case-insensitive: subdomains and lookalikes such as `example.com.evil` do not match. Tag-only actions preserve the message's folder and read state. First-match ordering still applies: an earlier matching rule wins, so add the tag action to that existing rule when appropriate. Rules do not change provider mail or tags, and cannot process messages that have not been imported.
+Every newly imported matching copy receives the tag immediately. Domain matching is exact and case-insensitive: subdomains and lookalikes such as `example.com.evil` do not match. Tag-only actions preserve the message's folder and read state. An earlier matching rule with Stop enabled prevents later auto-tag rules from running. Reorder rules or disable Stop where continuation is intended. Rules do not change provider mail or tags, and cannot process messages that have not been imported.
 
 Use **Apply rules to existing imported copies…** for eligible cached messages; its existing exclusions (drafts, sent, Trash and already locally managed copies) remain in force. Creating a tag saves the catalog entry independently of saving a rule. Its color can be changed in Tag Manager.
 

@@ -86,17 +86,17 @@ STYLES = {
 }
 
 
-def image_url(value, blocked_host=""):
+def image_url(value, blocked_host="", schemes=("https",), preserve_fragment=False):
     if re.search(r"[\s\\\x00-\x1f\x7f]", value):
         return None
     try:
         parsed = urlsplit(value)
         host = (parsed.hostname or "").encode("idna").decode().lower().rstrip(".")
         if (
-            parsed.scheme != "https"
+            parsed.scheme not in schemes
             or parsed.username
             or parsed.password
-            or parsed.port not in (None, 443)
+            or parsed.port not in (None, 443 if parsed.scheme == "https" else 80)
         ):
             return None
         if (
@@ -116,12 +116,46 @@ def image_url(value, blocked_host=""):
             ):
                 return None
         netloc = "[" + host + "]" if ":" in host else host
-        return urlunsplit(("https", netloc, parsed.path, parsed.query, ""))
+        return urlunsplit(
+            (
+                parsed.scheme,
+                netloc,
+                parsed.path,
+                parsed.query,
+                parsed.fragment if preserve_fragment else "",
+            )
+        )
     except (ValueError, UnicodeError):
         return None
 
 
-def sanitize(source, allowed=(), blocked_host="", reader_colors=False):
+def link_url(value, blocked_host=""):
+    if len(value) > 8192:
+        return None
+    url = image_url(value, blocked_host, ("http", "https"), True)
+    if url:
+        try:
+            ipaddress.ip_address(urlsplit(url).hostname)
+        except ValueError:
+            return url
+    return None
+
+
+def text_links(body, blocked_host=""):
+    links = []
+    for match in re.finditer(r'https?://[^\s<>"\x27]+', body):
+        text = match.group().rstrip(".,;:!?)]}")
+        url = link_url(text, blocked_host)
+        if url:
+            links.append(
+                {"start": match.start(), "end": match.start() + len(text), "text": text, "url": url}
+            )
+        if len(links) >= 500:
+            break
+    return links
+
+
+def sanitize(source, allowed=(), blocked_host="", reader_colors=False, links=False):
     origins = set()
     blocked = 0
 
@@ -130,6 +164,8 @@ def sanitize(source, allowed=(), blocked_host="", reader_colors=False):
         if attr == "style":
             if re.search(r"url|expression|image|var\s*\(|attr\s*\(|[@\\]", value, re.I):
                 return None
+        if tag == "a" and attr == "href":
+            return link_url(value, blocked_host) if links else None
         if tag == "img" and attr == "src":
             url = image_url(value, blocked_host)
             if url:
@@ -159,6 +195,7 @@ def sanitize(source, allowed=(), blocked_host="", reader_colors=False):
         attributes={
             "*": {"style", "title", "align"},
             "img": {"src", "alt", "width", "height"},
+            "a": {"href"} if links else set(),
             "table": {"width", "cellpadding", "cellspacing", "border"},
             "td": {"colspan", "rowspan", "width", "height", "valign"},
             "th": {"colspan", "rowspan"},
@@ -168,7 +205,9 @@ def sanitize(source, allowed=(), blocked_host="", reader_colors=False):
         filter_style_properties=STYLES - {"color", "background-color", "border-color"}
         if reader_colors
         else STYLES,
-        url_schemes={"https"},
+        url_schemes={"http", "https"} if links else {"https"},
+        link_rel="noopener noreferrer",
+        set_tag_attribute_values={"a": {"target": "_blank"}} if links else {},
         url_relative="deny",
     )
     return result, sorted(origins), blocked
@@ -193,6 +232,7 @@ def preview_info(message_id: int, request: Request):
         "needs_sync": row["html_body"] is None and bool(row["remote_key"]),
         "origins": origins,
         "blocked_images": blocked,
+        "text_links": text_links(row["body"], request.url.hostname or ""),
     }
 
 
@@ -202,6 +242,7 @@ def preview(
     request: Request,
     allow: list[str] = Query(default=[]),
     appearance: Literal["theme", "light", "dark"] = "theme",
+    links: bool = False,
 ):
     row = message(message_id)
     if len(allow) > 50:
@@ -211,7 +252,11 @@ def preview(
     if any(origin not in origins for origin in allow):
         raise HTTPException(400, "Image origin is not part of this message")
     body, _, _ = sanitize(
-        row["html_body"] or "", allowed=set(allow), blocked_host=host, reader_colors=True
+        row["html_body"] or "",
+        allowed=set(allow),
+        blocked_host=host,
+        reader_colors=True,
+        links=links,
     )
     theme = preferences.get_preferences()["theme"]
     bg, fg, line = theme["surface"], theme["text"], theme["border"]
@@ -226,6 +271,7 @@ def preview(
         "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src "
         + (" ".join(allow) if allow else "'none'")
         + "; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox"
+        + (" allow-popups allow-popups-to-escape-sandbox" if links else "")
     )
     return HTMLResponse(
         '<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><style>body{margin:0;padding:16px;font:16px system-ui,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}pre{white-space:pre-wrap}table{max-width:100%}'

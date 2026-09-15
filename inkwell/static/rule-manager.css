@@ -1,3 +1,34 @@
+.rule-run-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 10px;
+}
+.rule-run-panel .field {
+  flex: 1;
+  min-width: 160px;
+  margin: 0;
+}
+.rule-run-panel p {
+  flex-basis: 100%;
+  margin: 0;
+}
+.rule-run-panel [hidden] {
+  display: none !important;
+}
+.rule-entry.rule-drop-before {
+  box-shadow: inset 0 3px var(--accent);
+}
+.rule-entry.rule-drop-after {
+  box-shadow: inset 0 -3px var(--accent);
+}
+.rule-choice[draggable] {
+  cursor: grab;
+}
+.rule-stop {
+  margin-block: 12px;
+}
 .rule-manager {
   container: rules-workspace / inline-size;
 }
@@ -315,8 +346,12 @@ main:has(#workspace .rule-manager) #page-title {
   }
 }
 @media (pointer: coarse), (max-width: 700px) {
+  .rule-manager .rule-entry-tools button {
+    min-width: 44px;
+  }
   .rule-manager #rule-form .check-label,
   .rule-manager button,
+  .rule-manager .rule-entry-tools button,
   .rule-manager summary,
   .rule-manager .field input,
   .rule-manager .field select,

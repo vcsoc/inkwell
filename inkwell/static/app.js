@@ -574,6 +574,18 @@ async function navigate(route, { historyMode = 'push' } = {}) {
     requestModalClose();
     return;
   }
+  if (!['settings', 'rules', 'tags', 'calendar', 'contacts'].includes(state.view)) {
+    const folder = state.remoteFolder
+      ? 'remote:' + state.remoteFolder.id
+      : /^(inbox|archive|trash|sent|drafts|local-[1-9][0-9]*)$/.test(state.view)
+        ? state.view
+        : null;
+    state.ruleExecutionContext = {
+      folder,
+      message_id: state.selected?.id || null,
+      subject: state.selected?.subject || '',
+    };
+  }
   const [requestedView, requestedPage] = route.split('/');
   const allowedViews = [
     ...folders.map((folder) => folder[0]),
@@ -687,6 +699,7 @@ async function navigate(route, { historyMode = 'push' } = {}) {
     state.ruleSeed = null;
     await InkwellRules($('#workspace'), {
       sourceMessage,
+      executionContext: state.ruleExecutionContext || {},
       foldersChanged: refreshCounts,
       api,
       esc,
@@ -1382,6 +1395,7 @@ async function renderSettings() {
   const generation = state.generation;
   const page = state.settingsPage || 'overview';
   await InkwellSettings.mount($('#workspace'), page, {
+    executionContext: state.ruleExecutionContext || {},
     foldersChanged: refreshCounts,
     api,
     esc,

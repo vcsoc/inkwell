@@ -200,6 +200,13 @@ async function launch() {
             `Could not open your default browser. Open ${url} manually. If inkwell displayed a device code, enter that code on Microsoft's sign-in page.`,
           ),
         );
+    } else if (require('./email-links.cjs')(url, origin)) {
+      window.webContents
+        .executeJavaScript('Boolean(document.querySelector("#reader [data-email-links]")?.checked)')
+        .then((enabled) => {
+          if (enabled && !window.isDestroyed()) return shell.openExternal(url);
+        })
+        .catch(() => {});
     }
     return { action: 'deny' };
   });
