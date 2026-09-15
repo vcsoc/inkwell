@@ -264,6 +264,7 @@ def preview(
     allow: list[str] = Query(default=[]),
     appearance: Literal["theme", "light", "dark"] = "theme",
     links: bool = False,
+    q: str = Query(default="", max_length=200),
 ):
     row = message(message_id)
     if len(allow) > 50:
@@ -290,6 +291,10 @@ def preview(
     colors += f"body a[href],body a[href] *{{color:{link_color}!important}}body a[href]{{text-decoration:underline!important;text-decoration-thickness:2px!important;text-underline-offset:.18em!important;cursor:pointer}}body a[href]:hover{{text-decoration-thickness:3px!important}}body a[href]:focus-visible{{outline:2px solid {link_color};outline-offset:3px;border-radius:2px}}"
     if not row["html_body"]:
         body = "<pre>" + html.escape(row["body"]) + "</pre>"
+    from .search_highlights import highlight
+
+    body = highlight(body, q)
+    colors += "body mark[data-search-hit],body a[href] mark[data-search-hit]{background-color:#ffdf68!important;color:#17212b!important;border-radius:2px}"
     policy = (
         "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src "
         + (" ".join(allow) if allow else "'none'")

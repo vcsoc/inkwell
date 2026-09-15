@@ -79,7 +79,7 @@ def test_graph_applies_rules_during_import_and_never_overrides_later_moves(clien
     )
     with store.db() as db:
         db.execute(
-            "INSERT INTO accounts(id,name,email,imap_host,imap_port,smtp_host,smtp_port,username,secret,smtp_security) VALUES (1,'Me','me@example.com','',993,'',465,'me@example.com','','tls')"
+            "INSERT INTO accounts(id,name,email,imap_host,imap_port,smtp_host,smtp_port,username,secret,smtp_security,provider) VALUES (1,'Me','me@example.com','',993,'',465,'me@example.com','','tls','microsoft')"
         )
     account = {"id": 1, "email": "me@example.com"}
     assert microsoft.sync_account(account) == 1

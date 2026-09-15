@@ -215,7 +215,8 @@ def access_token(account):
     with TOKEN_LOCK:
         with store.db() as db:
             row = db.execute(
-                "SELECT secret FROM accounts WHERE id=? AND provider='microsoft'", (account["id"],)
+                "SELECT secret FROM accounts WHERE id=? AND provider='microsoft' AND email=?",
+                (account["id"], account["email"]),
             ).fetchone()
         if not row:
             raise ValueError("Account disconnected")
@@ -238,14 +239,16 @@ def access_token(account):
         updated["refresh_token"] = fresh.get("refresh_token") or token["refresh_token"]
         with store.db() as db:
             if not db.execute(
-                "UPDATE accounts SET secret=? WHERE id=? AND provider='microsoft'",
-                (store.seal(json.dumps(updated)), account["id"]),
+                "UPDATE accounts SET secret=? WHERE id=? AND provider='microsoft' AND email=? AND secret=?",
+                (store.seal(json.dumps(updated)), account["id"], account["email"], row["secret"]),
             ).rowcount:
                 raise ValueError("Account disconnected")
         return updated["access_token"]
 
 
-def sync_account(account, folder=None, trusted_only=False):
+def sync_account(
+    account, folder=None, trusted_only=False, *, max_pages=2, on_page=None, cancel=None
+):
     from .mail import TextExtractor
     from .message_keys import sender_key
     from email.utils import quote as quote_display_name
@@ -277,7 +280,15 @@ def sync_account(account, folder=None, trusted_only=False):
         + "/messages?$top=100&$orderby=receivedDateTime%20desc&$select=id,from,toRecipients,ccRecipients,bccRecipients,subject,body,receivedDateTime,isRead,flag"
     )
     with client() as http:
-        for _ in range(2):
+        seen = set()
+        for _ in range(max_pages):
+            if cancel is not None and cancel.is_set():
+                raise InterruptedError("Sync stopped")
+            if url in seen:
+                raise ValueError("Repeated Graph pagination URL")
+            seen.add(url)
+            before = count
+            headers["Authorization"] = "Bearer " + access_token(account)
             response = http.get(url, headers=headers)
             response.raise_for_status()
             data = response.json()
@@ -326,7 +337,8 @@ def sync_account(account, folder=None, trusted_only=False):
                         continue
                     # Account may have been disconnected while the network request ran.
                     if not db.execute(
-                        "SELECT 1 FROM accounts WHERE id=?", (account["id"],)
+                        "SELECT 1 FROM accounts WHERE id=? AND email=? AND provider='microsoft'",
+                        (account["id"], account["email"]),
                     ).fetchone():
                         raise ValueError("Account disconnected")
                     cursor = db.execute(
@@ -377,6 +389,8 @@ def sync_account(account, folder=None, trusted_only=False):
                                 f"{account['id']}:graph:{message['id']}",
                             ),
                         )
+            if on_page is not None:
+                on_page(count - before)
             url = data.get("@odata.nextLink")
             if not url:
                 break
@@ -388,6 +402,9 @@ def sync_account(account, folder=None, trusted_only=False):
                 or not parsed.path.startswith("/v1.0/me/")
             ):
                 raise ValueError("Unexpected Graph pagination URL")
+        else:
+            if on_page is not None and max_pages > 2 and url:
+                raise ValueError("Folder pagination safety limit reached")
     return count
 
 

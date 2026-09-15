@@ -37,7 +37,13 @@ def test_discovery_hierarchy_folder_import_and_search_scopes(client, monkeypatch
             )
         if path.endswith("/inbox"):
             return httpx.Response(200, json={"id": "inbox-id"})
-        if path.rsplit("/", 1)[-1] in {"junkemail", "deleteditems", "sentitems", "drafts"}:
+        if path.rsplit("/", 1)[-1] in {
+            "junkemail",
+            "deleteditems",
+            "sentitems",
+            "drafts",
+            "archive",
+        }:
             return httpx.Response(404)
         if path.endswith("/childFolders"):
             return httpx.Response(

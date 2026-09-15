@@ -341,9 +341,10 @@ def run_rules(data: RunRules):
             ):
                 raise HTTPException(422, "Invalid folder identifier")
             if data.folder in ("inbox", "archive", "trash", "sent", "drafts"):
-                candidates = list(
-                    db.execute("SELECT id FROM messages WHERE folder=?", (data.folder,))
-                )
+                from .folder_views import predicate
+
+                clause, params = predicate(data.folder)
+                candidates = list(db.execute("SELECT id FROM messages WHERE " + clause, params))
             elif re.fullmatch(r"local-[1-9][0-9]*", data.folder):
                 message_moves.destination(db, data.folder)
                 candidates = list(

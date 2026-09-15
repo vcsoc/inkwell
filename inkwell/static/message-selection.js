@@ -5,7 +5,8 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
   let visible = [],
     anchor = null,
     scope = '',
-    busy = false;
+    busy = false,
+    selectionStarted = false;
   const paint = () => {
     document.querySelectorAll('[data-message]').forEach((row) => {
       const checked = ids.has(Number(row.dataset.message));
@@ -94,6 +95,7 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
   };
   const select = (id, event) => {
     if (busy) return;
+    selectionStarted = true;
     if (event.shiftKey && anchor !== null && visible.includes(anchor)) {
       const a = visible.indexOf(anchor),
         b = visible.indexOf(id);
@@ -117,6 +119,7 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
     if (next !== scope) {
       ids.clear();
       anchor = null;
+      selectionStarted = false;
       scope = next;
     }
     visible = messages.map((m) => m.id);
@@ -130,12 +133,17 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
       tools.className = 'selection-tools';
       document.querySelector('.mail-toolbar').after(tools);
     }
-    tools.innerHTML = `<label class="select-all-label"><input type="checkbox" id="select-all-messages" aria-label="Select all visible messages"><span id="selection-count"></span></label><span class="selection-bulk" hidden><select id="selection-destination" aria-label="Move selected messages to"><option value="inbox">Inbox</option><option value="archive">Archive</option><option value="trash">Trash</option>${(state.localFolders || []).map((f) => `<option value="local-${f.id}">${esc(f.path || f.name)}</option>`).join('')}${state.remoteFolders.map((f) => `<option value="remote:${f.id}">${esc(state.accounts.find((a) => a.id === f.account_id)?.email || 'Account')} / ${esc(f.path)}</option>`).join('')}</select><button class="secondary" id="move-selected">Move</button><button class="secondary" id="restore-selected" hidden>Restore</button><button class="secondary danger" id="delete-selected">Trash</button><button class="secondary" id="clear-selection">Clear</button><select id="selection-tag" aria-label="Tag for selected messages"><option value="">Choose tag…</option>${(state.tagCatalog || []).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select><button class="secondary" id="add-selected-tag">Add tag</button><button class="secondary" id="remove-selected-tag">Remove tag</button></span>`;
+    const readerDock = tools.querySelector('.reader-tools-dock');
+    const controls = document.createElement('div');
+    controls.innerHTML = `<label class="select-all-label"><input type="checkbox" id="select-all-messages" aria-label="Select all visible messages"><span id="selection-count"></span></label><span class="selection-bulk" hidden><select id="selection-destination" aria-label="Move selected messages to"><option value="inbox">Inbox</option><option value="archive">Archive</option><option value="trash">Trash</option>${(state.localFolders || []).map((f) => `<option value="local-${f.id}">${esc(f.path || f.name)}</option>`).join('')}${state.remoteFolders.map((f) => `<option value="remote:${f.id}">${esc(state.accounts.find((a) => a.id === f.account_id)?.email || 'Account')} / ${esc(f.path)}</option>`).join('')}</select><button class="secondary" id="move-selected">Move</button><button class="secondary" id="restore-selected" hidden>Restore</button><button class="secondary danger" id="delete-selected">Trash</button><button class="secondary" id="clear-selection">Clear</button><select id="selection-tag" aria-label="Tag for selected messages"><option value="">Choose tag…</option>${(state.tagCatalog || []).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select><button class="secondary" id="add-selected-tag">Add tag</button><button class="secondary" id="remove-selected-tag">Remove tag</button></span>`;
+    for (const child of [...tools.children]) if (child !== readerDock) child.remove();
+    tools.prepend(...controls.childNodes);
     tools.querySelector('#select-all-messages').onchange = (e) => {
       if (busy) {
         paint();
         return;
       }
+      selectionStarted = true;
       if (e.target.checked) visible.forEach((id) => ids.add(id));
       else ids.clear();
       paint();
@@ -171,6 +179,7 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
     tools.querySelector('#delete-selected').onclick = deleteSelected;
     tools.querySelector('#clear-selection').onclick = () => {
       if (busy) return;
+      selectionStarted = true;
       ids.clear();
       paint();
     };
@@ -255,9 +264,22 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
     bindFolders,
     deleteSelected,
     rowClick: (row, event) => {
+      const id = Number(row.dataset.message);
       if (event.ctrlKey || event.metaKey || event.shiftKey) {
-        select(Number(row.dataset.message), event);
+        if (busy) return true;
+        if (!selectionStarted && !ids.size) {
+          const first = anchor ?? state.selected?.id;
+          if (visible.includes(first)) {
+            anchor = first;
+            if ((event.ctrlKey || event.metaKey) && id !== anchor) ids.add(anchor);
+          }
+        }
+        select(id, event);
         return true;
+      }
+      if (!ids.size) {
+        anchor = id;
+        selectionStarted = false;
       }
       return false;
     },

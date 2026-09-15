@@ -170,6 +170,15 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
     await email.getByRole('heading', { name: 'Packaged HTML preview' }).click();
     await app.evaluate(({ BrowserWindow }) => {
       const wc = BrowserWindow.getAllWindows()[0].webContents;
+      wc.sendInputEvent({ type: 'keyDown', keyCode: 'F9' });
+      wc.sendInputEvent({ type: 'keyUp', keyCode: 'F9' });
+    });
+    await expect(window.locator('#toast')).toContainText(
+      'Connect an email account in Settings first.',
+    );
+    await expect(email.getByRole('heading', { name: 'Packaged HTML preview' })).toBeVisible();
+    await app.evaluate(({ BrowserWindow }) => {
+      const wc = BrowserWindow.getAllWindows()[0].webContents;
       wc.sendInputEvent({ type: 'keyDown', keyCode: 'Delete' });
       wc.sendInputEvent({ type: 'keyUp', keyCode: 'Delete' });
     });

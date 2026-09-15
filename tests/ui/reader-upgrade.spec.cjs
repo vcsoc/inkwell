@@ -132,7 +132,11 @@ test('Enabling reader links opens an isolated browser tab without loading tracki
   expect(firstColor).not.toBe(
     await frame.locator('body').evaluate((el) => getComputedStyle(el).color),
   );
-  await page.locator('#reader-appearance').click();
+  await readerAction(
+    page,
+    await page.locator('#reader-appearance').getAttribute('aria-label'),
+    'Toggle reader light / dark',
+  );
   await page.getByLabel('Enable text links', { exact: true }).check();
   await expect(link).toHaveCSS('text-decoration-line', 'underline');
   await expect.poll(() => link.evaluate((el) => getComputedStyle(el).color)).not.toBe(firstColor);
@@ -151,6 +155,42 @@ test('Enabling reader links opens an isolated browser tab without loading tracki
   expect(await page.evaluate(() => window.compromised)).toBeUndefined();
 });
 
+test('Search highlights are safe in HTML and text, and reader tools share the selection row', async ({
+  page,
+}) => {
+  await page.locator('#global-search').fill('Safe');
+  await expect(page.locator(`[data-message="${id}"] mark[data-search-hit]`)).toHaveText('Safe');
+  await page.locator(`[data-message="${id}"]`).click();
+  const frame = page.frameLocator('.html-message');
+  await expect(frame.locator('mark[data-search-hit]')).toHaveText('Safe');
+  await expect(frame.locator('script,img[src]')).toHaveCount(0);
+  await expect(page.locator('#selection-tools .reader-actions')).toBeVisible();
+  const geometry = await page.evaluate(() => {
+    const a = document.querySelector('.reader-actions').getBoundingClientRect(),
+      b = document.querySelector('.select-all-label').getBoundingClientRect();
+    return Math.abs((a.top + a.bottom - b.top - b.bottom) / 2);
+  });
+  expect(geometry).toBeLessThan(5);
+  await page.getByLabel('Remote content options').selectOption('text');
+  await expect(page.locator('.message-body mark[data-search-hit]')).toHaveText('Safe');
+  await page.locator('#reader').evaluate((e) => (e.scrollTop = e.scrollHeight));
+  await expect(page.locator('#reader-menu')).toBeInViewport();
+});
+test('All mail and Unread preserve the open reader and its link permission', async ({ page }) => {
+  await page.locator(`[data-message="${id}"]`).click();
+  await page.getByLabel('Enable text links', { exact: true }).check();
+  await expect(page.frameLocator('.html-message').locator('a[href]')).toHaveCount(1);
+  await page.locator('.html-message').evaluate((el) => (el.dataset.retained = 'yes'));
+  await page.locator('[data-filter=unread]').click();
+  await expect(page.locator(`[data-message="${id}"]`)).toHaveCount(0);
+  await expect(page.locator('.html-message')).toHaveAttribute('data-retained', 'yes');
+  await expect(page.getByLabel('Enable text links', { exact: true })).toBeChecked();
+  await expect(page.locator('[data-filter=unread]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-filter=all]').click();
+  await expect(page.locator(`[data-message="${id}"]`)).toHaveClass(/selected/);
+  await expect(page.locator('.html-message')).toHaveAttribute('data-retained', 'yes');
+  await expect(page.getByLabel('Enable text links', { exact: true })).toBeChecked();
+});
 test('Text preview links are opt-in and reset when reopening the reader', async ({ page }) => {
   await page.locator(`[data-message="${id}"]`).click();
   await page.getByLabel('Remote content options').selectOption('text');

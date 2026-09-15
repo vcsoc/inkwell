@@ -163,6 +163,20 @@ async function launch() {
   window.webContents.on('before-input-event', (event, input) => {
     if (
       input.type === 'keyDown' &&
+      input.key === 'F9' &&
+      !input.control &&
+      !input.meta &&
+      !input.alt &&
+      !input.shift &&
+      !input.isComposing
+    ) {
+      event.preventDefault();
+      if (!input.isAutoRepeat)
+        window.webContents.executeJavaScript('void window.InkwellSyncMail?.()').catch(() => {});
+      return;
+    }
+    if (
+      input.type === 'keyDown' &&
       input.key === 'Delete' &&
       !input.isAutoRepeat &&
       !input.control &&

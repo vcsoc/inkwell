@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator, model_validator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from .background_sync import BackgroundSync
 from . import (
     not_junk,
     mail_search,
@@ -47,6 +48,7 @@ if EXTRA_HOSTS and not ACCESS_KEY:
     raise RuntimeError("Remote access requires INKWELL_ACCESS_KEY")
 TOKEN = secrets.token_urlsafe(32)
 SYNC_LOCK = threading.Lock()
+BACKGROUND_SYNC = BackgroundSync(SYNC_LOCK)
 LOGIN_LOCK = threading.Lock()
 LOGIN_ATTEMPTS = []
 
@@ -54,7 +56,10 @@ LOGIN_ATTEMPTS = []
 @asynccontextmanager
 async def lifespan(app):
     store.init()
-    yield
+    try:
+        yield
+    finally:
+        BACKGROUND_SYNC.stop()
 
 
 app = FastAPI(title="inkwell", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
@@ -244,6 +249,16 @@ def delete_account(account_id: int):
     return {"ok": True}
 
 
+@app.post("/api/sync/jobs")
+def start_background_sync(full: bool = False):
+    return BACKGROUND_SYNC.start(full=full)
+
+
+@app.get("/api/sync/jobs")
+def background_sync_status():
+    return BACKGROUND_SYNC.status()
+
+
 @app.post("/api/sync")
 def sync():
     if not SYNC_LOCK.acquire(blocking=False):
@@ -289,7 +304,21 @@ def sync():
 
 @app.get("/api/remote-folders")
 def server_folders():
-    return rows("SELECT * FROM remote_folders ORDER BY account_id,path COLLATE NOCASE")
+    folders = rows("SELECT * FROM remote_folders ORDER BY account_id,path COLLATE NOCASE")
+    cached = {
+        r["id"]: r
+        for r in rows(
+            "SELECT CASE WHEN local_folder_override=1 THEN local_destination_id ELSE remote_folder_id END AS id,count(*) AS total,sum(unread) AS unread FROM messages WHERE folder IN ('inbox','remote') GROUP BY 1"
+        )
+    }
+    return [
+        {
+            **f,
+            "cached_total": cached.get(f["id"], {}).get("total", 0),
+            "cached_unread": cached.get(f["id"], {}).get("unread", 0),
+        }
+        for f in folders
+    ]
 
 
 @app.post("/api/remote-folders/{folder_id}/sync")
@@ -327,35 +356,40 @@ def messages(
         r"(inbox|starred|sent|drafts|archive|trash|remote|local-[1-9][0-9]*)", folder
     ):
         raise HTTPException(422, "Invalid folder")
-    clause = "starred=1 AND folder!='trash'" if folder == "starred" else "folder=?"
-    params = [] if folder == "starred" else [folder]
+    from .folder_views import predicate as folder_predicate
+
+    clause, params = folder_predicate(folder)
+    if folder == "starred":
+        clause, params = "starred=1 AND folder!='trash'", []
     if remote_folder_id is not None and scope != "all":
         if not rows("SELECT id FROM remote_folders WHERE id=?", (remote_folder_id,)):
             raise HTTPException(404, "Server folder not found")
         clause = "CASE WHEN local_folder_override=1 THEN local_destination_id ELSE remote_folder_id END=? AND folder IN ('inbox','remote')"
         params = [remote_folder_id]
-    if scope == "subfolders" and (remote_folder_id is not None or folder == "inbox"):
-        root = "id=?" if remote_folder_id is not None else "well_known='inbox'"
+    aggregate_role = {"inbox": "inbox", "archive": "archive", "sent": "sentitems"}.get(folder)
+    if scope == "subfolders" and (remote_folder_id is not None or aggregate_role):
+        root = "id=?" if remote_folder_id is not None else "well_known=?"
         clause = f"""CASE WHEN local_folder_override=1 THEN local_destination_id ELSE remote_folder_id END IN (
             WITH RECURSIVE subtree(id,remote_id,account_id) AS (
                 SELECT id,remote_id,account_id FROM remote_folders WHERE {root}
                 UNION SELECT child.id,child.remote_id,child.account_id FROM remote_folders child
                 JOIN subtree parent ON child.parent_remote_id=parent.remote_id AND child.account_id=parent.account_id
             ) SELECT id FROM subtree) AND folder IN ('inbox','remote')"""
-        params = [remote_folder_id] if remote_folder_id is not None else []
+        params = [remote_folder_id] if remote_folder_id is not None else [aggregate_role]
         if remote_folder_id is None:
-            clause = "(" + clause + " OR folder='inbox')"
+            clause = "(" + clause + " OR folder=?)"
+            params.append(folder)
     if scope == "subfolders":
         roots = [f"remote:{remote_folder_id}" if remote_folder_id is not None else folder]
-        if remote_folder_id is not None or folder == "inbox":
-            root = "id=?" if remote_folder_id is not None else "well_known='inbox'"
+        if remote_folder_id is not None or aggregate_role:
+            root = "id=?" if remote_folder_id is not None else "well_known=?"
             descendants = rows(
                 f"""WITH RECURSIVE tree(id,remote_id,account_id) AS (
                 SELECT id,remote_id,account_id FROM remote_folders WHERE {root}
                 UNION SELECT c.id,c.remote_id,c.account_id FROM remote_folders c JOIN tree p
                 ON c.parent_remote_id=p.remote_id AND c.account_id=p.account_id
             ) SELECT id FROM tree""",
-                (remote_folder_id,) if remote_folder_id is not None else (),
+                (remote_folder_id,) if remote_folder_id is not None else (aggregate_role,),
             )
             roots.extend("remote:" + str(r["id"]) for r in descendants)
         clause = (
@@ -394,9 +428,25 @@ def messages(
 
 @app.get("/api/counts")
 def counts():
-    return rows(
+    from .folder_views import predicate
+
+    result = rows(
         "SELECT folder,count(*) AS total,sum(unread) AS unread FROM messages GROUP BY folder"
     )
+    result = [r for r in result if r["folder"] not in ("archive", "sent")]
+    for folder in ("archive", "sent"):
+        clause, params = predicate(folder)
+        result.append(
+            {
+                "folder": folder,
+                **rows(
+                    "SELECT count(*) AS total,coalesce(sum(unread),0) AS unread FROM messages WHERE "
+                    + clause,
+                    params,
+                )[0],
+            }
+        )
+    return result
 
 
 @app.get("/api/messages/{message_id}")

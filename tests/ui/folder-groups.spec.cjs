@@ -10,7 +10,7 @@ test('Deep Outlook folders fit the sidebar and classic app shortcuts sit above S
   await page.route('**/api/sync', (r) => r.fulfill({ json: [] }));
   await page.route('**/api/remote-folders', (r) =>
     r.fulfill({
-      json: Array.from({ length: 12 }, (_, i) => ({
+      json: Array.from({ length: 24 }, (_, i) => ({
         id: 900 + i,
         account_id: 850,
         remote_id: 'f' + i,
@@ -40,6 +40,23 @@ test('Deep Outlook folders fit the sidebar and classic app shortcuts sit above S
     await expect(page.locator('#navigation')).not.toContainText('Cached views');
     await expect(page.locator('#navigation')).not.toContainText('Local folders · top level');
     await expect(page.locator('#navigation')).not.toContainText('inkwell · local mail');
+    const brand = await page.locator('.sidebar .brand').boundingBox();
+    await page.locator('#navigation').evaluate((e) => (e.scrollTop = e.scrollHeight));
+    await expect(page.locator('.sidebar .brand')).toBeInViewport();
+    expect((await page.locator('.sidebar .brand').boundingBox()).y).toBe(brand.y);
+    const overflow = await page.locator('.sidebar').evaluate((e) => ({
+      width: e.scrollWidth,
+      client: e.clientWidth,
+      children: [...e.children].map((c) => ({
+        id: c.id,
+        class: c.className,
+        right: c.getBoundingClientRect().right,
+        parent: e.getBoundingClientRect().right,
+        width: c.scrollWidth,
+      })),
+    }));
+    expect(overflow.width, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.client + 1);
+    await page.locator('#navigation').evaluate((e) => (e.scrollTop = 0));
     const geometry = await page.locator('.server-folders').evaluate((group) => {
       const box = group.getBoundingClientRect();
       return [...group.querySelectorAll('.remote-folder')].map((row) => {

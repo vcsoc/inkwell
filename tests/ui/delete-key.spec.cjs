@@ -41,6 +41,37 @@ test.afterEach(async ({ page }) => {
     });
   }
 });
+for (const modifier of ['Control', 'Meta'])
+  test(`${modifier}-click includes the highlighted message in the Delete batch`, async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name === 'mobile',
+      'Ctrl-click requires the side-by-side mail list and reader.',
+    );
+    await page.locator(`[data-message="${ids[0]}"] .subject`).click();
+    await page.locator(`[data-message="${ids[1]}"] .subject`).click({ modifiers: [modifier] });
+    for (const id of ids)
+      await expect(page.locator(`[data-message="${id}"] .select-message`)).toBeChecked();
+    await expect(page.locator('#selection-count')).toHaveText('2 selected');
+    await page.keyboard.press('Delete');
+    for (const id of ids)
+      await expect.poll(async () => (await api(page, '/messages/' + id)).folder).toBe('trash');
+  });
+test('Explicitly unchecking the first message excludes it from Delete', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === 'mobile',
+    'Ctrl-click requires the side-by-side mail list and reader.',
+  );
+  await page.locator(`[data-message="${ids[0]}"] .subject`).click();
+  await page.locator(`[data-message="${ids[1]}"] .subject`).click({ modifiers: ['Control'] });
+  await page.locator(`[data-message="${ids[0]}"] .select-message`).uncheck();
+  await page.keyboard.press('Delete');
+  await expect.poll(async () => (await api(page, '/messages/' + ids[1])).folder).toBe('trash');
+  expect((await api(page, '/messages/' + ids[0])).folder).toBe('inbox');
+});
 test('Delete trashes checked messages, then permanently removes them from local Trash', async ({
   page,
 }) => {

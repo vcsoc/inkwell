@@ -35,7 +35,10 @@ window.InkwellHtmlPreview = async (root, message, options) => {
     content.innerHTML = `${mode !== 'text' && message.html_body === null && message.remote_key ? '<p class="notice">Showing the text copy. Sync this folder to download its HTML version.</p>' : ''}<div class="message-body"></div>`;
     const body = content.querySelector('.message-body');
     body.textContent = message.body;
-    if (!checkbox.checked) return;
+    if (!checkbox.checked) {
+      InkwellHighlight(body, options.query);
+      return;
+    }
     const metadata = await info();
     if (!current() || !checkbox.checked || !body.isConnected) return;
     const fragment = document.createDocumentFragment();
@@ -54,10 +57,11 @@ window.InkwellHtmlPreview = async (root, message, options) => {
     }
     fragment.append(document.createTextNode(message.body.slice(offset)));
     body.replaceChildren(fragment);
+    InkwellHighlight(body, options.query);
   };
   const updateFrame = () => {
     if (!current() || !frame) return;
-    const query = new URLSearchParams({ appearance });
+    const query = new URLSearchParams({ appearance, q: options.query || '' });
     selected.forEach((origin) => query.append('allow', origin));
     if (checkbox.checked) query.set('links', 'true');
     frame.setAttribute(

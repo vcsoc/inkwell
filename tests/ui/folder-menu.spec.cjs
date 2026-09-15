@@ -123,8 +123,12 @@ test('Server-folder context creates a local child and keeps the server tree outs
     return r.fulfill({ json: local });
   });
   const startupSync = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/sync');
+  const startupBackground = page.waitForResponse(
+    (r) => new URL(r.url()).pathname === '/api/sync/jobs',
+  );
   await page.reload();
   await startupSync;
+  await startupBackground;
   writes.length = 0;
   const selector = '#navigation [data-remote-folder="72"]';
   await showSidebar(page, selector);

@@ -1,0 +1,13 @@
+# Background mailbox downloads
+
+`POST /api/sync/jobs` starts or joins a shared job; `GET /api/sync/jobs` reports its ID, active state, current folder, completed/total folder visits, newly imported messages, revision and bounded errors. `?full=true` clears the in-process completed-folder set before a new job. Requests do not restart an already active job. Both endpoints retain the normal session/origin protections.
+
+The existing quick Inbox/current-folder sync remains available. The app starts the all-folder job after startup/manual quick sync and checks again approximately every two minutes while open. F9 requests a full pass after the quick pull. The status below the page heading reports progress; failure details are in its tooltip. New pages refresh cached counts/list rows without replacing a reader, its toolbar, or an open editor.
+
+One daemon worker holds the existing transport lock, discovers Microsoft folders and snapshots every folder (including nested folders). It uses GET-only Graph retrieval and does not modify server messages, folders or read flags. OAuth token refresh remains a separate authorization operation. A failed folder does not stop other folders; failed discovery retains and checks the cached tree. Disconnected/replaced account identities are rechecked before importing. Token refresh writes are conditional on the credentials not having changed concurrently.
+
+Initial backfill follows up to 5,000 validated pages per folder, at most 100 messages per page. Repeated/untrusted pagination URLs and the safety ceiling report failure. Imported pages stay cached when a later page fails. Existing immutable provider IDs deduplicate copies and preserve local filing/read/star choices. Existing incoming-rule and Not Junk protections remain active; provider Drafts/Sent remain snapshots, not editable drafts or incoming-rule candidates.
+
+After a folder completes, automatic passes fetch its most recent 200 messages. F9 requests a new full rescan when idle. This is not Graph delta synchronization: older server moves may need F9, server deletions do not erase downloaded copies, and local changes are not sent back. On backend restart the in-memory completion set resets; a new full pass resumes by duplicate-safe rescan, not a persisted cursor. Quitting signals cancellation between pages; a network request already in flight can finish before shutdown. No service runs after the backend exits.
+
+Backfill consumes network bandwidth and local disk space. HTML/text limits still apply and attachments/original MIME are not fetched. Generic IMAP remains Inbox-only. No provider calendar/contact sync or server-folder management is added.

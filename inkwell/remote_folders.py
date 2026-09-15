@@ -62,7 +62,7 @@ def discover(account):
                         )
                 url = data.get("@odata.nextLink")
         # Resolve roles by provider IDs, not localized display names. These are GET-only.
-        for role in ("junkemail", "deleteditems", "sentitems", "drafts"):
+        for role in ("junkemail", "deleteditems", "sentitems", "drafts", "archive"):
             requests += 1
             if requests > 500:
                 raise ValueError("Folder discovery exceeded its request limit")
@@ -79,7 +79,10 @@ def discover(account):
     # Publish only a complete snapshot. Keep cached mail when folders disappear.
     with store.db() as db:
         db.execute("BEGIN IMMEDIATE")
-        if not db.execute("SELECT 1 FROM accounts WHERE id=?", (account["id"],)).fetchone():
+        if not db.execute(
+            "SELECT 1 FROM accounts WHERE id=? AND email=? AND provider='microsoft'",
+            (account["id"], account["email"]),
+        ).fetchone():
             raise ValueError("Account disconnected")
         for remote_id, values in found.items():
             db.execute(

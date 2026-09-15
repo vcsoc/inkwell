@@ -306,7 +306,7 @@ function remoteTree() {
               .map((folder) => {
                 if (seen.has(folder.id)) return '';
                 seen.add(folder.id);
-                const button = `<button class="nav-item remote-folder ${state.remoteFolder?.id === folder.id && state.view === 'remote' ? 'active' : ''}" data-remote-folder="${folder.id}" title="${esc(folder.path)} · ${folder.total_count} on server" aria-label="${esc(folder.path)}"><span aria-hidden="true">▱</span><span class="folder-name">${esc(folder.name)}</span><small>${folder.unread_count || ''}</small></button>`;
+                const button = `<button class="nav-item remote-folder ${state.remoteFolder?.id === folder.id && state.view === 'remote' ? 'active' : ''}" data-remote-folder="${folder.id}" title="${esc(folder.path)} · ${folder.cached_total ?? 0} cached · ${folder.total_count} on server · ${folder.unread_count || 0} unread on server" aria-label="${esc(folder.path)}"><span aria-hidden="true">▱</span><span class="folder-name">${esc(folder.name)}</span><small>${(folder.cached_unread ?? folder.unread_count) || ''}</small></button>`;
                 const children =
                   branch(folder.remote_id, depth + 1) + localChildren('remote:' + folder.id);
                 return children
@@ -742,7 +742,7 @@ async function navigate(route, { historyMode = 'push' } = {}) {
       },
     });
   } else await renderMail();
-  if (view === 'remote' && state.route === nextRoute) {
+  if (view === 'remote' && state.route === nextRoute && !backgroundSync.active) {
     const generation = state.generation;
     api('/remote-folders/' + state.remoteFolder.id + '/sync', { method: 'POST' })
       .then(async () => {
@@ -814,7 +814,14 @@ async function renderMail({ listOnly = false } = {}) {
   $$('[data-filter]').forEach((b) =>
     on(b, 'click', () => {
       state.filter = b.dataset.filter;
-      return refreshQuickMail();
+      state.offset = 0;
+      state.generation++;
+      $$('[data-filter]').forEach((button) => {
+        const active = button.dataset.filter === state.filter;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', String(active));
+      });
+      return renderMail({ listOnly: true });
     }),
   );
   on($('#prev-page'), 'click', async () => {
@@ -883,6 +890,7 @@ function renderMessageList() {
   if ($('#connect-empty')) on($('#connect-empty'), 'click', () => navigate('settings/mail'));
   if ($('#demo-empty')) on($('#demo-empty'), 'click', loadDemo);
   InkwellPaintTags($('#message-list'));
+  InkwellHighlight($('#message-list'), state.query);
   selection.bindRows(messages);
   if (preferences.mail_view === 'table') {
     $('#message-list').insertAdjacentHTML(
@@ -1223,6 +1231,7 @@ function renderReader() {
         ];
     readerColors.forEach((name, index) => pane.style.setProperty(name, colors[index]));
   }
+  $('.reader-tools-dock')?.replaceChildren();
   $('#reader').innerHTML =
     `${InkwellReaderToolbar(m, dark, canMarkNotJunk(m))}<h2>${esc(m.subject || '(No subject)')}</h2><div class="reader-tags">${tagPills(m)}</div><div class="reader-meta"><div class="avatar">${esc(initials(m.sender))}</div><div><strong>${esc(m.sender)}</strong>${m.demo ? '<span class="badge">SAMPLE</span>' : ''}<small>To ${esc(m.recipient)}</small>${m.cc ? `<small>Cc ${esc(m.cc)}</small>` : ''}${m.bcc ? `<small>Bcc ${esc(m.bcc)}</small>` : ''}<small>${esc(new Date(m.date).toLocaleString())}</small></div></div><div id="message-preview"></div>`;
   InkwellPaintTags($('#reader'));
@@ -1243,6 +1252,15 @@ function renderReader() {
         button.disabled = false;
       }
     });
+  let dock = $('.reader-tools-dock');
+  if (!dock) {
+    dock = document.createElement('div');
+    dock.className = 'reader-tools-dock';
+    $('#selection-tools').append(dock);
+  }
+  dock.replaceChildren(pane.querySelector('.reader-actions'));
+  for (const selector of ['h2', '.reader-meta', '.reader-tags'])
+    InkwellHighlight(pane.querySelector(selector), state.query);
   on($('#reader-star'), 'click', () => setReaderStar(m, !m.starred));
   void InkwellHtmlPreview($('#message-preview'), m, {
     api,
@@ -1250,6 +1268,7 @@ function renderReader() {
     esc,
     mode: preferences.preview_mode || 'html',
     appearance: view,
+    query: state.query,
     isCurrent: () => state.selected?.id === m.id,
   });
   on($('#reader-appearance'), 'click', () => {
@@ -1316,6 +1335,19 @@ function renderReader() {
   );
 }
 let notJunkPolling = false;
+const backgroundSync = InkwellBackgroundSync({
+  api,
+  toast,
+  refresh: async () => {
+    await refreshCounts();
+    if (
+      !state.composer &&
+      !$('#modal').open &&
+      !['settings', 'calendar', 'contacts', 'tags', 'rules'].includes(state.view)
+    )
+      await renderMail({ listOnly: true });
+  },
+});
 async function pollNotJunkMail() {
   if (notJunkPolling || !state.routerReady || !state.accounts.length || pendingWork) return;
   notJunkPolling = true;
@@ -1335,6 +1367,7 @@ async function pollNotJunkMail() {
     /* Retry at the next interval; manual Sync exposes connection errors. */
   } finally {
     notJunkPolling = false;
+    if (state.accounts.length && !backgroundSync.active) void backgroundSync.start();
   }
 }
 setInterval(pollNotJunkMail, 120000);
@@ -1725,37 +1758,48 @@ on($('#ai-form'), 'submit', (e) => {
   return askAI($('#ai-prompt').value);
 });
 on($('#use-ai'), 'click', () => compose({ body: state.aiAnswer }));
-on($('#sync'), 'click', async () => {
+window.InkwellSyncMail = async () => {
+  if ($('#sync').disabled) return;
   if (!state.accounts.length) {
     toast('Connect an email account in Settings first.');
     return;
   }
   $('#sync').disabled = true;
-  toast('Securely syncing your inbox…');
+  const generation = state.generation;
+  const folder = state.view === 'remote' ? state.remoteFolder : null;
+  toast(folder ? 'Securely syncing ' + folder.name + '…' : 'Securely syncing your inbox…');
   try {
-    const results =
-      state.view === 'remote' && state.remoteFolder
-        ? [
-            {
-              email: state.remoteFolder.name,
-              ...(await api('/remote-folders/' + state.remoteFolder.id + '/sync', {
-                method: 'POST',
-              })),
-            },
-          ]
-        : await api('/sync', { method: 'POST' });
+    const results = folder
+      ? [
+          {
+            email: folder.name,
+            ...(await api('/remote-folders/' + folder.id + '/sync', {
+              method: 'POST',
+            })),
+          },
+        ]
+      : await api('/sync', { method: 'POST' });
     toast(
       results
         .map((r) => `${r.email}: ${r.error || r.folder_error || `${r.added} new messages`}`)
         .join('\n'),
     );
     await refreshCounts();
-    if (!['settings', 'calendar', 'contacts', 'tags', 'rules'].includes(state.view))
-      await renderMail();
+    if (
+      generation === state.generation &&
+      !state.composer &&
+      !$('#modal').open &&
+      !['settings', 'calendar', 'contacts', 'tags', 'rules'].includes(state.view)
+    )
+      await renderMail({ listOnly: true });
+  } catch (error) {
+    toast(error.message);
   } finally {
     $('#sync').disabled = false;
+    if (state.accounts.length && !backgroundSync.active) void backgroundSync.start(true);
   }
-});
+};
+on($('#sync'), 'click', window.InkwellSyncMail);
 window.InkwellFocusQuickFilter = () => {
   if ($('#modal').open) return;
   const quick = $('#quick-filter');
@@ -1806,6 +1850,11 @@ window.InkwellDeleteFromPreview = () => {
     void selection.deleteSelected();
 };
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'F9' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    if (!e.repeat) void window.InkwellSyncMail();
+    return;
+  }
   if (deleteMailKey(e)) return;
   if (
     (e.ctrlKey || e.metaKey) &&
@@ -1860,17 +1909,22 @@ async function bootstrap() {
     if (state.accounts.length) {
       api('/sync', { method: 'POST' })
         .then(async (results) => {
+          void backgroundSync.start();
           const errors = results.filter((r) => r.error || r.folder_error);
           if (errors.length)
             toast(errors.map((r) => `${r.email}: ${r.error || r.folder_error}`).join('\n'));
           await refreshCounts();
           if (
             !['settings', 'calendar', 'contacts', 'tags', 'rules'].includes(state.view) &&
-            !$('#modal').open
+            !$('#modal').open &&
+            !state.composer
           )
-            await renderMail();
+            await renderMail({ listOnly: true });
         })
-        .catch((error) => toast(error.message));
+        .catch((error) => {
+          toast(error.message);
+          void backgroundSync.poll();
+        });
     }
   } catch (error) {
     modal(
