@@ -1,6 +1,21 @@
 'use strict';
 window.InkwellHtmlPreview = async (root, message, options) => {
   const { api, navigate, mode, esc, isCurrent, appearance = 'theme' } = options;
+  const luminance = (color) => {
+    const v = [1, 3, 5]
+      .map((i) => parseInt(color.slice(i, i + 2), 16) / 255)
+      .map((n) => (n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4));
+    return v[0] * 0.2126 + v[1] * 0.7152 + v[2] * 0.0722;
+  };
+  const background = luminance(getComputedStyle(root).getPropertyValue('--surface').trim());
+  const contrast = (color) => {
+    const foreground = luminance(color);
+    return (Math.max(background, foreground) + 0.05) / (Math.min(background, foreground) + 0.05);
+  };
+  let color = ['#005ac6', '#75bcff'].sort((a, b) => contrast(b) - contrast(a))[0];
+  if (contrast(color) < 4.5)
+    color = ['#000000', '#ffffff'].sort((a, b) => contrast(b) - contrast(a))[0];
+  root.style.setProperty('--email-link', color);
   let text = mode === 'text' || !message.html_body,
     selected = [],
     origins = [],

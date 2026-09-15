@@ -26,6 +26,32 @@ def test_unsafe_links_are_never_enabled(url):
     assert html_mail.link_url(url) is None
 
 
+@pytest.mark.parametrize(
+    "background", ["#ffffff", "#202731", "#777777", "#005ac6", "#75bcff", "#a050a0"]
+)
+def test_link_palette_meets_contrast(background):
+    def luminance(color):
+        values = [int(color[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+        return sum(
+            (v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4) * w
+            for v, w in zip(values, (0.2126, 0.7152, 0.0722))
+        )
+
+    first, second = sorted(
+        [luminance(background), luminance(html_mail.reader_link_color(background))]
+    )
+    assert (second + 0.05) / (first + 0.05) >= 4.5
+
+
+def test_sender_cannot_remove_enabled_link_underlines():
+    clean, _, _ = html_mail.sanitize(
+        '<a href="https://example.org" style="text-decoration:none!important;text-decoration-line:none;color:red">Link</a>',
+        reader_colors=True,
+        links=True,
+    )
+    assert "text-decoration" not in clean and "color:red" not in clean
+
+
 def test_enabling_links_preserves_scriptless_sandbox_and_does_not_enable_images(client):
     body = '<a href="https://example.org/path?q=1&amp;x=2#part" target="_top" ping="https://evil.org" onclick="bad()">Visit</a><a href="javascript:bad()">Bad</a><script>bad()</script><img src="https://images.example.org/pixel">'
     with store.db() as db:

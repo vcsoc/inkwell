@@ -129,6 +129,23 @@ def image_url(value, blocked_host="", schemes=("https",), preserve_fragment=Fals
         return None
 
 
+def reader_link_color(background):
+    def luminance(color):
+        values = [int(color[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+        values = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in values]
+        return sum(v * w for v, w in zip(values, (0.2126, 0.7152, 0.0722)))
+
+    bg = luminance(background)
+
+    def contrast(color):
+        fg = luminance(color)
+        return (max(bg, fg) + 0.05) / (min(bg, fg) + 0.05)
+
+    colors = ["#005ac6", "#75bcff"]
+    best = max(colors, key=contrast)
+    return best if contrast(best) >= 4.5 else max(["#000000", "#ffffff"], key=contrast)
+
+
 def link_url(value, blocked_host=""):
     if len(value) > 8192:
         return None
@@ -162,6 +179,10 @@ def sanitize(source, allowed=(), blocked_host="", reader_colors=False, links=Fal
     def attribute(tag, attr, value):
         nonlocal blocked
         if attr == "style":
+            if links and tag == "a":
+                value = re.sub(
+                    r"(?:^|;)\s*text-decoration(?:-[a-z]+)?\s*:[^;]*", "", value, flags=re.I
+                )
             if re.search(r"url|expression|image|var\s*\(|attr\s*\(|[@\\]", value, re.I):
                 return None
         if tag == "a" and attr == "href":
@@ -265,6 +286,8 @@ def preview(
     if appearance == "light" and theme["dark"]:
         bg, fg, line = "#ffffff", "#292e2b", "#e7e8e1"
     colors = f"html,body{{background:{bg};color:{fg};color-scheme:{'dark' if appearance == 'dark' or (appearance == 'theme' and theme['dark']) else 'light'}}}body *{{color:{fg}!important;background-color:transparent!important;border-color:{line}!important}}body{{font-size:{theme['font_size']}px}}"
+    link_color = reader_link_color(bg)
+    colors += f"body a[href],body a[href] *{{color:{link_color}!important}}body a[href]{{text-decoration:underline!important;text-decoration-thickness:2px!important;text-underline-offset:.18em!important;cursor:pointer}}body a[href]:hover{{text-decoration-thickness:3px!important}}body a[href]:focus-visible{{outline:2px solid {link_color};outline-offset:3px;border-radius:2px}}"
     if not row["html_body"]:
         body = "<pre>" + html.escape(row["body"]) + "</pre>"
     policy = (

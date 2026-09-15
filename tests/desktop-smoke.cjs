@@ -131,6 +131,14 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
       };
     });
     await window.getByLabel('Enable text links', { exact: true }).check();
+    await expect(email.getByRole('link', { name: 'Browser link' })).toHaveCSS(
+      'text-decoration-line',
+      'underline',
+    );
+    await expect(email.getByRole('link', { name: 'Browser link' })).toHaveCSS(
+      'text-decoration-thickness',
+      '2px',
+    );
     await email.getByRole('link', { name: 'Browser link' }).click();
     await expect
       .poll(() => app.evaluate(() => global.openedEmailURL))
@@ -284,7 +292,17 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
     ).toBeAttached();
     const movingFolder = window.locator('#navigation [aria-label="Archive / Desktop subfolder"]');
     if (!(await movingFolder.isVisible())) await window.locator('#menu').click();
-    await movingFolder.dragTo(window.locator('#navigation [data-view=inbox]'));
+    await expect(window.locator('#toast')).toContainText('Local subfolder created.');
+    await movingFolder.hover();
+    const start = await movingFolder.boundingBox();
+    await window.mouse.down();
+    await window.mouse.move(start.x + start.width / 2 + 10, start.y + start.height / 2, {
+      steps: 3,
+    });
+    const drop = await window.locator('#navigation [data-view=inbox]').boundingBox();
+    await window.mouse.move(drop.x + drop.width / 2, drop.y + drop.height / 2, { steps: 6 });
+    await window.mouse.move(drop.x + drop.width / 2 + 1, drop.y + drop.height / 2);
+    await window.mouse.up();
     await expect(
       window.locator('[data-local-branch="inbox"] [aria-label="Inbox / Desktop subfolder"]'),
     ).toBeAttached();

@@ -125,6 +125,17 @@ test('Enabling reader links opens an isolated browser tab without loading tracki
     'https://evil.example/link',
   );
   await expect(frame.locator('script,img[src],iframe')).toHaveCount(0);
+  const link = frame.getByRole('link', { name: 'Disabled navigation' });
+  await expect(link).toHaveCSS('text-decoration-line', 'underline');
+  await expect(link).toHaveCSS('text-decoration-thickness', '2px');
+  const firstColor = await link.evaluate((el) => getComputedStyle(el).color);
+  expect(firstColor).not.toBe(
+    await frame.locator('body').evaluate((el) => getComputedStyle(el).color),
+  );
+  await page.locator('#reader-appearance').click();
+  await page.getByLabel('Enable text links', { exact: true }).check();
+  await expect(link).toHaveCSS('text-decoration-line', 'underline');
+  await expect.poll(() => link.evaluate((el) => getComputedStyle(el).color)).not.toBe(firstColor);
   expect(urls).toEqual([]);
   const pending = page.waitForEvent('popup');
   await frame.getByRole('link', { name: 'Disabled navigation' }).click();
@@ -147,6 +158,11 @@ test('Text preview links are opt-in and reset when reopening the reader', async 
   await page.getByLabel('Enable text links', { exact: true }).check();
   await expect(page.locator('.message-body a')).toHaveAttribute('href', 'https://example.org/text');
   await expect(page.locator('.message-body a')).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(page.locator('.message-body a')).toHaveCSS('text-decoration-line', 'underline');
+  await expect(page.locator('.message-body a')).toHaveCSS('text-decoration-thickness', '2px');
+  expect(
+    await page.locator('.message-body a').evaluate((el) => getComputedStyle(el).color),
+  ).not.toBe(await page.locator('.message-body').evaluate((el) => getComputedStyle(el).color));
   await page.getByLabel('Enable text links', { exact: true }).uncheck();
   await expect(page.locator('.message-body a')).toHaveCount(0);
   await page.reload();

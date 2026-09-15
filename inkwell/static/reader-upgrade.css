@@ -1,3 +1,18 @@
+#reader .email-preview-content .message-body a:any-link {
+  color: var(--email-link) !important;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.18em;
+  cursor: pointer;
+}
+#reader .email-preview-content .message-body a:hover {
+  text-decoration-thickness: 3px;
+}
+#reader .email-preview-content .message-body a:focus-visible {
+  outline: 2px solid var(--email-link);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
 .email-link-control {
   min-height: 34px;
   font-size: 13px;
