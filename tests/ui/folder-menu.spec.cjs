@@ -151,12 +151,19 @@ test('Creating a subfolder updates an open rule editor without losing its edits'
   await page.getByRole('menuitem', { name: 'New subfolder…' }).click();
   await page.getByLabel('Folder name', { exact: true }).fill(prefix + ' Destination');
   await page.getByRole('button', { name: 'Create subfolder', exact: true }).click();
+  await expect(page.locator('#toast')).toContainText('Local subfolder created.');
+  if (await page.locator('#sidebar').evaluate((el) => el.classList.contains('open'))) {
+    await page.locator('#navigation [data-view=archive]').focus();
+    await page.keyboard.press('Escape');
+  }
+  await page.getByLabel('Action 1 value', { exact: true }).fill(prefix + ' Destination');
   await expect(
     page
-      .getByLabel('Action 1 value', { exact: true })
-      .locator('option')
+      .getByRole('listbox')
+      .getByRole('option')
       .filter({ hasText: prefix + ' Destination' }),
   ).toHaveCount(1);
+  await page.getByLabel('Action 1 value', { exact: true }).press('Enter');
   await expect(page.getByLabel('Rule name', { exact: true })).toHaveValue(prefix + ' Unsaved rule');
   await expect(page.getByLabel('Condition 1 value', { exact: true })).toHaveValue(
     'Keep this condition',

@@ -6,7 +6,7 @@ A thin, light, indeterminate strip runs across the top of the mail list while th
 
 ## Outlook server folder tree
 
-The sidebar starts with **inkwell · local mail**, keeping Inbox, Starred, Sent, Drafts, Archive, Trash and local folders together. Connected Microsoft accounts appear separately below, in collapsible **Outlook** groups. Multiple accounts get numbered groups; hover the group heading for its address without bringing back a visible account banner. Parent branches can also be collapsed; select a folder's button to view it. On phones, use **Open navigation**. Names are rendered as text, including names containing markup characters.
+The sidebar keeps Inbox, Starred, Sent, Drafts, Archive, Trash and local folders together without an extra local-mail heading or server-count caption. Classic layout also has Rule Manager and Tag Manager icons above Settings in the far-left Apps rail. Connected Microsoft accounts appear separately below, in collapsible **Outlook** groups. Multiple accounts get numbered groups; hover the group heading for its address without bringing back a visible account banner. Parent branches can also be collapsed; select a folder's button to view it. On phones, use **Open navigation**. Names are rendered as text, including names containing markup characters.
 
 The main **Inbox** is the aggregate local workspace view across accounts, including locally refiled Inbox copies. **Outlook → Inbox** is the account's discovered server folder view. These are different views, not a second Inbox created on the server. The main **Drafts** contains editable, autosaved inkwell drafts; **Outlook → Drafts** contains downloaded server-draft snapshots, not those local editors. The top Inbox count describes cached unread mail; account-tree counts come from the server and can be much larger than the downloaded cache.
 
@@ -26,7 +26,7 @@ Schema **11** preserves existing folder IDs, names, messages, rules and the fold
 
 ## Move and reorder local folders
 
-Drag a **local folder** by its name. Hover near the top or bottom of another local folder for **Place before / Place after**; hover over its middle to **Move inside**. A themed placement marker and inside-target outline preview the result before releasing. Dropping into a folder appends the moved branch after its existing local children. Hovering over a collapsed destination opens it after a short delay. Drop on **Local folders · top level** to move a branch back to the root.
+Drag a **local folder** by its name. Hover near the top or bottom of another local folder for **Place before / Place after**; hover over its middle to **Move inside**. A themed placement marker and inside-target outline preview the result before releasing. Dropping into a folder appends the moved branch after its existing local children. Hovering over a collapsed destination opens it after a short delay. Drop on the outlined top-level drop zone (shown only during folder dragging) to move a branch back to the root.
 
 Nothing is committed until a valid drop. Escape or dropping outside a valid destination cancels. A folder cannot go inside itself or its descendants, exceed 32 local levels, or collide with a sibling name. The backend revalidates under a transaction; failures leave the hierarchy unchanged.
 
@@ -66,7 +66,7 @@ Right-click a message, press Shift+F10/Context Menu, or use its **⋯** button. 
 
 Available actions:
 
-- **Apply rule…** opens a prefilled rule editor for sender, subject, domain or TLD. Save for future imports or explicitly save and apply just to this selected cached copy; see [context rules](RULE-MANAGER-COMPOSE.md#rules-from-a-message).
+- **Apply rule…** opens saved rules for selection and execution; **Create from this message** starts a prefilled sender, subject, domain or TLD rule. Save for future imports or explicitly save and apply just to this selected cached copy; see [context rules](RULE-MANAGER-COMPOSE.md#rules-from-a-message).
 - Find all by sender, organisation or subject.
 - Open message / edit local draft.
 - Reply, Forward, or New message to sender (opens a compose form; never sends automatically).

@@ -44,7 +44,7 @@ For a phone, see [Mobile setup](docs/MOBILE.md). `localhost` on a phone refers t
 | --- | --- |
 | Desktop | Native OS window, isolated renderer, automatic local backend startup, single-instance launcher |
 | Mobile | Touch-oriented navigation, responsive mail reader, full-screen forms, safe-area support, install manifest, offline connectivity explanation |
-| Email | Multiple IMAP/SMTP accounts, inbox sync, isolated HTML/text previews, opt-in remote images and text links, search, pagination, unread/tag pills, local read/unread, stars, archive/trash, drafts, reply, forward, explicit SMTP sending, draft autosave, local drag-and-drop and Trash restore |
+| Email | Multiple IMAP/SMTP accounts, inbox sync, isolated HTML/text previews, opt-in remote images and text links, search, pagination, unread/tag pills, local read/unread, stars, archive/trash, drafts, reply, forward, explicit SMTP sending, draft autosave, local drag-and-drop, Trash restore, and [cached .eml file export](docs/EMAIL-EXPORT.md) |
 | Calendar | Themed month grid/agenda, all-day and multi-day events, drag/two-endpoint ranges, timezone-aware daily/weekly/monthly/yearly repeats, whole-series editing, `.ics` export |
 | Mail rules | Compact Rule Manager with list-left/editor-right layout, [scoped manual execution, drag priority and per-rule Stop](docs/RULE-EXECUTION.md), context-menu creation/application, sender/domain/TLD/subject conditions, multiple local actions, and [Not Junk](docs/NOT-JUNK.md) sender memory with Inbox/rule filing — never server mutations |
 | People | Create/edit/delete contacts, compose from contact, recipient suggestions |

@@ -23,12 +23,12 @@ Legacy rules retain their behavior and appear in the builder. Rule tag reference
 
 ## Rules from a message
 
-Choose **Apply rule…** from an email's context menu or reader More menu. The editor starts with the exact normalized sender address; changing its field to Subject, Sender domain or Sender TLD fills that message's corresponding value. Values remain editable. The subject starts as a case-insensitive substring condition; sender/domain/TLD default to exact matching.
+Choose **Apply rule…** from an email's context menu or reader More menu to select and run a saved rule against that message. **Create from this message** instead starts a new rule with the exact normalized sender address; changing its field to Subject, Sender domain or Sender TLD fills that message's corresponding value. Values remain editable. The subject starts as a case-insensitive substring condition; sender/domain/TLD default to exact matching.
 
 **TLD** means the final DNS label: `.ca`, `.com`, or `.uk` for `example.co.uk`. It is not the registrable domain or a public-suffix lookup. Leading dots and letter case are normalized; `co.uk` is rejected as a TLD value. TLD conditions support is/is not and do not match missing domains or IP literals. These broad conditions do not authenticate sender identity.
 
 - **Save rule** stores the configuration for future imports, subject to saved priority and Stop settings.
-- **Save and apply to this message** saves it, then explicitly runs only that selected rule on the selected cached incoming copy, even if it was already locally filed. It does not run other rules or apply to every matching cached message. Conditions, enabled state, exclusions, resource validation, tag limits and Not Junk protection still apply. Drafts and known sent copies are protected. A nonmatching rule leaves the copy unchanged.
+- **Save and apply to this message** saves it, then explicitly runs only that selected rule on the selected cached incoming copy, even if it was already locally filed. It does not run other rules or apply to every matching cached message. Conditions, exclusions, resource validation, tag limits and Not Junk protection still apply. Explicit single-rule runs can execute disabled saved rules without enabling automatic execution. Drafts and known sent copies are protected. A nonmatching rule leaves the copy unchanged.
 - Saving and application are separate operations. If application fails, the saved rule remains visible and the editor retains its ID and edits; retry updates it rather than creating a duplicate. The message changes themselves are transactional.
 
 `GET /api/rules/from-message/{id}` supplies the seed. `POST /api/rules/{id}/apply-message` accepts `{message_id}`. Both inherit normal session/origin protection. Schema **10** marks TLD rule configuration support; older binaries reject it. Rollback requires a pre-upgrade database with its matching vault key.
@@ -43,7 +43,7 @@ In Rule Manager, choose **Auto-tag** (accessible name: Create auto-tag rule). Th
 
 Every newly imported matching copy receives the tag immediately. Domain matching is exact and case-insensitive: subdomains and lookalikes such as `example.com.evil` do not match. Tag-only actions preserve the message's folder and read state. An earlier matching rule with Stop enabled prevents later auto-tag rules from running. Reorder rules or disable Stop where continuation is intended. Rules do not change provider mail or tags, and cannot process messages that have not been imported.
 
-Use **Apply rules to existing imported copies…** for eligible cached messages; its existing exclusions (drafts, sent, Trash and already locally managed copies) remain in force. Creating a tag saves the catalog entry independently of saving a rule. Its color can be changed in Tag Manager.
+Use **Run all enabled rules** with the chosen scope for cached incoming messages, including already managed copies. Drafts and known sent copies remain protected. Creating a tag saves the catalog entry independently of saving a rule. Its color can be changed in Tag Manager.
 
 ## Cc, Bcc and address autocomplete
 

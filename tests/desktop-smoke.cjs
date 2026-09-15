@@ -97,6 +97,29 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
         messageId,
       );
     database.close();
+    await app.evaluate(({ BrowserWindow }) => {
+      const wc = BrowserWindow.getAllWindows()[0].webContents;
+      global.originalStartDrag = wc.startDrag;
+      wc.startDrag = (item) => {
+        global.draggedEmailFiles = item.files;
+      };
+    });
+    await window
+      .locator('.message-row')
+      .first()
+      .getByRole('button', { name: 'Save or drag email file' })
+      .dispatchEvent('dragstart', {
+        dataTransfer: await window.evaluateHandle(() => new DataTransfer()),
+      });
+    await expect.poll(() => app.evaluate(() => global.draggedEmailFiles?.length)).toBe(1);
+    const exported = await app.evaluate(() => global.draggedEmailFiles[0]);
+    expect(exported.startsWith(path.join(data, '.email-export-cache'))).toBe(true);
+    expect(fs.readFileSync(exported, 'utf8')).toContain('X-Inkwell-Export:');
+    expect(fs.readFileSync(exported, 'utf8')).toContain('Packaged HTML preview');
+    expect(fs.statSync(exported).mode & 0o777).toBe(0o600);
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0].webContents.startDrag = global.originalStartDrag;
+    });
     await window.locator('.message-row').first().click();
     const email = window.frameLocator('.html-message');
     await expect(email.getByRole('heading', { name: 'Packaged HTML preview' })).toBeVisible();
@@ -289,6 +312,13 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
     await sidebarClick(window, '#navigation [data-view=inbox]');
     await window.locator(`[data-more="${messageId}"]`).click();
     await window.getByRole('menuitem', { name: 'Apply rule…', exact: true }).click();
+    await expect(window.getByRole('button', { name: 'Run saved rule', exact: true })).toBeEnabled();
+    const runResponse = window.waitForResponse((r) => r.url().endsWith('/api/rules/run'));
+    await window.getByRole('button', { name: 'Run saved rule', exact: true }).click();
+    const executed = await runResponse;
+    expect(executed.status()).toBe(200);
+    expect(executed.request().postDataJSON().message_id).toBe(messageId);
+    await window.getByRole('button', { name: 'Create from this message', exact: true }).click();
     await window.getByLabel('Rule name', { exact: true }).fill('Desktop context rule');
     await window.getByLabel('Condition 1 field', { exact: true }).selectOption('tld');
     await expect(window.getByLabel('Condition 1 value', { exact: true })).not.toHaveValue('');

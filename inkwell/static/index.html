@@ -37,6 +37,33 @@
         <button data-view="inbox" aria-label="Mail" title="Mail">▤</button>
         <button data-view="calendar" aria-label="Calendar" title="Calendar">▦</button>
         <button data-view="contacts" aria-label="People" title="People">♙</button>
+        <button data-view="rules" aria-label="Rule Manager" title="Rule Manager">
+          <svg
+            viewBox="0 0 24 24"
+            width="22"
+            height="22"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            aria-hidden="true"
+          >
+            <path d="M9 6h12M9 12h12M9 18h12M2 5l2 2 3-4M2 11l2 2 3-4M2 17l2 2 3-4" />
+          </svg>
+        </button>
+        <button data-view="tags" aria-label="Tag Manager" title="Tag Manager">
+          <svg
+            viewBox="0 0 24 24"
+            width="22"
+            height="22"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            aria-hidden="true"
+          >
+            <path d="M3 3h8l10 10-8 8L3 11z" />
+            <circle cx="7.5" cy="7.5" r="1" />
+          </svg>
+        </button>
         <button data-view="settings" aria-label="Settings" title="Settings">⚙</button>
       </nav>
       <aside class="sidebar" id="sidebar">
@@ -214,6 +241,7 @@
       <button role="menuitem" tabindex="-1" data-action="contact">Add sender to People…</button>
       <button role="menuitem" tabindex="-1" data-action="copy">Copy sender address…</button>
       <button role="menuitem" tabindex="-1" data-action="save">Save message as text…</button>
+      <button role="menuitem" tabindex="-1" data-action="save-eml">Save email file (.eml)</button>
     </div>
     <div id="toast" class="toast hidden" role="status"></div>
     <script src="/static/theme-files.js" defer></script>
@@ -226,9 +254,11 @@
     <script src="/static/drafts.js" defer></script>
     <script src="/static/address-autocomplete.js" defer></script>
     <script src="/static/composer.js" defer></script>
+    <script src="/static/email-export.js" defer></script>
     <script src="/static/message-selection.js" defer></script>
     <script src="/static/calendar.js" defer></script>
     <script src="/static/rule-priority.js" defer></script>
+    <script src="/static/destination-picker.js" defer></script>
     <script src="/static/rules.js" defer></script>
     <script src="/static/settings.js" defer></script>
     <script src="/static/tag-color-picker.js" defer></script>

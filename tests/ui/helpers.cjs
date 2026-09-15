@@ -22,7 +22,9 @@ async function readerAction(page, name, menuName) {
   }
 }
 async function sidebarClick(page, selector) {
-  if (!(await page.locator(selector).isVisible())) await page.locator('#menu').click();
+  await expect(page.locator(selector)).toBeAttached();
+  if (!(await page.locator(selector).isVisible()) && (await page.locator('#menu').isVisible()))
+    await page.locator('#menu').click();
   await page.locator(selector).click();
 }
 async function openRuleSection(page, id) {

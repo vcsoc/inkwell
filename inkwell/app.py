@@ -28,6 +28,7 @@ from . import (
     ai,
     collections,
     html_mail,
+    email_export,
     mail,
     microsoft,
     preferences,
@@ -61,6 +62,7 @@ app.include_router(preferences.router)
 app.include_router(microsoft.router)
 app.include_router(collections.router)
 app.include_router(html_mail.router)
+app.include_router(email_export.router)
 app.include_router(rules.router)
 app.include_router(message_moves.router)
 app.include_router(tag_store.router)

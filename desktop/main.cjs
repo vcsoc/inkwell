@@ -111,12 +111,23 @@ async function launch() {
     autoHideMenuBar: true,
     icon: path.join(root, 'inkwell/static/icon-512.png'),
     webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
       webSecurity: true,
     },
   });
+  const cleanupExports = require('./file-export.cjs')(window, {
+    origin,
+    cookie,
+    directory: path.join(
+      process.env.INKWELL_DATA_DIR || path.join(app.getPath('home'), '.inkwell'),
+      '.email-export-cache',
+    ),
+    iconPath: path.join(root, 'inkwell/static/icon-512.png'),
+  });
+  app.once('will-quit', cleanupExports);
   let closing = false,
     closeAllowed = false;
   window.on('close', (event) => {

@@ -81,7 +81,8 @@ test('rule editor creates local destinations and saves sender exclusions', async
   await page.getByLabel('Condition 1 field', { exact: true }).selectOption('domain');
   await page.getByLabel('Condition 1 operator', { exact: true }).selectOption('is');
   await page.getByLabel('Condition 1 value', { exact: true }).fill('example.org');
-  await page.getByLabel('Action 1 value', { exact: true }).selectOption('local-' + folderId);
+  await page.getByLabel('Action 1 value', { exact: true }).fill(name);
+  await page.getByLabel('Action 1 value', { exact: true }).press('Enter');
   await openRuleSection(page, 'rule-advanced');
   await page.getByLabel('Exclude unread messages').check();
   await page.getByLabel('Only messages older than days (0 = any age)').fill('7');

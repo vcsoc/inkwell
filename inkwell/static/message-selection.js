@@ -187,7 +187,14 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
         event.stopPropagation();
         select(id, event);
       };
+      const exportDrag = InkwellBindEmailExport(
+        row,
+        id,
+        () => (ids.has(id) ? [...ids] : [id]),
+        toast,
+      );
       row.ondragstart = (event) => {
+        if (event.altKey && exportDrag) return exportDrag(event);
         if (busy) {
           event.preventDefault();
           return;

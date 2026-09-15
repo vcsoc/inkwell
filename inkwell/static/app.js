@@ -314,35 +314,33 @@ function remoteTree() {
                   : button;
               })
               .join('');
-      return `<section class="server-folders" aria-label="${esc(account.email)} server folders"><details data-account-folder-group="${account.id}" ${collapsedFolders.has('account:' + account.id) ? '' : 'open'}><summary class="folder-account-heading" title="${esc(account.email)}"><span>${account.provider === 'microsoft' ? 'Outlook' : 'Server'}${state.accounts.length > 1 ? ' ' + (index + 1) : ''}</span></summary><p class="folder-group-hint">Cached views · counts from server</p>${branch('')}</details></section>`;
+      return `<section class="server-folders" aria-label="${esc(account.email)} server folders"><details data-account-folder-group="${account.id}" ${collapsedFolders.has('account:' + account.id) ? '' : 'open'}><summary class="folder-account-heading" title="${esc(account.email)}"><span>${account.provider === 'microsoft' ? 'Outlook' : 'Server'}${state.accounts.length > 1 ? ' ' + (index + 1) : ''}</span></summary>${branch('')}</details></section>`;
     })
     .join('');
 }
 function navigation() {
-  $('#navigation').innerHTML =
-    '<div class="folder-group-heading">inkwell · local mail</div>' +
-    folders
-      .map(([id, icon, name], i) => {
-        const local = state.localFolders?.find((f) => 'local-' + f.id === id);
-        const parent = local?.parent;
-        const divider =
-          i === 6
-            ? '<div class="nav-divider"></div>' +
-              (state.localFolders?.length
-                ? '<div id="folder-root-drop">Local folders · top level</div>'
-                : '')
-            : '';
-        if (
-          parent &&
-          (['inbox', 'archive', 'sent', 'drafts', 'trash'].includes(parent) ||
-            state.localFolders.some((f) => 'local-' + f.id === parent) ||
-            state.remoteFolders.some((f) => 'remote:' + f.id === parent))
-        )
-          return divider;
-        const button = `<button class="nav-item ${state.view === id ? 'active' : ''}" data-view="${id}" aria-label="${esc(name)}"><span aria-hidden="true">${icon}</span>${local ? `<span class="folder-name">${esc(local.name)}</span>` : esc(name)}${id === 'inbox' && state.counts.find((c) => c.folder === id)?.unread ? `<span class="nav-count">${state.counts.find((c) => c.folder === id).unread}</span>` : ''}</button>`;
-        return divider + localBranch(id, button);
-      })
-      .join('');
+  $('#navigation').innerHTML = folders
+    .map(([id, icon, name], i) => {
+      const local = state.localFolders?.find((f) => 'local-' + f.id === id);
+      const parent = local?.parent;
+      const divider =
+        i === 6
+          ? '<div class="nav-divider"></div>' +
+            (state.localFolders?.length
+              ? '<div id="folder-root-drop" aria-label="Move folder to top level" title="Move folder to top level"></div>'
+              : '')
+          : '';
+      if (
+        parent &&
+        (['inbox', 'archive', 'sent', 'drafts', 'trash'].includes(parent) ||
+          state.localFolders.some((f) => 'local-' + f.id === parent) ||
+          state.remoteFolders.some((f) => 'remote:' + f.id === parent))
+      )
+        return divider;
+      const button = `<button class="nav-item ${state.view === id ? 'active' : ''}" data-view="${id}" aria-label="${esc(name)}"><span aria-hidden="true">${icon}</span>${local ? `<span class="folder-name">${esc(local.name)}</span>` : esc(name)}${id === 'inbox' && state.counts.find((c) => c.folder === id)?.unread ? `<span class="nav-count">${state.counts.find((c) => c.folder === id).unread}</span>` : ''}</button>`;
+      return divider + localBranch(id, button);
+    })
+    .join('');
   const serverTree = remoteTree();
   if (serverTree)
     $('#navigation [data-view=calendar]').insertAdjacentHTML(
@@ -385,6 +383,19 @@ function navigation() {
       return navigate(b.dataset.view);
     }),
   );
+  $$('#navigation .server-folders .nav-item').forEach((button) => {
+    let depth = 1;
+    for (
+      let p = button.parentElement;
+      p && !p.classList.contains('server-folders');
+      p = p.parentElement
+    )
+      if (p.classList.contains('folder-children')) depth++;
+    const indent = 8 + Math.min(depth, 6) * 10;
+    button.style.paddingInlineStart = indent + 16 + 'px';
+    if (button.parentElement.tagName === 'SUMMARY')
+      button.parentElement.style.setProperty('--folder-indent', indent + 'px');
+  });
   $$('.mobile-tabs button, .app-rail button').forEach((b) =>
     b.classList.toggle(
       'active',
@@ -957,6 +968,7 @@ async function editTags(message) {
 async function messageAction(action, id) {
   const generation = state.generation;
   if (action === 'open') return openMessage(id);
+  if (action === 'save-eml') return InkwellDownloadEmail(id);
   if (action === 'apply-rule') {
     const seed = await api('/rules/from-message/' + id);
     if (generation !== state.generation) return;

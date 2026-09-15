@@ -323,8 +323,8 @@ def run_rules(data: RunRules):
             if not row:
                 raise HTTPException(404, "Rule not found")
             configured = [Rule.model_validate_json(row["config"])]
-            if not configured[0].enabled:
-                raise HTTPException(422, "Enable this rule before running it")
+            # An explicit single-rule run does not change its automatic enabled setting.
+            configured[0].enabled = True
             validate_rule(configured[0], db)
         else:
             configured = configured_rules(db)

@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { DatabaseSync } = require('node:sqlite');
-const { sidebarClick } = require('./helpers.cjs');
+const { sidebarClick, selectEmailMenuAction } = require('./helpers.cjs');
 const path = require('node:path'),
   os = require('node:os');
 let prefix, original, ids, subject;
@@ -61,6 +61,86 @@ test.afterEach(async ({ page }) => {
     if (folder.name.startsWith(prefix)) await api(page, '/local-folders/' + folder.id, 'DELETE');
   await api(page, '/preferences', 'PUT', original);
 });
+test('Email-file download exports cached mail without altering the message', async ({ page }) => {
+  const before = await api(page, '/messages/' + ids[0]);
+  await page.locator(`[data-more="${ids[0]}"]`).click();
+  const pending = page.waitForEvent('download');
+  await selectEmailMenuAction(page, 'Save email file (.eml)');
+  const download = await pending;
+  expect(download.suggestedFilename()).toMatch(/\.eml$/);
+  const contents = require('node:fs').readFileSync(await download.path(), 'utf8');
+  expect(contents).toContain('X-Inkwell-Export:');
+  expect(contents).toContain('Keep body');
+  expect(await api(page, '/messages/' + ids[0])).toEqual(before);
+});
+
+test('Apply Rule opens saved rules and Run saved rule executes only the current message', async ({
+  page,
+}) => {
+  const rule = (
+    await api(page, '/rules', 'POST', {
+      name: prefix + ' saved',
+      enabled: false,
+      conditions: [{ field: 'subject', operator: 'contains', value: prefix }],
+      actions: [{ type: 'star' }],
+    })
+  ).id;
+  await page.locator(`[data-more="${ids[0]}"]`).click();
+  await page.getByRole('menuitem', { name: 'Apply rule…', exact: true }).click();
+  await expect(page.getByLabel('Rule name', { exact: true })).toHaveValue(prefix + ' saved');
+  await expect(page.getByRole('button', { name: 'Run saved rule', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Run saved rule', exact: true }).click();
+  await expect(page.locator('#toast')).toContainText('1 local copies matched');
+  expect((await api(page, '/messages/' + ids[0])).starred).toBe(1);
+  expect((await api(page, '/messages/' + ids[1])).starred).toBe(0);
+  const stored = (await api(page, '/rules')).filter((r) => r.id === rule);
+  expect(stored).toHaveLength(1);
+  expect(stored[0].enabled).toBe(false);
+  await page.getByRole('button', { name: 'Create from this message', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Run saved rule', exact: true })).toBeDisabled();
+  await expect(page.getByLabel('Condition 1 value', { exact: true })).toHaveValue(
+    'writer@example.co.uk',
+  );
+});
+
+test('Destination autocomplete keeps IDs, selects by keyboard, and blocks unmatched text', async ({
+  page,
+}) => {
+  const folder = (await api(page, '/local-folders', 'POST', { name: prefix + ' Destination' })).id;
+  await page.goto('/#/rules');
+  await page.locator('#create-rule').click();
+  await page.getByLabel('Rule name', { exact: true }).fill(prefix + ' autocomplete');
+  await page.getByLabel('Condition 1 value', { exact: true }).fill(prefix);
+  const input = page.getByRole('combobox', { name: 'Action 1 value', exact: true });
+  await input.fill('does not exist');
+  await page.getByRole('button', { name: 'Save rule', exact: true }).click();
+  expect(
+    (await api(page, '/rules')).filter((r) => r.name === prefix + ' autocomplete'),
+  ).toHaveLength(0);
+  await input.fill(prefix + ' Dest');
+  await page.evaluate(async () => {
+    const folders = await (await fetch('/api/local-folders')).json();
+    document
+      .querySelector('#rule-editor')
+      .dispatchEvent(new CustomEvent('inkwell-folders-changed', { detail: folders }));
+  });
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue(prefix + ' Dest');
+  await expect(
+    page.getByRole('listbox').getByRole('option', { name: prefix + ' Destination', exact: true }),
+  ).toBeVisible();
+  await input.press('Enter');
+  await expect(input).toHaveValue(prefix + ' Destination');
+  await input.fill(prefix + ' Dest');
+  await page.getByLabel('Rule name', { exact: true }).click();
+  await expect(input).toHaveValue(prefix + ' Destination');
+  await page.getByRole('button', { name: 'Save rule', exact: true }).click();
+  await expect(page.locator('#toast')).toContainText('Rule saved');
+  expect(
+    (await api(page, '/rules')).find((r) => r.name === prefix + ' autocomplete').actions,
+  ).toEqual([{ type: 'move', value: 'local-' + folder }]);
+});
+
 test('Apply rule prefills sender, subject, domain and TLD and applies only this copy', async ({
   page,
 }) => {

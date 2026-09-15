@@ -109,7 +109,8 @@ test('Rule Manager builds AND/OR conditions and multiple actions, preserves edit
   await expect(page.getByLabel('Rule name', { exact: true })).toHaveValue(prefix + ' ABC rule');
   await expect(page.getByLabel('Condition 1 value', { exact: true })).toHaveValue('ABC');
   const folder = (await api(page, '/local-folders')).find((f) => f.name === prefix + ' XYZ').id;
-  await page.getByLabel('Action 1 value', { exact: true }).selectOption('local-' + folder);
+  await page.getByLabel('Action 1 value', { exact: true }).fill(prefix + ' XYZ');
+  await page.getByLabel('Action 1 value', { exact: true }).press('Enter');
   await page.getByRole('button', { name: 'Add action', exact: true }).click();
   await page.getByLabel('Action 2 type', { exact: true }).selectOption('mark_read');
   await page.getByRole('button', { name: 'Add action', exact: true }).click();

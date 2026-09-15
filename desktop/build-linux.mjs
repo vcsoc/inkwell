@@ -87,6 +87,7 @@ await fs.writeFile(
 );
 await fs.copyFile(path.join(root, 'desktop/main.cjs'), path.join(source, 'desktop/main.cjs'));
 await fs.copyFile(path.join(root, 'desktop/email-links.cjs'), path.join(source, 'desktop/email-links.cjs'));
+for (const file of ['preload.cjs','file-export.cjs']) await fs.copyFile(path.join(root,'desktop',file),path.join(source,'desktop',file));
 await fs.copyFile(
   path.join(root, 'inkwell/static/icon-512.png'),
   path.join(source, 'inkwell/static/icon-512.png'),
