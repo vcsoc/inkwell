@@ -22,10 +22,11 @@ window.InkwellTagManager = async (
   let tags = await api('/tags'),
     selected = new Set(),
     anchor = null,
-    editing = null;
+    editing = null,
+    focusAfterSave = null;
   if (!isCurrent() || !root.isConnected) return;
   catalogChanged(tags);
-  root.innerHTML = `<section id="tag-manager"><p class="notice">Manage local tags across every cached folder, including Drafts and Trash. Rename and merge update message labels; deleting tags never deletes mail. Changes apply immediately when saved.</p><div class="tag-manager-tools"><label>Find tags<input id="tag-search" type="search" placeholder="Find a tag…"></label><label>Show<select id="tag-usage"><option value="all">All tags</option><option value="used">Used tags</option><option value="unused">Unused tags</option></select></label><label>Sort<select id="tag-sort"><option value="name">Alphabetical</option><option value="count">Most used</option></select></label><span id="tag-summary" role="status"></span></div><div class="tag-manager-layout"><section class="card"><h2 id="tag-editor-title">Create tag</h2><form id="tag-editor"><label class="field">Tag name<input name="name" maxlength="32" required></label><label class="field color-field">Tag color<input name="color" aria-label="Tag color" value="#486b54" pattern="#[0-9a-fA-F]{6}" required spellcheck="false"></label><div id="tag-color-preview"></div><div class="form-actions"><button class="primary" type="submit">Save tag</button><button class="secondary" id="new-tag" type="button">New tag</button></div></form></section><section><div class="tag-bulk-tools"><label><input id="select-all-tags" type="checkbox"> Select visible tags</label><span id="selected-tags-count"></span><button class="secondary" id="clear-selected-tags" type="button">Clear selection</button><button class="secondary danger" id="delete-tags" disabled>Delete selected tags</button><form id="merge-tags"><label>Replacement tag<input name="name" maxlength="32" required list="manager-tag-names"></label><button class="secondary" disabled>Replace / merge selected</button></form><datalist id="manager-tag-names"></datalist></div><div id="tag-list"></div></section></div></section>`;
+  root.innerHTML = `<section id="tag-manager"><p class="notice">Manage local tags across every cached folder, including Drafts and Trash. Rename and merge update message labels; deleting tags never deletes mail. Changes apply immediately when saved.</p><div class="tag-manager-tools"><label>Find tags<input id="tag-search" type="search" placeholder="Find a tag…"></label><label>Show<select id="tag-usage"><option value="all">All tags</option><option value="used">Used tags</option><option value="unused">Unused tags</option></select></label><label>Sort<select id="tag-sort"><option value="name">Alphabetical</option><option value="count">Most used</option></select></label><span id="tag-summary" role="status"></span><button type="button" class="secondary" id="tag-create-shortcut">Create tag</button></div><div class="tag-manager-layout"><section class="card" id="tag-editor-panel" hidden><h2 id="tag-editor-title">Create tag</h2><form id="tag-editor"><label class="field">Tag name<input name="name" maxlength="32" required></label><label class="field color-field">Tag color<input name="color" aria-label="Tag color" value="#486b54" pattern="#[0-9a-fA-F]{6}" required spellcheck="false"></label><div id="tag-color-preview"></div><div class="form-actions"><button class="primary" type="submit">Save tag</button><button class="secondary" id="new-tag" type="button">New tag</button></div></form></section><section><div class="tag-bulk-tools"><label><input id="select-all-tags" type="checkbox"> Select visible tags</label><span id="selected-tags-count"></span><button class="secondary" id="clear-selected-tags" type="button">Clear selection</button><button class="secondary danger" id="delete-tags" disabled>Delete selected tags</button><form id="merge-tags"><label>Replacement tag<input name="name" maxlength="32" required list="manager-tag-names"></label><button class="secondary" disabled>Replace / merge selected</button></form><datalist id="manager-tag-names"></datalist></div><div id="tag-list"></div></section></div></section>`;
   const form = root.querySelector('#tag-editor'),
     list = root.querySelector('#tag-list');
   const updateColors = InkwellTagColorPicker(form);
@@ -38,6 +39,7 @@ window.InkwellTagManager = async (
   form.oninput = preview;
   preview();
   const editor = (tag = null) => {
+    root.querySelector('#tag-editor-panel').hidden = false;
     editing = tag?.id || null;
     form.elements.name.value = tag?.name || '';
     form.elements.color.value = tag?.color || '#486b54';
@@ -46,6 +48,7 @@ window.InkwellTagManager = async (
     form.elements.name.focus();
   };
   root.querySelector('#new-tag').onclick = () => editor();
+  root.querySelector('#tag-create-shortcut').onclick = () => editor();
   const visible = () =>
     tags
       .filter((t) =>
@@ -65,6 +68,7 @@ window.InkwellTagManager = async (
       );
   const paint = () => {
     const shown = visible();
+    root.querySelector('#tag-manager').classList.toggle('has-selected-tags', selected.size > 0);
     list.querySelectorAll('[data-tag-id]').forEach((row) => {
       const checked = selected.has(Number(row.dataset.tagId));
       row.classList.toggle('selected', checked);
@@ -88,7 +92,7 @@ window.InkwellTagManager = async (
         root.querySelector('#tag-sort').value === 'count'
           ? 'Most used'
           : /^\p{L}/u.test(tag.name)
-            ? tag.name[0].toLocaleUpperCase()
+            ? Array.from(tag.name)[0].toLocaleUpperCase()
             : '#';
       if (!groups.has(letter)) groups.set(letter, []);
       groups.get(letter).push(tag);
@@ -97,7 +101,7 @@ window.InkwellTagManager = async (
       [...groups]
         .map(
           ([letter, entries]) =>
-            `<section class="tag-letter-group"><h2>${esc(letter)} <small>(${entries.length})</small></h2>${entries.map((t) => `<div class="tag-manager-item" data-tag-id="${t.id}" tabindex="0"><input type="checkbox" aria-label="Select ${esc(t.name)}"><button class="tag-manager-name" data-open-tag="${t.id}" aria-label="Show messages tagged ${esc(t.name)}"><span class="mail-pill tag-pill" data-tag-color="${esc(t.color)}">${esc(t.name)}</span></button><span class="tag-manager-count" title="Cached messages, including Trash and Drafts">${t.count}</span><button class="secondary" data-edit-tag="${t.id}">Edit</button><button class="secondary danger" data-delete-tag="${t.id}" aria-label="Delete tag ${esc(t.name)}">Delete</button></div>`).join('')}</section>`,
+            `<section class="tag-letter-group"><h2>${esc(letter)} <small>(${entries.length})</small></h2><div class="tag-letter-grid">${entries.map((t) => `<div class="tag-manager-item" data-tag-id="${t.id}" tabindex="0"><input type="checkbox" aria-label="Select ${esc(t.name)}"><button class="tag-manager-name" data-open-tag="${t.id}" aria-label="Show messages tagged ${esc(t.name)}" title="Show messages tagged ${esc(t.name)}"><span class="mail-pill tag-pill" data-tag-color="${esc(t.color)}">${esc(t.name)}</span></button><span class="tag-manager-count" title="Cached messages, including Trash and Drafts">${t.count}</span><button class="secondary tag-item-action" data-edit-tag="${t.id}" aria-label="Edit" title="Edit ${esc(t.name)}">✎</button><button class="secondary danger tag-item-action" data-delete-tag="${t.id}" aria-label="Delete tag ${esc(t.name)}" title="Delete ${esc(t.name)}">×</button></div>`).join('')}</div></section>`,
         )
         .join('') || '<p>No matching tags.</p>';
     root.querySelector('#tag-summary').textContent = `${shown.length} of ${tags.length} tags`;
@@ -125,12 +129,17 @@ window.InkwellTagManager = async (
       toast(error.message);
     } finally {
       manager.inert = false;
+      if (focusAfterSave) {
+        if (isCurrent() && root.isConnected)
+          list.querySelector(`[data-tag-id="${focusAfterSave}"]`)?.focus();
+        focusAfterSave = null;
+      }
     }
   };
   form.onsubmit = (event) => {
     event.preventDefault();
     void action(async () => {
-      await api('/tags' + (editing ? '/' + editing : ''), {
+      const saved = await api('/tags' + (editing ? '/' + editing : ''), {
         method: editing ? 'PUT' : 'POST',
         body: { name: form.elements.name.value, color: form.elements.color.value },
       });
@@ -140,6 +149,8 @@ window.InkwellTagManager = async (
         form.elements.name.value = '';
         preview();
       }
+      if (isCurrent() && root.isConnected) root.querySelector('#tag-editor-panel').hidden = true;
+      focusAfterSave = saved.id;
       toast('Tag saved across local mail.');
     });
   };

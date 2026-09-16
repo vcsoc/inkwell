@@ -186,6 +186,7 @@ test('Tag palette and two-dimensional picker replace RGB sliders and persist col
   page,
 }, info) => {
   await page.goto('/#/tags');
+  await page.getByRole('button', { name: 'Create tag', exact: true }).click();
   await page.getByLabel('Tag name', { exact: true }).fill(prefix + ' Color');
   await expect(page.locator('#tag-editor [data-channel]')).toHaveCount(0);
   await page.getByLabel('Choose tag color', { exact: true }).click();

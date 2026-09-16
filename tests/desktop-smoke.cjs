@@ -218,18 +218,39 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
     } else {
       await window.locator('#settings').click();
     }
-    await settingsSection(window,'Shortcuts');
-    const shortcutInput=window.locator('[data-shortcut-capture="sync"]');await shortcutInput.focus();
-    const nativeFunctionKey=key=>app.evaluate(({BrowserWindow},keyCode)=>{const wc=BrowserWindow.getAllWindows()[0].webContents;wc.sendInputEvent({type:'keyDown',keyCode});wc.sendInputEvent({type:'keyUp',keyCode});},key);
-    await nativeFunctionKey('F8');await expect(shortcutInput).toHaveValue('F8');
-    await nativeFunctionKey('F9');await expect(shortcutInput).toHaveValue('F9');
-    await nativeFunctionKey('F8');await window.getByRole('button',{name:'Save shortcuts',exact:true}).click();await expect(window.locator('#shortcut-status')).toContainText('saved');
-    await sidebarClick(window,'#navigation [data-view=inbox]');await window.locator(`[data-message="${messageId}"] .subject`).click();await email.getByRole('heading',{name:'Packaged HTML preview'}).click();
-    await window.evaluate(()=>{window.__originalSync=window.InkwellSyncMail;window.__shortcutCalls=0;window.InkwellSyncMail=()=>window.__shortcutCalls++;});
-    await nativeFunctionKey('F9');expect(await window.evaluate(()=>window.__shortcutCalls)).toBe(0);
-    await nativeFunctionKey('F8');await expect.poll(()=>window.evaluate(()=>window.__shortcutCalls)).toBe(1);
-    await window.evaluate(()=>window.InkwellSyncMail=window.__originalSync);
-    await window.locator('#settings').click();await settingsSection(window,'Shortcuts');await window.getByRole('button',{name:'Reset defaults',exact:true}).click();await expect(window.locator('#shortcut-status')).toContainText('saved');
+    await settingsSection(window, 'Shortcuts');
+    const shortcutInput = window.locator('[data-shortcut-capture="sync"]');
+    await shortcutInput.focus();
+    const nativeFunctionKey = (key) =>
+      app.evaluate(({ BrowserWindow }, keyCode) => {
+        const wc = BrowserWindow.getAllWindows()[0].webContents;
+        wc.sendInputEvent({ type: 'keyDown', keyCode });
+        wc.sendInputEvent({ type: 'keyUp', keyCode });
+      }, key);
+    await nativeFunctionKey('F8');
+    await expect(shortcutInput).toHaveValue('F8');
+    await nativeFunctionKey('F9');
+    await expect(shortcutInput).toHaveValue('F9');
+    await nativeFunctionKey('F8');
+    await window.getByRole('button', { name: 'Save shortcuts', exact: true }).click();
+    await expect(window.locator('#shortcut-status')).toContainText('saved');
+    await sidebarClick(window, '#navigation [data-view=inbox]');
+    await window.locator(`[data-message="${messageId}"] .subject`).click();
+    await email.getByRole('heading', { name: 'Packaged HTML preview' }).click();
+    await window.evaluate(() => {
+      window.__originalSync = window.InkwellSyncMail;
+      window.__shortcutCalls = 0;
+      window.InkwellSyncMail = () => window.__shortcutCalls++;
+    });
+    await nativeFunctionKey('F9');
+    expect(await window.evaluate(() => window.__shortcutCalls)).toBe(0);
+    await nativeFunctionKey('F8');
+    await expect.poll(() => window.evaluate(() => window.__shortcutCalls)).toBe(1);
+    await window.evaluate(() => (window.InkwellSyncMail = window.__originalSync));
+    await window.locator('#settings').click();
+    await settingsSection(window, 'Shortcuts');
+    await window.getByRole('button', { name: 'Reset defaults', exact: true }).click();
+    await expect(window.locator('#shortcut-status')).toContainText('saved');
     await settingsSection(window, 'Mail accounts');
     await app.evaluate(({ shell }) => {
       globalThis.inkwellTestExternalURLs = [];
@@ -294,14 +315,12 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
     expect(preferences.sandbox).toBe(true);
     await window.locator('#close-modal').click();
     await sidebarClick(window, '#tag-manager-link');
+    await window.getByRole('button', { name: 'Create tag', exact: true }).click();
     await window.getByLabel('Tag name', { exact: true }).fill('Desktop tag manager');
     await window.getByLabel('Choose tag color', { exact: true }).click();
     await window.getByRole('button', { name: 'Set Tag color to #2664a0', exact: true }).click();
     await window.getByRole('button', { name: 'Save tag', exact: true }).click();
-    await expect(window.locator('.tag-manager-item .tag-pill')).toHaveCSS(
-      'background-color',
-      'rgb(38, 100, 160)',
-    );
+    await expect(window.locator('.tag-manager-item .tag-pill')).toHaveCSS('--tag-bg', '#2664a0');
     if (!(await window.locator('#navigation [data-view=archive]').isVisible()))
       await window.locator('#menu').click();
     await window.locator('#navigation [data-view=archive]').click({ button: 'right' });
@@ -316,16 +335,19 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
     await expect(window.locator('#toast')).toContainText('Local subfolder created.');
     await movingFolder.hover();
     const start = await movingFolder.boundingBox();
-    await window.mouse.move(start.x+start.width/2,start.y+start.height/2);
+    await window.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
     await window.mouse.down();
     await window.mouse.move(start.x + start.width / 2 + 24, start.y + start.height / 2, {
       steps: 8,
     });
-    await expect(window.locator('#navigation')).toHaveClass(/folder-dragging/,{timeout:1000});
+    await expect(window.locator('#navigation')).toHaveClass(/folder-dragging/, { timeout: 1000 });
     const drop = await window.locator('#navigation [data-view=inbox]').boundingBox();
     await window.mouse.move(drop.x + drop.width / 2, drop.y + drop.height / 2, { steps: 6 });
     await window.mouse.move(drop.x + drop.width / 2 + 1, drop.y + drop.height / 2);
-    await expect(window.locator('#navigation [data-view=inbox]')).toHaveClass(/folder-drop-inside/,{timeout:1000});
+    await expect(window.locator('#navigation [data-view=inbox]')).toHaveClass(
+      /folder-drop-inside/,
+      { timeout: 1000 },
+    );
     await window.mouse.up();
     await expect(
       window.locator('[data-local-branch="inbox"] [aria-label="Inbox / Desktop subfolder"]'),
@@ -354,6 +376,11 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
     await sidebarClick(window, '#navigation [data-view=inbox]');
     await window.locator(`[data-more="${messageId}"]`).click();
     await window.getByRole('menuitem', { name: 'Apply rule…', exact: true }).click();
+    await expect(
+      window.getByRole('button', { name: 'Run saved rule', exact: true }),
+    ).toBeDisabled();
+    await expect(window.getByLabel('Rule name', { exact: true })).not.toHaveValue('Desktop rule');
+    await window.getByRole('button', { name: 'Edit Desktop rule', exact: true }).click();
     await expect(window.getByRole('button', { name: 'Run saved rule', exact: true })).toBeEnabled();
     const runResponse = window.waitForResponse((r) => r.url().endsWith('/api/rules/run'));
     await window.getByRole('button', { name: 'Run saved rule', exact: true }).click();

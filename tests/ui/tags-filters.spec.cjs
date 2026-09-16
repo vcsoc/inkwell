@@ -67,6 +67,7 @@ test('Tag Manager creates and edits colors with local controls and appears above
       .locator('#tag-manager-link')
       .evaluate((el) => !!el.nextElementSibling?.matches('#settings')),
   ).toBe(true);
+  await page.getByRole('button', { name: 'Create tag', exact: true }).click();
   await page.getByLabel('Tag name', { exact: true }).fill(prefix + 'Project');
   await page.getByLabel('Tag color', { exact: true }).fill('#ffdc60');
   await page.getByRole('button', { name: 'Save tag', exact: true }).click();
@@ -76,8 +77,8 @@ test('Tag Manager creates and edits colors with local controls and appears above
   ).toBeVisible();
   let entry = (await api(page, '/tags')).find((t) => t.name === name);
   await expect(page.locator(`[data-tag-id="${entry.id}"] .tag-pill`)).toHaveCSS(
-    'background-color',
-    'rgb(255, 220, 96)',
+    '--tag-bg',
+    '#ffdc60',
   );
   await page.locator(`[data-edit-tag="${entry.id}"]`).click();
   await page.getByLabel('Tag name', { exact: true }).fill(prefix + 'Renamed');
@@ -85,8 +86,8 @@ test('Tag Manager creates and edits colors with local controls and appears above
   await expect(page.locator('#tag-editor input[type=color]')).toHaveCount(0);
   await page.getByRole('button', { name: 'Save tag', exact: true }).click();
   await expect(page.locator(`[data-tag-id="${entry.id}"] .tag-pill`)).toHaveCSS(
-    'background-color',
-    'rgb(38, 100, 160)',
+    '--tag-bg',
+    '#2664a0',
   );
   await page.locator('#tag-search').fill(prefix);
   await page.locator('#tag-usage').selectOption('unused');
@@ -96,6 +97,28 @@ test('Tag Manager creates and edits colors with local controls and appears above
     fullPage: true,
   });
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+});
+test('Tag directory uses full-width grouped columns and compact names', async ({ page }, info) => {
+  for (const name of ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta']) await tag(page, name);
+  await page.goto('/#/tags');
+  await page.locator('#tag-search').fill(prefix);
+  await expect(page.locator('.tag-letter-grid .tag-manager-item')).toHaveCount(6);
+  const layout = await page.locator('.tag-letter-grid').evaluate((el) => ({
+    columns: getComputedStyle(el).gridTemplateColumns.split(' ').length,
+    width: el.getBoundingClientRect().width,
+    manager: document.querySelector('#tag-manager').getBoundingClientRect().width,
+  }));
+  expect(layout.width).toBeGreaterThan(layout.manager * 0.95);
+  if (info.project.name === 'desktop') expect(layout.columns).toBeGreaterThan(1);
+  await expect(page.locator('.tag-manager-name .tag-pill').first()).toHaveCSS(
+    'background-color',
+    'rgba(0, 0, 0, 0)',
+  );
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  await page.screenshot({
+    path: `test-results/${info.project.name}-tag-directory.png`,
+    fullPage: true,
+  });
 });
 test('multi-select merge and delete update message labels without deleting messages', async ({
   page,

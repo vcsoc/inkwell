@@ -605,6 +605,6 @@ window.InkwellRules = async (
     root.querySelector('#rule-from-message').onclick = () =>
       editor(sourceMessage.rule, sourceMessage);
   }
-  editor(rules[0] || sourceMessage?.rule || {}, sourceMessage);
+  editor(sourceMessage ? sourceMessage.rule || {} : rules[0] || {}, sourceMessage);
   if (sourceMessage) root.querySelector('#rule-form [name=name]').focus();
 };

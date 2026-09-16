@@ -74,7 +74,7 @@ test('Email-file download exports cached mail without altering the message', asy
   expect(await api(page, '/messages/' + ids[0])).toEqual(before);
 });
 
-test('Apply Rule opens saved rules and Run saved rule executes only the current message', async ({
+test('Apply Rule starts from the message, not an existing rule; saved rules require selection', async ({
   page,
 }) => {
   const rule = (
@@ -85,8 +85,15 @@ test('Apply Rule opens saved rules and Run saved rule executes only the current 
       actions: [{ type: 'star' }],
     })
   ).id;
-  await page.locator(`[data-more="${ids[0]}"]`).click();
+  await page.locator(`[data-message="${ids[0]}"] .subject`).click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Apply rule…', exact: true }).click();
+  await expect(page.getByLabel('Rule name', { exact: true })).not.toHaveValue(prefix + ' saved');
+  await expect(page.getByLabel('Condition 1 value', { exact: true })).toHaveValue(
+    'writer@example.co.uk',
+  );
+  await expect(page.getByRole('button', { name: 'Run saved rule', exact: true })).toBeDisabled();
+  await expect(page.locator('.rule-entry.active')).toHaveCount(0);
+  await page.locator(`[data-edit-rule="${rule}"]`).click();
   await expect(page.getByLabel('Rule name', { exact: true })).toHaveValue(prefix + ' saved');
   await expect(page.getByRole('button', { name: 'Run saved rule', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Run saved rule', exact: true }).click();

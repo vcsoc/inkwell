@@ -2,7 +2,7 @@
 
 ## Rule Manager
 
-Open **Rule Manager** in the sidebar, or `/#/rules`. The same editor remains available under **Settings → Mail rules**. The compact list is on the **left**, with the selected rule's editor on the **right**. Click a rule name to edit it; its highlighted row exposes Disable/Enable, Duplicate and Delete. Rows show status and counts, with the complete condition/action summary in their tooltip. Missing-resource warnings remain visible. The first saved rule opens initially; **Create rule** starts a blank rule, and saving keeps the saved rule selected and open rather than jumping back to a blank form.
+Open **Rule Manager** in the sidebar, or `/#/rules`. The same editor remains available under **Settings → Mail rules**. The compact list is on the **left**, with the selected rule's editor on the **right**. Click a rule name to edit it; its highlighted row exposes Disable/Enable, Duplicate and Delete. Rows show status and counts, with the complete condition/action summary in their tooltip. Missing-resource warnings remain visible. When opened from the sidebar, the first saved rule opens initially; message-context entry instead starts a new form seeded from the clicked message. **Create rule** starts a blank rule, and saving keeps the saved rule selected and open rather than jumping back to a blank form.
 
 Search filters the list without losing editor changes. Selecting another rule or navigating away discards unsaved rule edits without confirmation. **Advanced options** contains the extra unread/age exclusions and opens automatically when they are active. **Tags and folders** holds resource creation; **How rules work** and **Not Junk senders** are expandable secondary sections. On narrow panes the list stacks above the editor; resizing does not discard edits.
 
@@ -23,7 +23,7 @@ Legacy rules retain their behavior and appear in the builder. Rule tag reference
 
 ## Rules from a message
 
-Choose **Apply rule…** from an email's context menu or reader More menu to select and run a saved rule against that message. **Create from this message** instead starts a new rule with the exact normalized sender address; changing its field to Subject, Sender domain or Sender TLD fills that message's corresponding value. Values remain editable. The subject starts as a case-insensitive substring condition; sender/domain/TLD default to exact matching.
+Choose **Apply rule…** from an email's context menu or reader More menu to start an unsaved rule seeded with that message's exact normalized sender address, not the first saved rule's details. You can explicitly select an existing rule to run against that message. **Create from this message** returns to the seeded new form; changing its field to Subject, Sender domain or Sender TLD fills that message's corresponding value. Values remain editable. The subject starts as a case-insensitive substring condition; sender/domain/TLD default to exact matching.
 
 **TLD** means the final DNS label: `.ca`, `.com`, or `.uk` for `example.co.uk`. It is not the registrable domain or a public-suffix lookup. Leading dots and letter case are normalized; `co.uk` is rejected as a TLD value. TLD conditions support is/is not and do not match missing domains or IP literals. These broad conditions do not authenticate sender identity.
 

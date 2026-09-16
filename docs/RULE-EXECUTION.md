@@ -11,7 +11,7 @@ Save and execution are separate transactions. A failed run does not lose the sav
 
 ## Context menu and destinations
 
-**Apply rule…** on a message opens the saved rule list and selects the first saved rule, without creating or executing anything. Select the desired rule and click **Run saved rule**; message scope retains the clicked message. **Create from this message** starts a separate unsaved, message-seeded rule. If there are no saved rules, the seeded new editor opens and explains that it must be saved before Run saved rule becomes available. A run still checks conditions, exclusions and protected-copy rules; it does not force unmatched actions.
+**Apply rule…** on a message opens a new, unsaved form seeded from that message, even when saved rules exist. It never implicitly selects the first saved rule. Nothing is created or executed merely by opening the page. To use an existing rule, explicitly select it from the list and click **Run saved rule**; message scope retains the clicked message. **Create from this message** returns to the message-seeded form. For a new rule, Run saved rule remains disabled until it is saved. A run still checks conditions, exclusions and protected-copy rules; it does not force unmatched actions.
 
 Move destinations use a search/autocomplete input, not a dropdown. Type a folder name/path, select a suggestion, or use arrows and Enter. Exact unique matches and a single remaining match on blur autoselect; ambiguous names require selection and unmatched text cannot be saved. The stored value remains the stable folder ID. Tag actions keep their catalog selector.
 

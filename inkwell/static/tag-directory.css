@@ -1,0 +1,151 @@
+/* Full-width alphabetical directory; editing tools follow rather than narrowing it. */
+#tag-manager .notice {
+  font-size: 12px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0 0 12px;
+}
+#tag-manager .tag-manager-tools,
+#tag-manager .tag-bulk-tools {
+  font-size: 12px;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+#tag-manager:not(.has-selected-tags) #clear-selected-tags,
+#tag-manager:not(.has-selected-tags) #delete-tags,
+#tag-manager:not(.has-selected-tags) #merge-tags {
+  display: none;
+}
+#tag-editor-panel[hidden] {
+  display: none;
+}
+
+#tag-manager .tag-manager-layout {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+#tag-manager .tag-manager-layout > section:not(.card) {
+  order: -1;
+}
+#tag-manager .tag-manager-layout > .card {
+  max-width: 640px;
+  width: 100%;
+}
+#tag-manager .tag-letter-group {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 0 12px;
+}
+#tag-manager .tag-letter-group h2 {
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+#tag-manager .tag-letter-group small {
+  font-size: 11px;
+  font-weight: 400;
+}
+.tag-letter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(210px, 100%), 1fr));
+  column-gap: 14px;
+  row-gap: 2px;
+}
+#tag-manager .tag-manager-item {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto 24px 24px;
+  gap: 4px;
+  border: 0;
+  border-radius: 4px;
+  margin: 0;
+  padding: 0 3px;
+  min-height: 32px;
+  background: transparent;
+  font-size: 12px;
+  min-width: 0;
+}
+#tag-manager .tag-manager-item:hover,
+#tag-manager .tag-manager-item:focus-within,
+#tag-manager .tag-manager-item.selected {
+  background: var(--accent-light);
+}
+#tag-manager .tag-manager-name {
+  display: block;
+  min-width: 0;
+  padding: 6px 0;
+  font: inherit;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  overflow: hidden;
+}
+#tag-manager .tag-manager-name .tag-pill {
+  display: block;
+  background: transparent;
+  color: inherit;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#tag-manager .tag-manager-name .tag-pill::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--tag-bg, var(--muted));
+  margin-right: 6px;
+  vertical-align: middle;
+}
+#tag-manager .tag-manager-count {
+  font-size: 10px;
+  min-width: 1ch;
+  text-align: right;
+}
+#tag-manager .tag-item-action {
+  width: 24px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+}
+@media (hover: hover) and (pointer: fine) {
+  #tag-manager .tag-item-action,
+  #tag-manager .tag-manager-item > input {
+    opacity: 0;
+  }
+  #tag-manager .tag-manager-item:hover .tag-item-action,
+  #tag-manager .tag-manager-item:focus-within .tag-item-action,
+  #tag-manager .tag-manager-item:hover > input,
+  #tag-manager .tag-manager-item:focus-within > input,
+  #tag-manager .tag-manager-item.selected > input {
+    opacity: 1;
+  }
+}
+@media (pointer: coarse), (max-width: 700px) {
+  .tag-letter-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(290px, 100%), 1fr));
+  }
+  #tag-manager .tag-manager-item {
+    grid-template-columns: 44px minmax(0, 1fr) auto 44px 44px;
+    min-height: 44px;
+  }
+  #tag-manager .tag-item-action,
+  #tag-manager .tag-manager-name {
+    min-height: 44px;
+  }
+  #tag-manager .tag-item-action {
+    width: 44px;
+  }
+  #tag-manager .tag-manager-item > input {
+    width: 44px;
+    height: 44px;
+    margin: 0;
+  }
+}

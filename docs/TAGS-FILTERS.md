@@ -4,7 +4,8 @@
 
 Open **Tag Manager** immediately above Settings in the sidebar, or visit `/#/tags`. On phones, open the sidebar first. The manager provides:
 
-- Alphabetical groups, usage counts, tag search, used/unused filtering, and alphabetical/most-used sorting.
+- Full-width alphabetical sections with compact multi-column entries, subtle dividers, color dots and adjacent usage counts. Columns adapt to the available space. Tag search, used/unused filtering, and alphabetical/most-used sorting remain available.
+- **Create tag** opens the editor below the directory. Saving returns focus to the saved entry. Editing controls appear on hover or keyboard focus, and remain visible with larger touch targets on phones. Bulk merge/delete controls appear when tags are selected.
 - Creating reusable tags before assigning them to mail.
 - Editing names and colors, with an in-app palette, saturation/brightness area, hue and hex picker plus a live pill preview (no RGB channel sliders or native color picker). Open **Choose color…** to reveal the picker.
 - Checkbox selection, Shift-click ranges, Ctrl/Command-click selection, and select-visible controls.
