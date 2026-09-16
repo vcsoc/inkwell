@@ -1,8 +1,8 @@
 # Mail workspace: activity, folders, search and message menus
 
-## Activity strip
+## Quiet logo activity
 
-A thin, light, indeterminate strip runs across the top of the mail list while this client has API work in progress, including startup import, folder discovery and folder import. Concurrent requests are counted: one finishing does not hide another's activity. Errors also release the indicator. Reduced-motion settings use a static strip rather than animation. It is not a percentage estimate or a monitor of other clients' background jobs.
+A faint, slow shimmer passes across the Inkwell logo during API work or active background mail syncing, instead of a progress bar across the mail pane. Concurrent requests are counted: one finishing does not hide another's activity. Errors also release the request indicator; active sync keeps the logo indication running between polls. The logo stays still while idle. Reduced-motion settings use a subtle static tint instead of movement. The accessible activity indicator and detailed sync status remain available. This is an activity cue, not a percentage estimate or a promise of immediate delivery.
 
 ## Outlook server folder tree
 

@@ -11,7 +11,10 @@ async function menu(page, id) {
   await page.locator(`[data-message="${id}"] [data-more]`).click();
 }
 
-test('activity strip accounts for overlapping requests and clears after failure', async ({
+const logoAnimation = (page) =>
+  page.locator('.brand-logo').evaluate((el) => getComputedStyle(el, '::after').animationName);
+
+test('logo activity accounts for overlapping requests and clears after failure', async ({
   page,
 }) => {
   await demo(page);
@@ -22,15 +25,36 @@ test('activity strip accounts for overlapping requests and clears after failure'
   await page.getByRole('searchbox', { name: 'Search email', exact: true }).fill('first');
   await page.getByRole('button', { name: 'Run email search' }).click();
   await expect.poll(() => waiting.length).toBe(1);
-  await expect(page.locator('#mail-activity')).toHaveCSS('opacity', '1');
+  await expect.poll(() => logoAnimation(page)).toBe('inkwell-logo-activity');
   await page.getByRole('searchbox', { name: 'Search email', exact: true }).fill('second');
   await page.getByRole('button', { name: 'Run email search' }).click();
   await expect.poll(() => waiting.length).toBe(2);
   await waiting[0].fulfill({ json: [] });
-  await expect(page.locator('#mail-activity')).toHaveCSS('opacity', '1');
+  await expect.poll(() => logoAnimation(page)).toBe('inkwell-logo-activity');
   await waiting[1].fulfill({ status: 503, json: { detail: 'Test network failure' } });
   await expect(page.locator('#toast')).toContainText('Test network failure');
-  await expect(page.locator('#mail-activity')).toHaveCSS('opacity', '0');
+  await expect.poll(() => logoAnimation(page)).toBe('none');
+  await expect(page.locator('#mail-activity')).toHaveCSS('clip-path', 'inset(50%)');
+});
+
+test('logo sync indication respects reduced motion and stops when idle', async ({ page }) => {
+  await demo(page);
+  await expect(page.locator('html')).toHaveAttribute('data-busy', 'false');
+  await page.evaluate(() => (document.documentElement.dataset.syncing = 'true'));
+  await expect.poll(() => logoAnimation(page)).toBe('inkwell-logo-activity');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect.poll(() => logoAnimation(page)).toBe('none');
+  await expect
+    .poll(() =>
+      page.locator('.brand-logo').evaluate((el) => getComputedStyle(el, '::after').opacity),
+    )
+    .toBe('1');
+  await page.evaluate(() => (document.documentElement.dataset.syncing = 'false'));
+  await expect
+    .poll(() =>
+      page.locator('.brand-logo').evaluate((el) => getComputedStyle(el, '::after').opacity),
+    )
+    .toBe('0');
 });
 
 test('server hierarchy, deep links and top search scopes work on desktop and mobile', async ({

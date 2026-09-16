@@ -1,40 +1,50 @@
 .mail-shell {
   position: relative;
 }
+/* Keep the activity semantics, without a moving bar across the mail pane. */
 .mail-activity {
-  height: 3px;
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  width: 1px;
+  height: 1px;
   overflow: hidden;
-  opacity: 0;
+  clip-path: inset(50%);
   pointer-events: none;
-  z-index: 3;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
-.mail-activity span {
-  display: block;
-  width: 32%;
-  height: 100%;
-  background: color-mix(in srgb, var(--accent) 45%, white);
-  animation: mail-work 1.3s ease-in-out infinite;
+.brand-logo {
+  position: relative;
+  overflow: hidden;
 }
-html[data-busy='true'] .mail-activity {
+.brand-logo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    color-mix(in srgb, var(--surface) 18%, transparent) 50%,
+    transparent 65%
+  );
+}
+html:is([data-busy='true'], [data-syncing='true']) .brand-logo::after {
   opacity: 1;
+  animation: inkwell-logo-activity 4s ease-in-out infinite;
 }
-@keyframes mail-work {
-  from {
+@keyframes inkwell-logo-activity {
+  0%,
+  15% {
     transform: translateX(-110%);
   }
-  to {
-    transform: translateX(420%);
+  85%,
+  100% {
+    transform: translateX(110%);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .mail-activity span {
+  html:is([data-busy='true'], [data-syncing='true']) .brand-logo::after {
     animation: none;
-    width: 100%;
+    background: color-mix(in srgb, var(--surface) 12%, transparent);
   }
 }
 .global-search {

@@ -247,7 +247,7 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
     await nativeFunctionKey('F8');
     await expect.poll(() => window.evaluate(() => window.__shortcutCalls)).toBe(1);
     await window.evaluate(() => (window.InkwellSyncMail = window.__originalSync));
-    await window.locator('#settings').click();
+    await sidebarClick(window, '#settings');
     await settingsSection(window, 'Shortcuts');
     await window.getByRole('button', { name: 'Reset defaults', exact: true }).click();
     await expect(window.locator('#shortcut-status')).toContainText('saved');
