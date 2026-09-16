@@ -38,6 +38,8 @@ from . import (
     store,
     rules,
     calendar_tools,
+    calendar_import,
+    calendar_reminders,
 )
 
 STATIC = Path(__file__).parent / "static"
@@ -765,7 +767,15 @@ def update_event(event_id: int, data: Event):
 def delete_event(event_id: int):
     with store.db() as conn:
         require_change(conn.execute("DELETE FROM events WHERE id=?", (event_id,)))
+        conn.execute(
+            "DELETE FROM settings WHERE (key LIKE 'calendar-import:%' OR key LIKE 'calendar-reminder:%') AND json_extract(value,'$.event_id')=?",
+            (event_id,),
+        )
     return {"ok": True}
+
+
+app.include_router(calendar_import.router(Event, event_values))
+app.include_router(calendar_reminders.router)
 
 
 @app.get("/api/calendar.ics")

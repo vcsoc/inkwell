@@ -1,6 +1,6 @@
 'use strict';
 // Source and installed desktop launcher. Backend stays loopback-only and dies with the app.
-const { app, BrowserWindow, dialog, session, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, session, shell, ipcMain, Notification } = require('electron');
 const { spawn } = require('node:child_process');
 const { randomBytes } = require('node:crypto');
 const net = require('node:net');
@@ -129,6 +129,7 @@ async function launch() {
     iconPath: path.join(root, 'inkwell/static/icon-512.png'),
   });
   app.once('will-quit', cleanupExports);
+  require('./calendar-reminders.cjs')(window, origin, { Notification });
   let closing = false,
     closeAllowed = false;
   window.on('close', (event) => {

@@ -31,6 +31,8 @@ Graph delta and next-page URLs remain private workspace state. Retained page has
 
 Sending identities are local per-account choices, not permission grants. Graph receives an explicit From address while OAuth retains the connected account identity; SMTP retains its login credentials. Unconfigured senders are rejected before transport and rejected aliases are never retried using another identity. Microsoft can still enforce or rewrite sender identities, and acceptance is not proof of the recipient-visible From header. See [Sending addresses](docs/SENDING-ADDRESSES.md).
 
+Calendar imports are explicit local transactions. Outlook invitations are retrieved using bounded, GET-only MIME requests; no RSVP or calendar writes are sent to providers. ICS URLs/alarms are not executed, embedded timezone recurrence programs are ignored in favor of installed named zones, and unsupported recurrence exceptions are rejected. Native reminders use fixed authenticated backend endpoints from Electron's main process, not a new renderer bridge. OS notifications expose meeting titles/locations according to desktop/lock-screen settings. They require the app to be running and cannot bypass sleep or Do Not Disturb. See [Calendar imports and reminders](docs/CALENDAR-IMPORT-REMINDERS.md).
+
 ## Reporting
 
 Do not post credentials, private mail or exploit payloads containing personal data in public issues. Report privately to the maintainer of the repository through their available private security contact. This scaffold does not invent a monitored security inbox or promise a response SLA.

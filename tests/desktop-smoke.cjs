@@ -85,6 +85,59 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
     expect(await window.evaluate(async () => (await fetch('/api/remote-folders')).json())).toEqual(
       [],
     );
+    // Exercise real session-authenticated reminder polling without disturbing the user's OS.
+    await app.evaluate(({ Notification }) => {
+      global.calendarNotices = [];
+      global.originalNoticeShow = Notification.prototype.show;
+      global.originalNoticeSupport = Notification.isSupported;
+      Notification.isSupported = () => true;
+      Notification.prototype.show = function () {
+        global.calendarNotices.push({ title: this.title, body: this.body });
+        this.emit('show');
+      };
+    });
+    const reminderId = await window.evaluate(async () => {
+      const start = new Date(Date.now() + 15 * 60000 + 15000);
+      const r = await fetch('/api/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Inkwell': '1' },
+        body: JSON.stringify({
+          title: 'Native reminder fixture',
+          start: start.toISOString(),
+          end: new Date(start.getTime() + 3600000).toISOString(),
+        }),
+      });
+      return (await r.json()).id;
+    });
+    await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0].webContents.emit('did-finish-load'),
+    );
+    await expect
+      .poll(() =>
+        app.evaluate(
+          () =>
+            global.calendarNotices.filter((n) => n.body.includes('Native reminder fixture')).length,
+        ),
+      )
+      .toBe(1);
+    await expect
+      .poll(() =>
+        window.evaluate(
+          async () =>
+            (await (await fetch('/api/calendar/reminders')).json()).reminders.filter(
+              (e) => e.title === 'Native reminder fixture',
+            ).length,
+        ),
+      )
+      .toBe(0);
+    await window.evaluate(
+      async (id) => fetch('/api/events/' + id, { method: 'DELETE', headers: { 'X-Inkwell': '1' } }),
+      reminderId,
+    );
+    await app.evaluate(({ Notification }) => {
+      Notification.prototype.show = global.originalNoticeShow;
+      Notification.isSupported = global.originalNoticeSupport;
+    });
     const messageId = Number(
       await window.locator('.message-row').first().getAttribute('data-message'),
     );
@@ -341,6 +394,8 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
       steps: 8,
     });
     await expect(window.locator('#navigation')).toHaveClass(/folder-dragging/, { timeout: 1000 });
+    // Small tiled windows can scroll Inbox out of view while revealing the source.
+    await window.locator('#navigation [data-view=inbox]').scrollIntoViewIfNeeded();
     const drop = await window.locator('#navigation [data-view=inbox]').boundingBox();
     await window.mouse.move(drop.x + drop.width / 2, drop.y + drop.height / 2, { steps: 6 });
     await window.mouse.move(drop.x + drop.width / 2 + 1, drop.y + drop.height / 2);

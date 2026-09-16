@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { DatabaseSync } = require('node:sqlite');
+const { readerAction } = require('./helpers.cjs');
 const path = require('node:path'),
   os = require('node:os');
 let original, prefix, folderId, htmlId, remoteAccount;
@@ -243,7 +244,7 @@ test('light-theme text reader switches its entire palette to dark and resets on 
   });
   await page.reload();
   await page.locator('.message-row .subject').first().click();
-  await page.locator('#reader-appearance').click();
+  await readerAction(page, 'Switch reader to dark view', 'Toggle reader light / dark');
   await expect(page.locator('#reader')).toHaveCSS('background-color', 'rgb(32, 39, 49)');
   await expect(page.locator('.message-body')).toHaveCSS('color', 'rgb(237, 241, 247)');
   await expect(page.locator('#reader')).toHaveCSS('color-scheme', 'dark');
@@ -291,7 +292,7 @@ test('HTML defaults to theme colors, toggles light and dark, and uses a bin icon
     'rgb(230, 237, 243)',
   );
   await expect(page.locator('#trash-message svg')).toBeVisible();
-  await page.locator('#reader-appearance').click();
+  await readerAction(page, 'Switch reader to light view', 'Toggle reader light / dark');
   await expect(body).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(page.locator('#reader')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(page.locator('#reader h2')).toHaveCSS('color', 'rgb(41, 46, 43)');
@@ -302,7 +303,7 @@ test('HTML defaults to theme colors, toggles light and dark, and uses a bin icon
     path: `test-results/${info.project.name}-light-reader-in-dark-theme.png`,
     fullPage: true,
   });
-  await page.locator('#reader-appearance').click();
+  await readerAction(page, 'Switch reader to dark view', 'Toggle reader light / dark');
   await expect(body).toHaveCSS('background-color', 'rgb(22, 27, 34)');
   await expect(page.locator('#reader')).toHaveCSS('background-color', 'rgb(22, 27, 34)');
   await expect(page.locator('#reader')).toHaveCSS('color-scheme', 'dark');

@@ -4,7 +4,7 @@
 
 A desktop/mobile-first email, calendar, contacts and AI workspace. The desktop app runs a private Python backend in a sandboxed Electron window. The mobile experience is an installable, responsive PWA connected to your private backend.
 
-> **Status: working early test build, not a complete or production-audited Outlook replacement.** Native standalone iOS/Android apps, Exchange/EWS, attachments, provider calendar sync and signed installers are not implemented. Microsoft OAuth/Graph mail uses the bundled public application registration. Please read the limitations before connecting important accounts.
+> **Status: working early test build, not a complete or production-audited Outlook replacement.** Native standalone iOS/Android apps, Exchange/EWS, general attachments, provider calendar sync and signed installers are not implemented. Microsoft OAuth/Graph mail uses the bundled public application registration. Please read the limitations before connecting important accounts.
 
 ## Install on this Linux machine
 
@@ -45,7 +45,7 @@ For a phone, see [Mobile setup](docs/MOBILE.md). `localhost` on a phone refers t
 | Desktop | Native OS window, isolated renderer, automatic local backend startup, single-instance launcher |
 | Mobile | Touch-oriented navigation, responsive mail reader, full-screen forms, safe-area support, install manifest, offline connectivity explanation |
 | Email | Multiple IMAP/SMTP accounts, inbox sync, isolated HTML/text previews, opt-in remote images and text links, search, pagination, unread/tag pills, local read/unread, stars, archive/trash, drafts, reply, forward, explicit SMTP sending, draft autosave, local drag-and-drop, Trash restore, and [cached .eml file export](docs/EMAIL-EXPORT.md) |
-| Calendar | Themed month grid/agenda, all-day and multi-day events, drag/two-endpoint ranges, timezone-aware daily/weekly/monthly/yearly repeats, whole-series editing, `.ics` export |
+| Calendar | Themed month grid/agenda, all-day and multi-day events, drag/two-endpoint ranges, timezone-aware daily/weekly/monthly/yearly repeats, whole-series editing, ICS/Outlook-invite import, `.ics` export, native 15-minute reminders while open |
 | Mail rules | Compact Rule Manager with list-left/editor-right layout, [scoped manual execution, drag priority and per-rule Stop](docs/RULE-EXECUTION.md), context-menu creation/application, sender/domain/TLD/subject conditions, multiple local actions, and [Not Junk](docs/NOT-JUNK.md) sender memory with Inbox/rule filing — never server mutations |
 | People | Create/edit/delete contacts, compose from contact, recipient suggestions |
 | AI | OpenAI, OpenRouter, Anthropic, Gemini and compatible APIs; official Codex CLI subscription bridge; Ollama, LM Studio, llama.cpp and served Unsloth models; explicit context sharing and draft suggestions |
@@ -78,6 +78,10 @@ Optional **From / To** search dates are inclusive in your local time zone and cl
 
 Settings has dedicated **Layout**, **Forms**, **Theme studio**, **Mail accounts**, **AI assistant**, and **Privacy & data** sub-pages—not scrolling anchors. Each has a direct link and supports reload and Back/Forward. In **Settings → Forms**, choose **Internal pages** to replace popup forms with in-app forms, then save. Open **Settings → Theme studio** for live color, typography, sizing and density editing, with a live sample preview panel, readable 16px defaults, separate sidebar font/size and spacing controls, in-app color pickers, YAML/JSON import/export, revert and saved persistence. See [Appearance](docs/APPEARANCE.md). [Rules and calendar](docs/RULES-CALENDAR.md) explains import rules, one-field live search, repeat options and the theme-colored wordmark.
 
+### Calendar imports and reminders
+
+Use **Calendar → Import .ics**, or **More actions → Add meeting invitation…** on an Outlook message, then review and add the events locally. Nothing sends an RSVP or modifies your provider calendar. Native desktop notifications remind you about timed events around 15 minutes before they start (with a small early margin), while Inkwell is open. Minimized works; closed/sleeping apps and OS notification settings can prevent timely delivery. See [Calendar import and reminders](docs/CALENDAR-IMPORT-REMINDERS.md) for supported recurrence, timezone and file limits.
+
 ### AI setup
 
 Provider presets now include **OpenRouter, OpenAI, Anthropic Claude, Google Gemini, Mistral, Groq, DeepSeek, xAI, Together AI**, and local servers. Claude and Gemini use their native APIs. For **ChatGPT/Codex subscriptions**, install the official Codex CLI on the backend and run `codex login` with ChatGPT sign-in, then choose the Codex provider and check its login. This is an advanced restricted CLI bridge, not a subscription API-key workaround. See [AI providers, local models and Codex security](docs/AI-PROVIDERS.md).
@@ -100,7 +104,7 @@ Open **Ask inkwell**, write your prompt, and optionally check **Include selected
 - **Not Outlook feature parity:** Microsoft Graph/OAuth supports delegated inbox reading and sending only. No Exchange/EWS, shared mailboxes or enterprise administration. The distributed build includes a public Inkwell application registration; Microsoft or organizational consent policies still apply.
 - No attachments, rich HTML compose, Reply All, conversation threading, provider-side rules, signatures, scheduled sending or remote folder management. Right-click folder creation builds **local-only subfolders**, not server folders. Local folders can be dragged to nest or reorder them, with a placement preview and a menu alternative; built-in and server folders remain fixed. Compose supports multiple To/Cc/Bcc recipients and local address autocomplete; see [Rule Manager and recipients](docs/RULE-MANAGER-COMPOSE.md).
 - No background IMAP IDLE, periodic polling, SMTP Sent-folder upload or two-way flag sync. Startup and post-Microsoft-connection imports are automatic. SMTP copies are stored locally; providers may separately save their own copies.
-- No CalDAV/CardDAV, per-occurrence exceptions, meeting invites, reminders, push notifications, tasks, calendar import or video-meeting creation.
+- No CalDAV/CardDAV, per-occurrence exceptions, RSVP/sending invitations, provider calendar sync, mobile push, tasks or video-meeting creation. Local ICS/Outlook-invite import and native OS reminders are available; reminders require the desktop app to stay open and cannot guarantee delivery during sleep or OS suppression.
 - Local deletion is not server deletion. A permanently deleted imported message may return on the next sync.
 - SMTP failures can have ambiguous delivery outcomes. Check the provider's Sent mailbox before retrying. There is no durable outbox/retry queue or send idempotency protocol.
 - Credentials are encrypted, but the decryption key lives beside the database. Mail, contacts and calendar content are plaintext at rest. Use full-disk encryption and protect backups.

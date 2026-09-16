@@ -39,7 +39,11 @@ window.InkwellMessageMenu = (onSelect, onError) => {
     ['filing', 'File', ['move', 'archive', 'restore', 'trash', 'delete']],
     ['mark', 'Mark', ['read', 'unread', 'flag', 'unflag', 'star', 'unstar']],
     ['find', 'Find related', ['sender', 'organisation', 'subject']],
-    ['more', 'More actions', ['write', 'contact', 'copy', 'save', 'save-eml', 'appearance']],
+    [
+      'more',
+      'More actions',
+      ['calendar-invite', 'write', 'contact', 'copy', 'save', 'save-eml', 'appearance'],
+    ],
   ];
   for (const key of ['open', 'reply', 'forward', 'apply-rule', 'not-junk', 'tags'])
     main.append(controls.get(key));

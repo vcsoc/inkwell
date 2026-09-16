@@ -1072,6 +1072,7 @@ async function messageAction(action, id) {
   if (action === 'open') return openMessage(id);
   if (action === 'flag' || action === 'unflag') return setMessageFlag(id, action === 'flag');
   if (action === 'save-eml') return InkwellDownloadEmail(id);
+  if (action === 'calendar-invite') return calendarImport.message(id);
   if (action === 'apply-rule') {
     const seed = await api('/rules/from-message/' + id);
     if (generation !== state.generation) return;
@@ -1510,7 +1511,31 @@ async function compose(data = {}) {
     renderMail,
   });
 }
-const calendarEditor = InkwellCalendar({ api, modal, state, esc, field, textarea, toast });
+const calendarImport = InkwellCalendarImport({
+  api,
+  modal,
+  esc,
+  toast,
+  refresh: async (event) => {
+    if (state.view === 'calendar') {
+      if (event)
+        state.month = new Date(
+          event.all_day ? event.start.slice(0, 10) + 'T12:00:00' : event.start,
+        );
+      await renderCalendar();
+    }
+  },
+});
+const calendarEditor = InkwellCalendar({
+  api,
+  modal,
+  state,
+  esc,
+  field,
+  textarea,
+  toast,
+  importCalendar: calendarImport.file,
+});
 async function renderCalendar() {
   return calendarEditor.render();
 }
