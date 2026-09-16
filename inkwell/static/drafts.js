@@ -16,6 +16,7 @@ window.InkwellDraftAutosave = ({ form, data, api, toast, onSaved }) => {
       subject: f.subject || '',
       body: f.body || '',
       account_id: f.account_id ? Number(f.account_id) : null,
+      from_address: f.from_address || null,
     };
   };
   if (id) lastSaved = JSON.stringify(values());

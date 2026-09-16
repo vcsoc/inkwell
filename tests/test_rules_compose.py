@@ -319,7 +319,7 @@ def test_graph_to_cc_bcc_buckets(client, monkeypatch):
     monkeypatch.setattr(microsoft, "client", HTTP)
     monkeypatch.setattr(microsoft, "access_token", lambda account: "mock-token")
     microsoft.send_mail(
-        {},
+        {"email": "me@example.com"},
         "Name <one@example.com>, two@example.com",
         "Subject",
         "Body",

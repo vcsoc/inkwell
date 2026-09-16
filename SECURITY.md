@@ -29,6 +29,8 @@ Secrets must not appear in screenshots, bug reports, version control, URLs, or u
 
 Graph delta and next-page URLs remain private workspace state. Retained page hashes detect cycles; validated URLs cannot send bearer tokens outside the permitted Graph origin/path. Downloading, flags and filing do not write server mail; provider removal events do not erase cached copies. Checkpoints follow committed imports, and schema 14 preserves existing credentials/provider IDs while adding local flags and synchronization state.
 
+Sending identities are local per-account choices, not permission grants. Graph receives an explicit From address while OAuth retains the connected account identity; SMTP retains its login credentials. Unconfigured senders are rejected before transport and rejected aliases are never retried using another identity. Microsoft can still enforce or rewrite sender identities, and acceptance is not proof of the recipient-visible From header. See [Sending addresses](docs/SENDING-ADDRESSES.md).
+
 ## Reporting
 
 Do not post credentials, private mail or exploit payloads containing personal data in public issues. Report privately to the maintainer of the repository through their available private security contact. This scaffold does not invent a monitored security inbox or promise a response SLA.

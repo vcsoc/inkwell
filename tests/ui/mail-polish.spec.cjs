@@ -161,6 +161,7 @@ test('server-tree drop files locally without displaying the account banner', asy
     route.fulfill({ json: { added: 0 } }),
   );
   const db = new DatabaseSync(path.join(process.env.INKWELL_UI_DATA, 'inkwell.db'));
+  db.exec('PRAGMA busy_timeout=1000');
   remoteAccount = Number(
     db
       .prepare(

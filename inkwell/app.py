@@ -20,6 +20,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .background_sync import BackgroundSync
 from . import (
+    sending_identities,
     not_junk,
     mail_search,
     addresses,
@@ -73,6 +74,7 @@ app.include_router(message_moves.router)
 app.include_router(tag_store.router)
 app.include_router(addresses.router)
 app.include_router(not_junk.router)
+app.include_router(sending_identities.router)
 app.add_middleware(
     TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]", *EXTRA_HOSTS]
 )
@@ -526,6 +528,7 @@ def delete_message(message_id: int):
 
 class Compose(BaseModel):
     account_id: int | None = None
+    from_address: str | None = Field(default=None, max_length=254, pattern=r"^[^\r\n]*$")
     recipient: str = Field(default="", max_length=8192)
     cc: str = Field(default="", max_length=8192)
     bcc: str = Field(default="", max_length=8192)
@@ -593,7 +596,7 @@ def save_draft(data: Compose):
             if data.draft_revision is not None and data.draft_revision != row["draft_revision"]:
                 raise HTTPException(409, "Draft changed elsewhere; your editor has been kept open")
             conn.execute(
-                "UPDATE messages SET account_id=?,recipient=?,subject=?,body=?,date=?,draft_key=COALESCE(draft_key,?),draft_revision=draft_revision+1,cc=?,bcc=? WHERE id=?",
+                "UPDATE messages SET account_id=?,recipient=?,subject=?,body=?,date=?,draft_key=COALESCE(draft_key,?),draft_revision=draft_revision+1,cc=?,bcc=?,sender=? WHERE id=?",
                 (
                     data.account_id,
                     data.recipient,
@@ -603,14 +606,16 @@ def save_draft(data: Compose):
                     data.draft_key,
                     data.cc,
                     data.bcc,
+                    data.from_address if data.from_address is not None else row["sender"],
                     row["id"],
                 ),
             )
             return {"id": row["id"], "draft_revision": row["draft_revision"] + 1}
         cursor = conn.execute(
-            "INSERT INTO messages(account_id,folder,sender,recipient,subject,body,date,unread,draft_key,draft_revision,cc,bcc) VALUES (?,'drafts','Me',?,?,?,?,0,?,1,?,?)",
+            "INSERT INTO messages(account_id,folder,sender,recipient,subject,body,date,unread,draft_key,draft_revision,cc,bcc) VALUES (?,'drafts',?,?,?,?,?,0,?,1,?,?)",
             (
                 data.account_id,
+                data.from_address or "Me",
                 data.recipient,
                 data.subject,
                 data.body,
@@ -642,7 +647,8 @@ def send_once(data: Compose):
     account = account_by_id(data.account_id)
     if data.draft_id:
         draft = rows(
-            "SELECT draft_revision FROM messages WHERE id=? AND folder='drafts'", (data.draft_id,)
+            "SELECT draft_revision,sender,account_id FROM messages WHERE id=? AND folder='drafts'",
+            (data.draft_id,),
         )
         if not draft or (
             data.draft_revision is not None and data.draft_revision != draft[0]["draft_revision"]
@@ -651,20 +657,32 @@ def send_once(data: Compose):
                 409,
                 "Draft changed, moved or was already sent. Check Drafts and Sent before sending.",
             )
+        if (
+            data.from_address is None
+            and draft[0]["sender"] != "Me"
+            and draft[0]["account_id"] == data.account_id
+        ):
+            data.from_address = draft[0]["sender"]
+    chosen_from = sending_identities.resolve(account, data.from_address)
+    transport_account = {**account, "send_from": chosen_from}
+    if account["provider"] != "microsoft":
+        transport_account["email"] = chosen_from
     try:
         transport = microsoft if account["provider"] == "microsoft" else mail
         if data.cc or data.bcc:
             transport.send_mail(
-                account, data.recipient, data.subject, data.body, cc=data.cc, bcc=data.bcc
+                transport_account, data.recipient, data.subject, data.body, cc=data.cc, bcc=data.bcc
             )
         else:
-            transport.send_mail(account, data.recipient, data.subject, data.body)
+            transport.send_mail(transport_account, data.recipient, data.subject, data.body)
+    except HTTPException:
+        raise
     except Exception as error:
         raise HTTPException(
             502,
             "Mail submission was not confirmed. Check Sent in your provider before retrying; delivery may be uncertain.",
         ) from error
-    return save_composed(data, "sent", account["email"])
+    return save_composed(data, "sent", chosen_from)
 
 
 class Event(calendar_tools.CalendarFields):

@@ -504,6 +504,9 @@ def send_mail(account, recipient, subject, body, cc="", bcc=""):
             headers={"Authorization": "Bearer " + access_token(account)},
             json={
                 "message": {
+                    "from": {
+                        "emailAddress": {"address": account.get("send_from", account["email"])}
+                    },
                     "subject": subject,
                     "body": {"contentType": "Text", "content": body},
                     "toRecipients": recipients(recipient),
@@ -513,6 +516,11 @@ def send_mail(account, recipient, subject, body, cc="", bcc=""):
                 "saveToSentItems": True,
             },
         )
+        if result.status_code == 403:
+            raise HTTPException(
+                403,
+                "Microsoft did not authorize this sender or mail submission. Check the selected From address and mailbox permissions. No fallback sender was attempted.",
+            )
         if result.status_code != 202:
             result.raise_for_status()
             raise ValueError("Graph did not accept message")

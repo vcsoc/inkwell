@@ -1,3 +1,14 @@
+.account-card {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.account-card > div {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+.account-card small {
+  overflow-wrap: anywhere;
+}
 .flag-button {
   flex: none;
   align-self: center;

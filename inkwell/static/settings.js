@@ -118,8 +118,22 @@ window.InkwellSettings = (() => {
       const accounts = await api('/accounts');
       if (!isCurrent() || !content.isConnected) return;
       accountsChanged(accounts);
-      content.innerHTML = `<section class="card" id="settings-mail"><h2>Your mail, at home.</h2><h3>Connect to inkwell</h3><p>Connect Outlook.com or Microsoft 365 with Microsoft sign-in, or add an IMAP / SMTP account using an app password. Credentials are encrypted on disk.</p>${accounts.map((a) => `<div class="account-card"><div><strong>${esc(a.name)}</strong><small>${esc(a.email)}${a.provider === 'microsoft' ? ' · Microsoft OAuth' : ''}</small></div><button class="icon-button danger" data-remove-account="${a.id}" aria-label="Remove ${esc(a.email)}">×</button></div>`).join('')}<button class="primary" id="add-account">＋ Connect email</button><div class="notice">Sync imports the newest 200 inbox messages (up to 10 MB each for IMAP). Read status, stars, folders and local sent copies stay local. Removing an account disconnects immediately but keeps downloaded mail and drafts. Attachments are not available in this build.</div><p>Gmail requires an app password if your account supports it. Outlook.com and Microsoft 365 use inkwell's configured Microsoft OAuth registration and Graph; you are not asked for an application ID or mailbox password. Some organizations may require administrator consent.</p><h3>Optional webmail</h3><p>Open Microsoft's official website in your default browser instead of connecting it to inkwell.</p><div class="form-actions"><a class="secondary" href="https://outlook.live.com/mail/" target="_blank" rel="noopener noreferrer">Open Outlook.com webmail ↗</a><a class="secondary" href="https://outlook.office.com/mail/" target="_blank" rel="noopener noreferrer">Open Microsoft 365 webmail ↗</a></div></section>`;
+      content.innerHTML = `<section class="card" id="settings-mail"><h2>Your mail, at home.</h2><h3>Connect to inkwell</h3><p>Connect Outlook.com or Microsoft 365 with Microsoft sign-in, or add an IMAP / SMTP account using an app password. Credentials are encrypted on disk.</p>${accounts.map((a) => `<div class="account-card"><div><strong>${esc(a.name)}</strong><small>${esc(a.email)}${a.provider === 'microsoft' ? ' · Microsoft OAuth' : ''}</small></div><button class="secondary" data-sending-addresses="${a.id}">Sending addresses</button><button class="icon-button danger" data-remove-account="${a.id}" aria-label="Remove ${esc(a.email)}">×</button></div>`).join('')}<button class="primary" id="add-account">＋ Connect email</button><div class="notice">Sync imports the newest 200 inbox messages (up to 10 MB each for IMAP). Read status, stars, folders and local sent copies stay local. Removing an account disconnects immediately but keeps downloaded mail and drafts. Attachments are not available in this build.</div><p>Gmail requires an app password if your account supports it. Outlook.com and Microsoft 365 use inkwell's configured Microsoft OAuth registration and Graph; you are not asked for an application ID or mailbox password. Some organizations may require administrator consent.</p><h3>Optional webmail</h3><p>Open Microsoft's official website in your default browser instead of connecting it to inkwell.</p><div class="form-actions"><a class="secondary" href="https://outlook.live.com/mail/" target="_blank" rel="noopener noreferrer">Open Outlook.com webmail ↗</a><a class="secondary" href="https://outlook.office.com/mail/" target="_blank" rel="noopener noreferrer">Open Microsoft 365 webmail ↗</a></div></section>`;
       on(content.querySelector('#add-account'), 'click', accountForm);
+      content.querySelectorAll('[data-sending-addresses]').forEach((button) =>
+        on(button, 'click', () => {
+          content.querySelector('#sending-address-settings')?.remove();
+          const root = document.createElement('section');
+          root.id = 'sending-address-settings';
+          root.className = 'card';
+          content.append(root);
+          return InkwellSendingIdentities(
+            root,
+            accounts.find((a) => a.id === Number(button.dataset.sendingAddresses)),
+            { api, esc, toast, isCurrent },
+          );
+        }),
+      );
       content.querySelectorAll('[data-remove-account]').forEach((button) =>
         on(button, 'click', async () => {
           await api('/accounts/' + button.dataset.removeAccount, { method: 'DELETE' });

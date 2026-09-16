@@ -316,13 +316,16 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
     await expect(window.locator('#toast')).toContainText('Local subfolder created.');
     await movingFolder.hover();
     const start = await movingFolder.boundingBox();
+    await window.mouse.move(start.x+start.width/2,start.y+start.height/2);
     await window.mouse.down();
-    await window.mouse.move(start.x + start.width / 2 + 10, start.y + start.height / 2, {
-      steps: 3,
+    await window.mouse.move(start.x + start.width / 2 + 24, start.y + start.height / 2, {
+      steps: 8,
     });
+    await expect(window.locator('#navigation')).toHaveClass(/folder-dragging/,{timeout:1000});
     const drop = await window.locator('#navigation [data-view=inbox]').boundingBox();
     await window.mouse.move(drop.x + drop.width / 2, drop.y + drop.height / 2, { steps: 6 });
     await window.mouse.move(drop.x + drop.width / 2 + 1, drop.y + drop.height / 2);
+    await expect(window.locator('#navigation [data-view=inbox]')).toHaveClass(/folder-drop-inside/,{timeout:1000});
     await window.mouse.up();
     await expect(
       window.locator('[data-local-branch="inbox"] [aria-label="Inbox / Desktop subfolder"]'),
