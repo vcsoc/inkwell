@@ -22,13 +22,13 @@ Image permission is never silently persisted by sender or domain. Reopening/relo
 
 ## Text links
 
-**Enable text links for this view** is available for HTML and text previews. Enabling does not load images or navigate anywhere by itself. HTML links and up to 500 literal HTTP/HTTPS URLs in text can then open in your browser. Disabling it, reopening mail or rebuilding the reader revokes permission; there is no global trusted-sender link setting.
+The **Text links** toggle in the reader toolbar is available for HTML and text previews. It starts off, supports keyboard Space and touch, and is labelled **Enable text links** for assistive technology. The tooltip describes its per-view permission and click-tracking risks. Enabling does not load images or navigate anywhere by itself. HTML links and up to 500 literal HTTP/HTTPS URLs in text can then open in your browser. Disabling it, reopening mail or rebuilding the reader revokes permission; there is no global trusted-sender link setting.
 
 Only absolute HTTP/HTTPS URLs with normal ports and eligible DNS names are supported. Script/data/file/mailto URLs, relative links, credentials, literal IP hosts, localhost and common internal hostnames remain blocked. This is not a DNS-aware firewall: aliases and redirects cannot establish trust. Websites may track clicks or display phishing content. Do not treat link text as proof of identity.
 
 Enabled links are visibly underlined, with a blue palette chosen for at least 4.5:1 contrast against the reader surface (black/white fallback for unusual custom colours). Hover strengthens the underline and keyboard focus adds an outline. This applies to HTML and text previews, including independent light/dark reader modes; sender HTML cannot remove the enabled-link underline.
 
-Links use `_blank`, `noopener noreferrer` and no-referrer policy. Web/PWA opens an isolated browser tab; Electron denies new app windows and delegates eligible URLs to the system browser only while the trusted reader link checkbox is enabled. Microsoft sign-in links retain their separate allowlist. No URL is fetched by the backend and enabling links grants no scripts or app-origin privileges to email HTML.
+Links use `_blank`, `noopener noreferrer` and no-referrer policy. Web/PWA opens an isolated browser tab; Electron denies new app windows and delegates eligible URLs to the system browser only while the trusted reader-toolbar link toggle is enabled. Microsoft sign-in links retain their separate allowlist. No URL is fetched by the backend and enabling links grants no scripts or app-origin privileges to email HTML.
 
 ## Security boundary
 

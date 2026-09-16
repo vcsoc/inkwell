@@ -13,7 +13,7 @@
   flex-wrap: nowrap;
   overflow-x: auto;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: safe flex-end;
   gap: 4px;
   margin: 0;
   padding: 3px;
@@ -34,6 +34,82 @@
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 7px;
+}
+.reader-links-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 6px;
+  border-radius: 7px;
+  color: var(--ink);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.reader-links-toggle input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.reader-links-track {
+  display: block;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--muted);
+  border: 1px solid var(--muted);
+  pointer-events: none;
+  transition: background-color 150ms ease;
+}
+.reader-links-track::after {
+  content: '';
+  display: block;
+  width: 12px;
+  height: 12px;
+  margin: 2px;
+  border-radius: 50%;
+  background: var(--surface);
+  transition: transform 150ms ease;
+}
+.reader-links-toggle input:checked + .reader-links-track {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.reader-links-toggle input:checked + .reader-links-track::after {
+  transform: translateX(14px);
+  background: var(--accent-text);
+}
+.reader-links-toggle:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.reader-links-toggle:hover {
+  background: var(--accent-light);
+}
+@container mail-reader (max-width:620px) {
+  .reader-links-label {
+    display: none;
+  }
+}
+@media (pointer: coarse), (max-width: 700px) {
+  .reader-links-toggle {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reader-links-track,
+  .reader-links-track::after {
+    transition: none;
+  }
 }
 .reader-tool svg {
   width: 17px;
@@ -85,22 +161,22 @@
     display: none;
   }
 }
-@container mail-reader (max-width:320px) {
+@container mail-reader (max-width:364px) {
   #edit-tags {
     display: none;
   }
 }
-@container mail-reader (max-width:230px) {
+@container mail-reader (max-width:274px) {
   #reader-appearance {
     display: none;
   }
 }
-@container mail-reader (max-width:185px) {
+@container mail-reader (max-width:229px) {
   #reply {
     display: none;
   }
 }
-@container mail-reader (max-width:160px) {
+@container mail-reader (max-width:204px) {
   #trash-message {
     display: none;
   }

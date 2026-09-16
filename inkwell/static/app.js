@@ -1386,6 +1386,7 @@ function renderReader() {
     InkwellHighlight(pane.querySelector(selector), state.query);
   on($('#reader-star'), 'click', () => setReaderStar(m, !m.starred));
   void InkwellHtmlPreview($('#message-preview'), m, {
+    linksControl: dock.querySelector('[data-email-links]'),
     api,
     navigate,
     esc,

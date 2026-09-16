@@ -21,9 +21,8 @@ window.InkwellHtmlPreview = async (root, message, options) => {
     origins = [],
     infoPromise = null,
     frame = null;
-  root.innerHTML =
-    '<label class="check-label email-link-control"><input type="checkbox" data-email-links aria-label="Enable text links"> Enable text links for this view</label><p class="fine-print">Links open in your browser. Destinations may track clicks or be misleading; scripts remain blocked.</p><div class="email-preview-content"></div>';
-  const checkbox = root.querySelector('[data-email-links]'),
+  root.innerHTML = '<div class="email-preview-content"></div>';
+  const checkbox = options.linksControl,
     content = root.querySelector('.email-preview-content');
   const current = () => root.isConnected && isCurrent();
   const info = () =>

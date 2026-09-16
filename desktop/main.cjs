@@ -252,7 +252,9 @@ async function launch() {
         );
     } else if (require('./email-links.cjs')(url, origin)) {
       window.webContents
-        .executeJavaScript('Boolean(document.querySelector("#reader [data-email-links]")?.checked)')
+        .executeJavaScript(
+          'Boolean(document.querySelector(".reader-tools-dock .reader-actions [data-email-links]")?.checked)',
+        )
         .then((enabled) => {
           if (enabled && !window.isDestroyed()) return shell.openExternal(url);
         })

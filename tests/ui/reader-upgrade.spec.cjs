@@ -119,7 +119,14 @@ test('Enabling reader links opens an isolated browser tab without loading tracki
   await page.locator(`[data-message="${id}"]`).click();
   const frame = page.frameLocator('.html-message');
   await expect(frame.locator('a[href]')).toHaveCount(0);
-  await page.getByLabel('Enable text links', { exact: true }).check();
+  const toggle = page
+    .locator('.reader-actions')
+    .getByRole('switch', { name: 'Enable text links', exact: true });
+  await expect(toggle).not.toBeChecked();
+  await expect(page.locator('#message-preview [data-email-links]')).toHaveCount(0);
+  await toggle.focus();
+  await toggle.press('Space');
+  await expect(toggle).toBeChecked();
   await expect(frame.getByRole('link', { name: 'Disabled navigation' })).toHaveAttribute(
     'href',
     'https://evil.example/link',
