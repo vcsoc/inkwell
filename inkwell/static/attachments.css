@@ -1,0 +1,107 @@
+#message-attachments {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  margin: 12px 0 18px;
+  background: var(--surface);
+  color: var(--ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.attachment-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.attachment-heading h3 {
+  font: 600 13px var(--font-family, sans-serif);
+  margin: 0;
+}
+.attachment-heading button,
+.attachment-card button {
+  font-size: 12px;
+  min-height: 36px;
+  padding: 6px 9px;
+}
+.attachment-status,
+.attachment-scope,
+.attachment-note {
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 5px 0;
+  color: var(--muted);
+}
+.attachment-status {
+  color: var(--ink);
+}
+.attachment-groups {
+  max-height: 260px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.attachment-source {
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+.attachment-source h4 {
+  font-size: 13px;
+  margin: 0 0 3px;
+  font-weight: 600;
+}
+.attachment-source > p {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0 0 6px;
+}
+.attachment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+  gap: 6px;
+}
+.attachment-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px;
+  background: var(--bg);
+  min-width: 0;
+}
+.attachment-card > div {
+  flex: 1;
+  min-width: 0;
+}
+.attachment-card strong {
+  font-size: 12px;
+  display: block;
+  overflow-wrap: anywhere;
+}
+.attachment-card small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+.attachment-card button {
+  flex: none;
+}
+.attachment-cached {
+  border-style: dashed;
+}
+.attachment-source summary {
+  cursor: pointer;
+  font-size: 12px;
+  padding: 8px 0;
+  min-height: 36px;
+}
+@media (pointer: coarse), (max-width: 700px) {
+  .attachment-heading button,
+  .attachment-card button,
+  .attachment-source summary {
+    min-height: 44px;
+  }
+}

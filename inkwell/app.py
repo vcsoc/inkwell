@@ -40,6 +40,7 @@ from . import (
     calendar_tools,
     calendar_import,
     calendar_reminders,
+    attachments,
 )
 
 STATIC = Path(__file__).parent / "static"
@@ -104,6 +105,11 @@ async def local_security(request: Request, call_next):
         if re.fullmatch(r"/api/messages/\d+/html", request.url.path)
         else None
     )
+    attachment_policy = (
+        response.headers.get("Content-Security-Policy")
+        if re.fullmatch(r"/api/messages/\d+/attachments/[a-f0-9]{64}/download", request.url.path)
+        else None
+    )
     response.headers.update(
         {
             "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
@@ -116,6 +122,8 @@ async def local_security(request: Request, call_next):
     if preview_policy:
         response.headers["Content-Security-Policy"] = preview_policy
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    elif attachment_policy:
+        response.headers["Content-Security-Policy"] = attachment_policy
     return response
 
 
@@ -776,6 +784,7 @@ def delete_event(event_id: int):
 
 app.include_router(calendar_import.router(Event, event_values))
 app.include_router(calendar_reminders.router)
+app.include_router(attachments.router)
 
 
 @app.get("/api/calendar.ics")

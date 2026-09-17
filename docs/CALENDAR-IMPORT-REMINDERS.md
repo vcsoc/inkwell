@@ -4,7 +4,10 @@
 
 - **Calendar → Import .ics**: choose a file, review its titles/times, then **Add to local calendar**. The calendar displays the first imported event's month.
 - On an Outlook message, choose **More actions → Add meeting invitation…** in its context/reader menu. Inkwell reads the original message's MIME using Microsoft Graph **GET**, extracts `text/calendar` / `.ics` parts, and opens the same review form. Forwarded invitations with calendar MIME parts also work.
-- Other providers currently require saving the ICS file from the provider and using the file importer. This does not add general mail attachment support.
+- Save an ICS file using the reader's [attachment panel](ATTACHMENTS.md) or your provider, then import it from Calendar or the file manager.
+- **Linux file manager → Open with → Inkwell**: the installer registers calendar MIME support and passes selected `.ics` files to the native import review, both on startup and in an already-running app. Review and explicitly add the events; a successful file-manager import opens Calendar at the imported month. Up to 10 files queue for separate review. Existing open forms/drafts are not replaced: finish or close the form first. No existing default application is changed automatically. Fully quit/reopen Inkwell after upgrading, and reopen the file manager's Open with dialog if its list was already open.
+
+The native file capability accepts only explicitly supplied local ICS paths or local file URLs, reads regular files with a 2 MB bound, and never executes them or follows remote calendar URLs. Only the trusted main app document can retrieve queued contents; renderer code cannot request arbitrary filesystem paths. The command-line equivalent is `inkwell --open-calendar /path/to/meeting.ics`.
 
 Imports are local only: no RSVP, acceptance, decline, meeting response, provider calendar synchronization or provider mail mutation occurs. Original messages and files remain unchanged. Opening the review does not create events. Import commits the entire selected batch atomically.
 

@@ -17,6 +17,8 @@ Run as your ordinary desktop user, **not root**. The installer works offline, ve
 - App icon in the same XDG data directory's icon tree
 - Uninstaller: `~/.local/opt/inkwell/uninstall.sh`
 
+The launcher registers `text/calendar` / ICS file support, so **Open with → Inkwell** can open local `.ics` files for review and local import. It works with the app closed or already running and queues behind an existing open form. No default application is changed automatically. Reopen an already-open file-manager application picker after upgrading. See [Calendar import](CALENDAR-IMPORT-REMINDERS.md).
+
 Launch **Inkwell** from your app menu or run `~/.local/bin/inkwell`. It starts the bundled backend automatically and stops it when the app quits. No service, autostart entry, root package or global system configuration is installed.
 
 The installer does **not** modify or delete the existing `~/.inkwell` workspace. On first app startup an additive database migration preserves existing password accounts while adding Microsoft OAuth metadata. Back up data with all Inkwell processes closed before upgrades.

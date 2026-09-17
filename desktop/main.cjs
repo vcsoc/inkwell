@@ -11,6 +11,12 @@ let backend;
 let quitting = false;
 const primaryInstance = app.requestSingleInstanceLock();
 if (!primaryInstance) app.quit();
+const calendarFiles = require('./calendar-files.cjs')();
+if (primaryInstance) calendarFiles.argumentsFrom(process.argv, process.cwd());
+app.on('open-file', (event, file) => {
+  event.preventDefault();
+  if (primaryInstance) calendarFiles.enqueue([file]);
+});
 
 async function availablePort() {
   return new Promise((resolve, reject) => {
@@ -130,6 +136,7 @@ async function launch() {
   });
   app.once('will-quit', cleanupExports);
   require('./calendar-reminders.cjs')(window, origin, { Notification });
+  calendarFiles.attach(window, origin, ipcMain);
   let closing = false,
     closeAllowed = false;
   window.on('close', (event) => {
@@ -300,7 +307,8 @@ app.on('before-quit', () => {
 app.on('will-quit', () => {
   backend?.kill();
 });
-app.on('second-instance', () => {
+app.on('second-instance', (_event, argv, cwd) => {
+  calendarFiles.argumentsFrom(argv, cwd);
   const w = BrowserWindow.getAllWindows()[0];
   if (w) {
     if (w.isMinimized()) w.restore();

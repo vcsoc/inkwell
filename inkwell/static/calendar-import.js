@@ -1,10 +1,11 @@
 'use strict';
 window.InkwellCalendarImport = ({ api, modal, esc, toast, refresh }) => {
   const zone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  const open = (messageId = null) => {
+  let importing = false;
+  const open = (messageId = null, nativeFile = null) => {
     modal(
       'Import meeting / calendar',
-      `<section id="calendar-import"><p class="notice">Adds local events only: no RSVP or Outlook calendar changes. Existing invitation UIDs are skipped, not overwritten. Repeating imports are limited to 1,000 occurrences; exceptions and cancellations need manual handling. A timed event without an end time uses one hour; review the dates below.</p>${messageId ? '' : '<label class="field">Calendar file (.ics)<input id="calendar-file" type="file" accept=".ics,text/calendar"></label>'}<p>Times without a timezone use ${esc(zone())}.</p><div id="calendar-import-preview"></div><p id="calendar-import-status" role="status"></p><button type="button" class="primary" id="calendar-import-save" disabled>Add to local calendar</button><p class="fine-print">Desktop reminders for timed events run about 15 minutes before the meeting. Keep Inkwell open (minimized is fine). Sleep, a closed app, or OS notification settings can delay or suppress alerts. All-day events have no timed alert.</p></section>`,
+      `<section id="calendar-import"><p class="notice">Adds local events only: no RSVP or Outlook calendar changes. Existing invitation UIDs are skipped, not overwritten. Repeating imports are limited to 1,000 occurrences; exceptions and cancellations need manual handling. A timed event without an end time uses one hour; review the dates below.</p>${nativeFile ? '<p>File: <strong>' + esc(nativeFile.filename) + '</strong></p>' : messageId ? '' : '<label class="field">Calendar file (.ics)<input id="calendar-file" type="file" accept=".ics,text/calendar"></label>'}<p>Times without a timezone use ${esc(zone())}.</p><div id="calendar-import-preview"></div><p id="calendar-import-status" role="status"></p><button type="button" class="primary" id="calendar-import-save" disabled>Add to local calendar</button><p class="fine-print">Desktop reminders for timed events run about 15 minutes before the meeting. Keep Inkwell open (minimized is fine). Sleep, a closed app, or OS notification settings can delay or suppress alerts. All-day events have no timed alert.</p></section>`,
     );
     const root = document.querySelector('#calendar-import'),
       status = root.querySelector('#calendar-import-status'),
@@ -30,7 +31,14 @@ window.InkwellCalendarImport = ({ api, modal, esc, toast, refresh }) => {
         if (current() && revision === generation) status.textContent = error.message;
       }
     };
-    if (messageId)
+    if (nativeFile)
+      void load(() =>
+        api('/calendar/import/preview', {
+          method: 'POST',
+          body: { content: nativeFile.content, timezone: zone() },
+        }),
+      );
+    else if (messageId)
       void load(() =>
         api(`/messages/${messageId}/calendar-invites?timezone=${encodeURIComponent(zone())}`),
       );
@@ -49,12 +57,13 @@ window.InkwellCalendarImport = ({ api, modal, esc, toast, refresh }) => {
     button.onclick = async () => {
       button.disabled = true;
       root.inert = true;
+      importing = true;
       try {
         const result = await api('/calendar/import', { method: 'POST', body: { entries } });
         if (!current()) return;
         document.querySelector('#modal').close();
         toast(`${result.added} calendar event(s) added; ${result.skipped} already imported.`);
-        await refresh(entries[0]?.event);
+        await refresh(entries[0]?.event, { openCalendar: !!nativeFile });
       } catch (error) {
         if (current()) {
           status.textContent = error.message;
@@ -62,8 +71,16 @@ window.InkwellCalendarImport = ({ api, modal, esc, toast, refresh }) => {
         }
       } finally {
         root.inert = false;
+        importing = false;
       }
     };
   };
-  return { file: () => open(), message: open };
+  return {
+    file: () => open(),
+    message: open,
+    native: (file) => open(null, file),
+    get busy() {
+      return importing;
+    },
+  };
 };

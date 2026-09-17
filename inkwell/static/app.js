@@ -1351,7 +1351,7 @@ function renderReader() {
   }
   $('.reader-tools-dock')?.replaceChildren();
   $('#reader').innerHTML =
-    `${InkwellReaderToolbar(m, dark, canMarkNotJunk(m))}<h2>${esc(m.subject || '(No subject)')}</h2><div class="reader-tags">${tagPills(m)}</div><div class="reader-meta"><div class="avatar">${esc(initials(m.sender))}</div><div><strong>${esc(m.sender)}</strong>${m.demo ? '<span class="badge">SAMPLE</span>' : ''}<small>To ${esc(m.recipient)}</small>${m.cc ? `<small>Cc ${esc(m.cc)}</small>` : ''}${m.bcc ? `<small>Bcc ${esc(m.bcc)}</small>` : ''}<small>${esc(new Date(m.date).toLocaleString())}</small></div></div><div id="message-preview"></div>`;
+    `${InkwellReaderToolbar(m, dark, canMarkNotJunk(m))}<h2>${esc(m.subject || '(No subject)')}</h2><div class="reader-tags">${tagPills(m)}</div><div class="reader-meta"><div class="avatar">${esc(initials(m.sender))}</div><div><strong>${esc(m.sender)}</strong>${m.demo ? '<span class="badge">SAMPLE</span>' : ''}<small>To ${esc(m.recipient)}</small>${m.cc ? `<small>Cc ${esc(m.cc)}</small>` : ''}${m.bcc ? `<small>Bcc ${esc(m.bcc)}</small>` : ''}<small>${esc(new Date(m.date).toLocaleString())}</small></div></div><section id="message-attachments" aria-label="Email attachments"></section><div id="message-preview"></div>`;
   const flagStatus = document.createElement('span');
   flagStatus.id = 'reader-flag-status';
   flagStatus.className = 'mail-pill flagged-pill';
@@ -1386,6 +1386,12 @@ function renderReader() {
   for (const selector of ['h2', '.reader-meta', '.reader-tags'])
     InkwellHighlight(pane.querySelector(selector), state.query);
   on($('#reader-star'), 'click', () => setReaderStar(m, !m.starred));
+  void InkwellAttachments($('#message-attachments'), m, {
+    api,
+    esc,
+    toast,
+    isCurrent: () => state.selected?.id === m.id,
+  });
   void InkwellHtmlPreview($('#message-preview'), m, {
     linksControl: dock.querySelector('[data-email-links]'),
     api,
@@ -1516,7 +1522,8 @@ const calendarImport = InkwellCalendarImport({
   modal,
   esc,
   toast,
-  refresh: async (event) => {
+  refresh: async (event, { openCalendar = false } = {}) => {
+    if (openCalendar && state.view !== 'calendar') await navigate('calendar');
     if (state.view === 'calendar') {
       if (event)
         state.month = new Date(
@@ -1526,6 +1533,40 @@ const calendarImport = InkwellCalendarImport({
     }
   },
 });
+if (window.inkwellCalendarFiles) {
+  let waiting = true,
+    taking = false,
+    pendingFile = null,
+    fileGeneration = 0;
+  window.addEventListener('InkwellCalendarFilesReady', () => {
+    waiting = true;
+    fileGeneration++;
+    if ($('#modal').open)
+      toast('Calendar file queued. Finish or close the current form to review it.');
+  });
+  setInterval(async () => {
+    if (!waiting || taking || !state.routerReady || $('#modal').open || calendarImport.busy) return;
+    taking = true;
+    const generation = fileGeneration;
+    try {
+      if (!pendingFile) pendingFile = await window.inkwellCalendarFiles.next();
+      if (!pendingFile) {
+        if (generation === fileGeneration) waiting = false;
+        return;
+      }
+      if ($('#modal').open || calendarImport.busy) return;
+      const file = pendingFile;
+      pendingFile = null;
+      if (file.error) toast(file.error);
+      else calendarImport.native(file);
+    } catch (error) {
+      waiting = false;
+      toast(error.message);
+    } finally {
+      taking = false;
+    }
+  }, 500);
+}
 const calendarEditor = InkwellCalendar({
   api,
   modal,

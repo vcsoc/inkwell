@@ -49,7 +49,7 @@ def init():
         # Version 1: preserve password accounts while adding Microsoft OAuth metadata.
         conn.execute("BEGIN IMMEDIATE")
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        if version > 14:
+        if version > 15:
             raise RuntimeError("This database was created by a newer inkwell version")
         if version < 1:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)")}
@@ -201,6 +201,11 @@ def init():
                 folder_id INTEGER NOT NULL REFERENCES remote_folders(id) ON DELETE CASCADE,
                 digest TEXT NOT NULL,PRIMARY KEY(folder_id,digest)) WITHOUT ROWID""")
             conn.execute("PRAGMA user_version=14")
+        if version < 15:
+            conn.execute("""CREATE TABLE IF NOT EXISTS attachment_views(
+                message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+                state TEXT NOT NULL)""")
+            conn.execute("PRAGMA user_version=15")
         # Repair derived keys from old unquoted Graph display names, without changing
         # message contents, filing, or sender decisions. Idempotent; no schema change.
         conn.execute("""UPDATE messages SET sender_key=inkwell_sender_key(sender),

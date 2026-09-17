@@ -8,7 +8,7 @@
   "scripts": {
     "desktop": "electron .",
     "test:ui": "playwright test",
-    "test:desktop": "node tests/desktop-smoke.cjs && node --test tests/calendar-reminders.cjs",
+    "test:desktop": "node tests/desktop-smoke.cjs && node --test tests/calendar-reminders.cjs tests/calendar-files.cjs && node tests/calendar-open-native.cjs",
     "build:linux": "node desktop/build-linux.mjs",
     "format": "prettier --write inkwell/static/*.{js,css,html} desktop/*.cjs tests/**/*.cjs playwright.config.cjs",
     "check": "node --check inkwell/static/app.js && node --check desktop/main.cjs && prettier --check inkwell/static/*.{js,css,html} desktop/*.cjs tests/**/*.cjs playwright.config.cjs"

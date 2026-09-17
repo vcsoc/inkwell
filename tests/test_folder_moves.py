@@ -132,4 +132,4 @@ def test_order_migration_preserves_old_alphabetical_order(client):
     assert children(client) == [a, z]
     assert children(client, "inbox") == [b]
     with store.db() as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 14
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 15
