@@ -42,9 +42,9 @@ For a phone, see [Mobile setup](docs/MOBILE.md). `localhost` on a phone refers t
 
 | Area | Implemented |
 | --- | --- |
-| Desktop | Native OS window, isolated renderer, automatic local backend startup, single-instance launcher, Linux ICS Open with integration |
+| Desktop | Native OS window, isolated renderer, automatic local backend startup, single-instance launcher, Linux ICS Open with integration, optional Omarchy Super+I launch binding |
 | Mobile | Touch-oriented navigation, responsive mail reader, full-screen forms, safe-area support, install manifest, offline connectivity explanation |
-| Email | Multiple IMAP/SMTP accounts, inbox sync, isolated HTML/text previews, opt-in remote images and text links, search, pagination, unread/tag pills, local read/unread, stars, archive/trash, drafts, reply, forward, explicit SMTP sending, draft autosave, local drag-and-drop, Trash restore, and [cached .eml file export](docs/EMAIL-EXPORT.md) |
+| Email | Multiple IMAP/SMTP accounts, inbox sync, isolated HTML/text previews, opt-in remote images and text links, search, pagination, persistent Today/This Week/This Month/Older date grouping, unread/tag pills, local read/unread, stars, archive/trash, drafts, reply, forward, explicit SMTP sending, draft autosave, local drag-and-drop, Trash restore, and [cached .eml file export](docs/EMAIL-EXPORT.md) |
 | Attachments | Top-reader filenames/sizes/downloads, exact Outlook conversation discovery across folders, selected-message IMAP inspection, inline groups, cached/offline status; [scope and limits](docs/ATTACHMENTS.md) |
 | Calendar | Themed month grid/agenda, all-day and multi-day events, drag/two-endpoint ranges, timezone-aware daily/weekly/monthly/yearly repeats, whole-series editing, ICS/Outlook-invite import, `.ics` export, native 15-minute reminders while open |
 | Mail rules | Compact Rule Manager with list-left/editor-right layout, [scoped manual execution, drag priority and per-rule Stop](docs/RULE-EXECUTION.md), context-menu creation/application, sender/domain/TLD/subject conditions, multiple local actions, and [Not Junk](docs/NOT-JUNK.md) sender memory with Inbox/rule filing — never server mutations |

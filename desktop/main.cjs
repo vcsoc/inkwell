@@ -137,6 +137,21 @@ async function launch() {
   app.once('will-quit', cleanupExports);
   require('./calendar-reminders.cjs')(window, origin, { Notification });
   calendarFiles.attach(window, origin, ipcMain);
+  const osShortcut = require('./os-shortcut.cjs')({ home: app.getPath('home') });
+  ipcMain.handle('inkwell-os-shortcut', async (event, action) => {
+    const url = new URL(event.senderFrame?.url || 'about:blank');
+    if (
+      event.sender !== window.webContents ||
+      event.senderFrame?.frameTreeNodeId !== window.webContents.mainFrame.frameTreeNodeId ||
+      url.origin !== origin ||
+      url.pathname !== '/'
+    )
+      throw Error('Untrusted shortcut request');
+    if (action === 'status') return osShortcut.status();
+    if (action === 'enable' || action === 'disable') return osShortcut.change(action === 'enable');
+    throw Error('Unknown shortcut action');
+  });
+  window.once('closed', () => ipcMain.removeHandler('inkwell-os-shortcut'));
   let closing = false,
     closeAllowed = false;
   window.on('close', (event) => {

@@ -883,7 +883,22 @@ async function renderMail({ listOnly = false } = {}) {
   renderMessageList();
   bindWorkspaceControls();
   if (state.selected) renderReader();
-  InkwellMailFilters.mount({ state, preferences, esc, saveWorkspace, refresh: refreshQuickMail });
+  InkwellMailFilters.mount({
+    state,
+    preferences,
+    esc,
+    saveWorkspace,
+    refresh: refreshQuickMail,
+    refreshGroups: async () => {
+      state.offset = 0;
+      state.generation++;
+      try {
+        await renderMail({ listOnly: true });
+      } catch (error) {
+        toast(error.message);
+      }
+    },
+  });
   $$('[data-filter]').forEach((b) =>
     on(b, 'click', () => {
       state.filter = b.dataset.filter;
@@ -910,12 +925,21 @@ async function renderMail({ listOnly = false } = {}) {
 }
 function renderMessageList() {
   const messages = state.messages;
+  const dateGroup = InkwellDateGroups();
+  let previousGroup = null;
+  const groupHeading = (message) => {
+    if (!preferences.group_messages_by_date) return '';
+    const label = dateGroup(message.date);
+    if (label === previousGroup) return '';
+    previousGroup = label;
+    return `<div class="mail-date-heading" role="heading" aria-level="3">${esc(label)}</div>`;
+  };
   $('#message-list').dataset.mailView = preferences.mail_view || 'cards';
   $('#message-list').innerHTML = messages.length
     ? messages
         .map(
           (m) =>
-            `<div class="message-row ${m.unread ? 'unread' : ''} ${state.selected?.id === m.id ? 'selected' : ''}" data-message="${m.id}" role="button" tabindex="0" aria-label="${esc(m.subject)}">${m.unread ? '<span class="unread-dot"></span>' : ''}<div class="avatar">${esc(initials(m.sender))}</div><div class="message-content"><div class="message-top"><span class="sender">${esc(displayName(['sent', 'drafts'].includes(state.view) ? m.recipient || 'New draft' : m.sender))}</span><time class="message-date">${esc(timeLabel(m.date))}</time></div><div class="subject">${state.view === 'collection' || state.searchScope !== 'folder' ? `<span class="folder-badge">${esc(['inbox', 'remote'].includes(m.folder) ? state.remoteFolders.find((f) => f.id === (m.local_folder_override ? m.local_destination_id : m.remote_folder_id))?.path || m.folder : m.folder)}</span>` : ''}${esc(m.subject || '(No subject)')}</div><div class="message-pills">${m.unread ? '<span class="mail-pill unread-pill">Unread</span>' : ''}${tagPills(m)}</div><div class="preview">${esc(m.preview)}</div></div><button class="star-button ${m.starred ? 'on' : ''}" data-star="${m.id}" aria-label="${m.starred ? 'Unstar' : 'Star'} message" aria-pressed="${!!m.starred}">${m.starred ? '★' : '☆'}</button><button class="message-more" data-more="${m.id}" aria-label="More email actions" aria-haspopup="menu" aria-expanded="false">⋯</button></div>`,
+            `${groupHeading(m)}<div class="message-row ${m.unread ? 'unread' : ''} ${state.selected?.id === m.id ? 'selected' : ''}" data-message="${m.id}" role="button" tabindex="0" aria-label="${esc(m.subject)}">${m.unread ? '<span class="unread-dot"></span>' : ''}<div class="avatar">${esc(initials(m.sender))}</div><div class="message-content"><div class="message-top"><span class="sender">${esc(displayName(['sent', 'drafts'].includes(state.view) ? m.recipient || 'New draft' : m.sender))}</span><time class="message-date">${esc(timeLabel(m.date))}</time></div><div class="subject">${state.view === 'collection' || state.searchScope !== 'folder' ? `<span class="folder-badge">${esc(['inbox', 'remote'].includes(m.folder) ? state.remoteFolders.find((f) => f.id === (m.local_folder_override ? m.local_destination_id : m.remote_folder_id))?.path || m.folder : m.folder)}</span>` : ''}${esc(m.subject || '(No subject)')}</div><div class="message-pills">${m.unread ? '<span class="mail-pill unread-pill">Unread</span>' : ''}${tagPills(m)}</div><div class="preview">${esc(m.preview)}</div></div><button class="star-button ${m.starred ? 'on' : ''}" data-star="${m.id}" aria-label="${m.starred ? 'Unstar' : 'Star'} message" aria-pressed="${!!m.starred}">${m.starred ? '★' : '☆'}</button><button class="message-more" data-more="${m.id}" aria-label="More email actions" aria-haspopup="menu" aria-expanded="false">⋯</button></div>`,
         )
         .join('')
     : `<div class="empty-state"><div class="empty-icon">▤</div><h2>${state.query ? 'Nothing found.' : 'A little breathing room.'}</h2><p>${state.query ? 'Try a sender, subject, phrase or tag name. Use tag:Work to search only tags. Folder scope and quick filters still apply.' : state.accounts.length ? 'There are no messages here. Sync your account or start a new conversation.' : 'Connect your email to get started, or explore a sample workspace first.'}</p><div class="empty-actions">${!state.accounts.length && !state.query ? '<button class="primary" id="connect-empty">Connect email</button><button class="secondary" id="demo-empty">Explore demo</button>' : ''}</div></div>`;
@@ -993,6 +1017,10 @@ function renderMessageList() {
     );
     $$('[data-table-sort]').forEach((button) =>
       on(button, 'click', () => {
+        if (preferences.group_messages_by_date && button.dataset.tableSort !== 'date') {
+          toast('Turn off Group by date to sort by another field.');
+          return;
+        }
         saveWorkspace({ mail_sort: button.dataset.tableSort });
         return refreshQuickMail();
       }),
@@ -2332,5 +2360,30 @@ const restoreRoute = () => {
 };
 window.addEventListener('popstate', restoreRoute);
 window.addEventListener('hashchange', restoreRoute);
+const dateGroupClockKey = () =>
+  new Date().toDateString() +
+  '|' +
+  new Date().getTimezoneOffset() +
+  '|' +
+  Intl.DateTimeFormat().resolvedOptions().timeZone;
+let groupedCalendarDay = dateGroupClockKey();
+function refreshDateGroupDay() {
+  const day = dateGroupClockKey();
+  if (day === groupedCalendarDay) return;
+  groupedCalendarDay = day;
+  const list = $('#message-list');
+  if (preferences.group_messages_by_date && list) {
+    const scroll = list.scrollTop;
+    const focused = list.contains(document.activeElement)
+      ? document.activeElement.closest('[data-message]')?.dataset.message
+      : null;
+    renderMessageList();
+    list.scrollTop = scroll;
+    if (focused) list.querySelector(`[data-message="${focused}"]`)?.focus({ preventScroll: true });
+  }
+}
+setInterval(refreshDateGroupDay, 60000);
+window.addEventListener('focus', refreshDateGroupDay);
+document.addEventListener('visibilitychange', refreshDateGroupDay);
 bootstrap();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});

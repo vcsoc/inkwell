@@ -1,5 +1,10 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
+contextBridge.exposeInMainWorld('inkwellOsShortcut', {
+  status: () => ipcRenderer.invoke('inkwell-os-shortcut', 'status'),
+  enable: () => ipcRenderer.invoke('inkwell-os-shortcut', 'enable'),
+  disable: () => ipcRenderer.invoke('inkwell-os-shortcut', 'disable'),
+});
 contextBridge.exposeInMainWorld('inkwellCalendarFiles', {
   next: () => ipcRenderer.invoke('inkwell-calendar-next'),
 });

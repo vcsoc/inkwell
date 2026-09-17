@@ -101,6 +101,7 @@ window.InkwellHotkeys = {
       .join(
         '',
       )}<div class="form-actions"><button class="primary" type="submit">Save shortcuts</button><button class="secondary" type="button" id="reset-shortcuts">Reset defaults</button></div><p role="status" id="shortcut-status"></p></form></section>`;
+    InkwellOsShortcutPanel(root);
     for (const input of root.querySelectorAll('[data-shortcut-capture]'))
       input.onkeydown = (e) => {
         if (e.key === 'Tab') return;
@@ -119,7 +120,7 @@ window.InkwellHotkeys = {
     const save = async (v) => {
       if (saving) return;
       saving = true;
-      const controls = [...root.querySelectorAll('input,button')];
+      const controls = [...root.querySelector('#shortcut-form').querySelectorAll('input,button')];
       controls.forEach((e) => (e.disabled = true));
       try {
         await savePreferences({ shortcuts: { ...v } });

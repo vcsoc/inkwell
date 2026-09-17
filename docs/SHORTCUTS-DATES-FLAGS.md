@@ -21,6 +21,29 @@ Sidebar arrows move focus; **Enter** opens a focused folder. Left/right collapse
 
 The redundant **+ New Message** button under the logo is removed. The top-right **Compose** button and configurable compose shortcut remain.
 
+## Optional Omarchy Super+I launch shortcut
+
+In the installed native app, open **Settings → Shortcuts → Omarchy launch shortcut → Enable Super+I**. This opt-in setting launches Inkwell when closed or focuses an existing Inkwell window through Omarchy. It is **off by default** and applies only to this computer, not other clients of the workspace. It does not set the default email application or enable autostart.
+
+An active Omarchy/Hyprland Lua session, the installed launcher, and a regular UTF-8 `~/.config/hypr/bindings.lua` are required. The app checks live bindings and refuses conflicts, backs up that file beside the original, then adds a marked fixed binding block. It uses `hl.unbind` before its own binding, reloads Hyprland and checks configuration errors. A failed change restores the previous contents when the file has not been concurrently edited; otherwise it keeps external changes and reports the backup location. Package-owned Omarchy files are never modified. Edited managed blocks require manual review rather than forced replacement.
+
+**Disable Super+I** removes only Inkwell's unchanged marked block and reloads the existing configuration. Disable it before uninstalling; personal Hyprland configuration is not removed with the application. Resetting in-app shortcut defaults does not change this OS setting. The renderer has only fixed status/enable/disable capabilities, restricted to the trusted main app document—not arbitrary command or file-write access.
+
+## Date grouping
+
+In the mailbox's **Quick filter** controls, turn on **Group by date**. This is a persistent workspace display preference, independent of filter pinning. It stays enabled across built-in, server and local folders, search results, collections, and reloads; cards and table views both support it.
+
+Groups are disjoint, using the viewer's local calendar:
+
+- **Today:** the current calendar day.
+- **This Week:** earlier days of the current Monday-start week, including days in the previous month if the week crosses a month boundary.
+- **This Month:** remaining days in the current month, excluding Today and This Week.
+- **Older:** dates before those periods.
+
+Empty sections are omitted. Future-dated and malformed/missing dates use separate **Future** and **Unknown date** labels rather than misleadingly appearing under Today or Older. Naive cached timestamps are interpreted as UTC, matching backend sorting.
+
+Grouped results use date sorting across pagination; the ascending/descending control still works. Your previous non-date sort choice is retained and restored when grouping is disabled. Headers cover the current result page, not unloaded mail or aggregate folder counts. Day/timezone changes refresh the headings without replacing the reader; suspended clients refresh on return. Toggling grouping preserves the open reader and its per-view permissions. No message records or server state change.
+
 ## Date search
 
 Optional **From** and **To** fields sit beside search. Either bound can be used alone; each has its own × clear button. Bounds are inclusive calendar days in the browser's local IANA time zone, including daylight-saving transitions. Filtering compares timestamps at microsecond precision. Invalid/reversed ranges leave the previous applied filter unchanged.

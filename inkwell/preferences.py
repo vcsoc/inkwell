@@ -49,6 +49,7 @@ class Preferences(BaseModel):
     message_list_width: int = Field(default=380, ge=220, le=900)
     ui_zoom: int = Field(default=100, ge=75, le=175)
     theme: Theme = Field(default_factory=Theme)
+    group_messages_by_date: bool = False
     mail_view: Literal["cards", "table"] = "cards"
     mail_sort: Literal[
         "date", "sender", "recipient", "subject", "unread", "starred", "tags", "imported"
@@ -71,6 +72,7 @@ class WorkspacePatch(BaseModel):
     sidebar_width: int | None = Field(default=None, ge=180, le=480)
     message_list_width: int | None = Field(default=None, ge=220, le=900)
     ui_zoom: int | None = Field(default=None, ge=75, le=175)
+    group_messages_by_date: bool | None = None
     mail_view: Literal["cards", "table"] | None = None
     mail_sort: (
         Literal["date", "sender", "recipient", "subject", "unread", "starred", "tags", "imported"]

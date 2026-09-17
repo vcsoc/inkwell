@@ -37,6 +37,8 @@ Native ICS Open with support queues only explicitly supplied local calendar file
 
 Attachment discovery is GET-only Graph or read-only IMAP, with exact conversation/account identity checks, bounded pages and validated same-resource pagination. Metadata is cached separately from file bytes. Explicit downloads are limited to 50 MB and use private temporary data, attachment disposition, sanitized filenames, octet-stream content type, no-sniff and sandbox CSP. Downloads are not malware-scanned and must be treated as untrusted. IMAP discovery itself requires bounded MIME retrieval; cloud references and attached Outlook items are not downloaded. Offline/incomplete lookup must never imply there are no attachments. See [Attachment scope and limits](docs/ATTACHMENTS.md).
 
+The optional Omarchy launch binding is off by default. Only the trusted native main app document can request its fixed status/enable/disable operations. It cannot provide commands, key combinations or filesystem paths. Changes target only a marked block in a regular user `bindings.lua`, with conflict checks, a private backup, reload/error validation and conditional rollback. Edited blocks and symlinked configurations are not overwritten. See [Keyboard controls](docs/SHORTCUTS-DATES-FLAGS.md).
+
 ## Reporting
 
 Do not post credentials, private mail or exploit payloads containing personal data in public issues. Report privately to the maintainer of the repository through their available private security contact. This scaffold does not invent a monitored security inbox or promise a response SLA.

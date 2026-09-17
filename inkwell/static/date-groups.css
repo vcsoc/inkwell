@@ -1,0 +1,15 @@
+.mail-date-heading {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+#quick-filter #group-by-date {
+  min-width: 18px;
+}
+#os-shortcut-status {
+  overflow-wrap: anywhere;
+}

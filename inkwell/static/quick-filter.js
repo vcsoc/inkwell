@@ -6,7 +6,7 @@ window.InkwellMailFilters = {
       starred_only: !!state.quick?.starred,
       tag_state: state.quick?.tag_state || 'all',
       ...(state.quick?.tag_id ? { tag_id: state.quick.tag_id } : {}),
-      sort_by: preferences.mail_sort || 'date',
+      sort_by: preferences.group_messages_by_date ? 'date' : preferences.mail_sort || 'date',
       sort_order: preferences.mail_order || 'desc',
       ...(state.dateFrom ? { date_from: state.dateFrom } : {}),
       ...(state.dateTo ? { date_to: state.dateTo } : {}),
@@ -15,7 +15,7 @@ window.InkwellMailFilters = {
         : {}),
     };
   },
-  mount({ state, preferences, esc, saveWorkspace, refresh }) {
+  mount({ state, preferences, esc, saveWorkspace, refresh, refreshGroups }) {
     const toolbar = document.querySelector('.mail-toolbar');
     toolbar.insertAdjacentHTML(
       'beforeend',
@@ -34,12 +34,24 @@ window.InkwellMailFilters = {
         .map(([value, label]) => `<option value="${value}">${label}</option>`)
         .join(
           '',
-        )}</select></label><label>Order<select id="quick-order"><option value="desc">Descending</option><option value="asc">Ascending</option></select></label><label>View<select id="quick-view"><option value="cards">Cards</option><option value="table">Table</option></select></label><label class="quick-pin" title="Keep current filters when switching folders in this session"><input type="checkbox" id="quick-pin"> Pin</label><button class="secondary" id="clear-quick-filter">Clear filters</button></div>`,
+        )}</select></label><label>Order<select id="quick-order"><option value="desc">Descending</option><option value="asc">Ascending</option></select></label><label>View<select id="quick-view"><option value="cards">Cards</option><option value="table">Table</option></select></label><label class="quick-pin" title="Group by message date in your local timezone; weeks start Monday. Uses date sorting while enabled."><input type="checkbox" role="switch" id="group-by-date"> Group by date</label><label class="quick-pin" title="Keep current filters when switching folders in this session"><input type="checkbox" id="quick-pin"> Pin</label><button class="secondary" id="clear-quick-filter">Clear filters</button></div>`,
     );
     const root = toolbar.querySelector('#quick-filter');
     root.querySelector('#quick-tag-state').value = state.quick?.tag_state || 'all';
     root.querySelector('#quick-tag').value = state.quick?.tag_id || '';
-    root.querySelector('#quick-sort').value = preferences.mail_sort || 'date';
+    root.querySelector('#quick-sort').value = preferences.group_messages_by_date
+      ? 'date'
+      : preferences.mail_sort || 'date';
+    root.querySelector('#quick-sort').disabled = !!preferences.group_messages_by_date;
+    root.querySelector('#group-by-date').checked = !!preferences.group_messages_by_date;
+    root.querySelector('#group-by-date').onchange = (event) => {
+      saveWorkspace({ group_messages_by_date: event.target.checked });
+      root.querySelector('#quick-sort').disabled = event.target.checked;
+      root.querySelector('#quick-sort').value = event.target.checked
+        ? 'date'
+        : preferences.mail_sort || 'date';
+      void refreshGroups();
+    };
     root.querySelector('#quick-order').value = preferences.mail_order || 'desc';
     root.querySelector('#quick-view').value = preferences.mail_view || 'cards';
     root.querySelector('#quick-pin').checked = !!preferences.quick_filter_pinned;
