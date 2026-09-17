@@ -1,11 +1,19 @@
 'use strict';
-window.InkwellTagColorPicker = (form) => {
-  const input = form.elements.color;
+window.InkwellTagColorPicker = (form, options = {}) => {
+  const input = options.input || form.elements.color;
+  const label = options.label || 'Tag color';
   const panel = document.createElement('details');
   panel.className = 'tag-color-picker';
   panel.innerHTML =
     '<summary aria-label="Choose tag color"><span class="tag-picker-swatch"></span>Choose color…</summary><div class="tag-color-controls"><div class="tag-color-plane" tabindex="0" role="slider" aria-label="Tag color saturation and brightness" aria-valuemin="0" aria-valuemax="100"><span class="tag-color-point"></span></div><label class="field">Hue<input type="range" min="0" max="359" step="1" aria-label="Tag color hue" class="tag-color-hue"></label><div class="tag-palette" role="group" aria-label="Tag color palette"></div><small>Choose a palette color or drag in the color area. Arrow keys adjust saturation and brightness. Hex entry is also available above.</small></div>';
-  input.closest('.color-field').after(panel);
+  if (options.mount) options.mount.append(panel);
+  else input.closest('.color-field').after(panel);
+  for (const element of panel.querySelectorAll('[aria-label]')) {
+    element.setAttribute(
+      'aria-label',
+      element.getAttribute('aria-label').replace('Tag color', label),
+    );
+  }
   const plane = panel.querySelector('.tag-color-plane'),
     point = panel.querySelector('.tag-color-point'),
     hue = panel.querySelector('.tag-color-hue');
@@ -115,7 +123,7 @@ window.InkwellTagColorPicker = (form) => {
     h = Number(hue.value);
     emit();
   };
-  const colors = [
+  const colors = options.colors || [
     '#ffffff',
     '#dddddd',
     '#999999',
@@ -159,7 +167,7 @@ window.InkwellTagColorPicker = (form) => {
     b.dataset.color = color;
     b.style.backgroundColor = color;
     b.title = color;
-    b.setAttribute('aria-label', 'Set Tag color to ' + color);
+    b.setAttribute('aria-label', 'Set ' + label + ' to ' + color);
     b.onclick = () => {
       input.value = color;
       update();

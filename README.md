@@ -50,7 +50,7 @@ For a phone, see [Mobile setup](docs/MOBILE.md). `localhost` on a phone refers t
 | Mail rules | Compact Rule Manager with list-left/editor-right layout, [scoped manual execution, drag priority and per-rule Stop](docs/RULE-EXECUTION.md), context-menu creation/application, sender/domain/TLD/subject conditions, multiple local actions, and [Not Junk](docs/NOT-JUNK.md) sender memory with Inbox/rule filing — never server mutations |
 | People | Create/edit/delete contacts, compose from contact, recipient suggestions |
 | AI | OpenAI, OpenRouter, Anthropic, Gemini and compatible APIs; official Codex CLI subscription bridge; Ollama, LM Studio, llama.cpp and served Unsloth models; explicit context sharing and draft suggestions |
-| Appearance | Saved popup/internal forms; responsive calendar side editor; 16px defaults, separate sidebar font/size, adjustable spacing, in-app RGB/hex colors, four palettes, contrast guidance and YAML/JSON theme import/export |
+| Appearance | Saved popup/internal forms; responsive calendar side editor; 16px defaults, separate sidebar font/size, adjustable spacing, compact in-app color-picker dropdowns and hex fields, four palettes, contrast guidance and YAML/JSON theme import/export |
 | Privacy | No telemetry or remote fonts, no remote email resources, TLS-only mail transport, encrypted stored credentials, CSP, origin checks, strict HttpOnly sessions, host allowlist |
 
 ### Email setup

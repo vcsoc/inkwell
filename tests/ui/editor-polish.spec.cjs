@@ -44,6 +44,40 @@ test('readable defaults, separate sidebar fonts and genuinely compact spacing pe
   await expect(page.getByLabel('Layout spacing (%)', { exact: true })).toHaveValue('80');
 });
 
+test('every theme color has a compact right-hand dropdown without changing form height', async ({
+  page,
+}, info) => {
+  const fields = page.locator('#theme-editor .color-field');
+  for (let i = 0; i < (await fields.count()); i++) {
+    const field = fields.nth(i),
+      trigger = field.locator('.theme-color-trigger');
+    await trigger.scrollIntoViewIfNeeded();
+    const before = await field.boundingBox();
+    await trigger.click();
+    await expect(field.locator('[popover]')).toBeVisible();
+    expect((await field.boundingBox()).height).toBe(before.height);
+    expect(await page.locator('.theme-color-popup:popover-open').count()).toBe(1);
+    await page.keyboard.press('Escape');
+  }
+  await page.evaluate(() => (document.documentElement.style.zoom = '1.5'));
+  const trigger = page.getByRole('button', { name: 'Choose background color', exact: true });
+  await trigger.click();
+  const popup = page.getByRole('group', { name: 'Background color picker', exact: true });
+  expect(
+    await popup.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return r.left >= 0 && r.right <= innerWidth + 1 && r.top >= 0 && r.bottom <= innerHeight + 1;
+    }),
+  ).toBe(true);
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => (document.documentElement.style.zoom = '1'));
+  await trigger.click();
+  await page.screenshot({
+    path: `test-results/${info.project.name}-theme-color-dropdown.png`,
+    fullPage: false,
+  });
+});
+
 test('YAML round trip, safe rejection and color picker stay inside the application', async ({
   page,
 }) => {
@@ -57,18 +91,35 @@ test('YAML round trip, safe rejection and color picker stay inside the applicati
   await expect(page.getByLabel('Theme name')).toHaveValue('YAML palette');
   await expect(page.getByLabel('Background color', { exact: true })).toHaveValue('#123456');
   await expect(page.locator('input[type=color]')).toHaveCount(0);
-  await page.getByText('Adjust background', { exact: true }).click();
-  const red = page.getByRole('slider', { name: 'Background red', exact: true });
-  await red.focus();
-  await red.press('Home');
-  await expect(page.getByLabel('Background color', { exact: true })).toHaveValue('#003456');
+  const trigger = page.getByRole('button', { name: 'Choose background color', exact: true });
+  const hex = page.getByLabel('Background color', { exact: true });
+  const fieldBox = await hex.boundingBox(),
+    triggerBox = await trigger.boundingBox();
+  expect(Math.abs(fieldBox.y - triggerBox.y)).toBeLessThan(2);
+  expect(triggerBox.x).toBeGreaterThanOrEqual(fieldBox.x + fieldBox.width - 2);
+  await trigger.click();
+  const popup = page.getByRole('group', { name: 'Background color picker', exact: true });
+  await expect(popup).toBeVisible();
+  await popup.getByRole('button', { name: 'Set Background color to #2664a0', exact: true }).click();
+  await expect(hex).toHaveValue('#2664a0');
+  const plane = popup.getByRole('slider', {
+    name: 'Background color saturation and brightness',
+    exact: true,
+  });
+  await plane.focus();
+  await plane.press('ArrowLeft');
+  await expect(hex).not.toHaveValue('#2664a0');
+  await popup.getByRole('button', { name: 'Set Background color to #2664a0', exact: true }).click();
+  expect(await popup.evaluate((el) => el.getBoundingClientRect().right <= innerWidth)).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(popup).not.toBeVisible();
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export theme', exact: true }).click();
   const file = await download;
   expect(file.suggestedFilename()).toBe('inkwell-theme.yaml');
   await page.locator('#theme-import').setInputFiles(await file.path());
   await expect(page.getByLabel('Theme name')).toHaveValue('YAML palette');
-  await expect(page.getByLabel('Background color', { exact: true })).toHaveValue('#003456');
+  await expect(page.getByLabel('Background color', { exact: true })).toHaveValue('#2664a0');
   await page.locator('#theme-import').setInputFiles({
     name: 'bad.yml',
     mimeType: 'application/yaml',

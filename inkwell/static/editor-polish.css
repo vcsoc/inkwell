@@ -135,15 +135,86 @@ html .sidebar .profile small {
 .color-field {
   min-width: 0;
 }
-.color-picker {
-  margin-top: 6px;
+.theme-color-input {
+  display: flex;
+  flex-direction: row;
+  gap: 0;
+  margin-bottom: 0;
+  align-items: stretch;
+  min-width: 0;
+}
+.color-field:has(.theme-color-input) > label.field {
+  margin-bottom: 6px;
+}
+.theme-color-input input {
+  flex: 1;
+  min-width: 0;
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+.theme-color-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 58px;
+  min-height: 44px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-left: 0;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--surface);
+  color: var(--ink);
+}
+.theme-color-popup {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  box-sizing: border-box;
+  overflow: auto;
+  padding: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 10px 35px #0004;
 }
-.color-picker summary {
-  cursor: pointer;
-  font-size: 14px;
+.theme-color-popup .tag-color-picker {
+  margin: 0;
+}
+.theme-color-popup summary[hidden] {
+  display: none;
+}
+.theme-color-popup .tag-color-controls {
+  margin: 0;
+  gap: 8px;
+}
+.theme-color-popup .tag-palette {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.theme-color-popup .tag-palette button {
+  min-height: 28px;
+  padding: 0;
+}
+.theme-color-popup .tag-color-plane {
+  min-height: 140px;
+}
+.theme-color-popup .field {
+  margin-bottom: 0;
+}
+.theme-color-popup .tag-color-hue {
+  min-height: 24px;
+  height: 24px;
+}
+@media (pointer: coarse) {
+  .theme-color-popup .tag-color-hue {
+    min-height: 44px;
+  }
+  .theme-color-popup .tag-palette {
+    grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+  }
+  .theme-color-popup .tag-palette button {
+    min-height: 44px;
+  }
 }
 .color-swatch {
   display: inline-block;
@@ -153,28 +224,11 @@ html .sidebar .profile small {
   vertical-align: middle;
   margin-right: 6px;
 }
-.color-picker label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  margin: 8px 0;
-}
-.color-picker input[type='range'] {
-  width: 100%;
-  min-width: 0;
-}
-.color-palette {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.color-palette button {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--muted);
+.theme-color-trigger .color-swatch {
+  margin: 0;
   border-radius: 4px;
 }
+
 main:has(#calendar-editor-layout) {
   container-type: inline-size;
   container-name: calendarspace;

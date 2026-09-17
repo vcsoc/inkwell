@@ -59,7 +59,7 @@ History survives deleting a draft/message/contact or disconnecting an account. *
 
 ## Tag color picker and menus
 
-Tag Manager uses **Choose color…** to reveal an in-app saturation/brightness area, hue control and 36-color palette, with optional hex entry and a live pill preview. Drag/touch or use arrow keys in the area (Shift for larger adjustments). There are no RGB channel sliders in Tag Manager and no native picker, eyedropper, screen-capture permission or CSP relaxation. General theme settings retain their existing RGB controls.
+Tag Manager uses **Choose color…** to reveal an in-app saturation/brightness area, hue control and 36-color palette, with optional hex entry and a live pill preview. Drag/touch or use arrow keys in the area (Shift for larger adjustments). There are no RGB channel sliders in Tag Manager and no native picker, eyedropper, screen-capture permission or CSP relaxation. Theme Studio uses the same picker controls in compact dropdowns beside its hex fields.
 
 Application context menus use text two pixels smaller than the configured base font, with a 12px minimum. No-wrap labels, scrolling and 44px touch targets are retained. This does not alter operating-system menus.
 

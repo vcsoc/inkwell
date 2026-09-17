@@ -15,7 +15,7 @@ inkwell/ai.py          Provider catalog, HTTP adapters and restricted official C
 inkwell/preferences.py Validated form-mode and theme persistence
 inkwell/static/appearance.js Independent layout/form/theme editors and validated presentation settings
 inkwell/static/theme-files.js Restricted YAML mappings and JSON theme serialization
-inkwell/static/color-editor.js In-app RGB/hex color controls, no screen capture or native eyedropper
+inkwell/static/color-editor.js Compact in-app HSV/hex dropdown color controls, no screen capture or native eyedropper
 inkwell/static/settings.js Routed Settings hub and feature-specific sub-pages
 inkwell/static/       Responsive client, app manifest, offline navigation fallback
 tests/test_api.py     Isolated API/security/storage tests and mocked transports
