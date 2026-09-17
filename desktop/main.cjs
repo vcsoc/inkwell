@@ -64,16 +64,17 @@ async function launch() {
     if (!quitting) failure = new Error(`Backend stopped (${code}). ${logs}`);
   });
   let ready = false;
-  for (let i = 0; i < 240; i++) {
+  const startupDeadline = Date.now() + 60000;
+  while (Date.now() < startupDeadline) {
     if (failure) throw failure;
     try {
-      const response = await fetch(origin);
+      const response = await fetch(origin, { signal: AbortSignal.timeout(1000) });
       if (response.ok) {
         ready = true;
         break;
       }
     } catch {}
-    await new Promise((r) => setTimeout(r, 250));
+    await new Promise((r) => setTimeout(r, 50));
   }
   if (!ready)
     throw new Error(

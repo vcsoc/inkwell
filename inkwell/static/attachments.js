@@ -56,14 +56,45 @@ window.InkwellAttachments = (() => {
       const groups = data?.groups || [],
         files = groups.flatMap((g) => g.files),
         count = files.length;
+      const statusText =
+        data?.error ||
+        data?.warning ||
+        (busy
+          ? 'Checking attachments…'
+          : !data
+            ? 'Loading attachment details…'
+            : data.complete
+              ? count
+                ? 'Attachment check complete.'
+                : 'No attachments found in the checked messages.'
+              : 'Attachment check is incomplete.');
+      const scopeText =
+        data?.scope === 'thread'
+          ? 'Entire Outlook conversation, including other folders · grouped by source message'
+          : 'This message only; full conversation discovery requires an Outlook conversation ID.';
+      const sourceText = (g) =>
+        `${g.selected ? 'This message' : g.subject}\n${g.sender}${g.date ? ' · ' + (Number.isNaN(Date.parse(g.date)) ? g.date : new Date(g.date).toLocaleString()) : ''}${g.cached_only ? ' · Earlier cached listing' : ''}`;
+      const info = [
+        statusText,
+        scopeText,
+        ...groups.filter((g) => g.files.length).map(sourceText),
+        'Files are saved only when you choose Download, never opened automatically. Cached lists contain metadata, not file contents. Only server-returned and previously discovered attachments can be listed.',
+      ].join('\n\n');
+      const selected = groups.find((g) => g.selected);
+      if (selected && (selected.files.length || selected.checked))
+        window.dispatchEvent(
+          new CustomEvent('InkwellAttachmentStatus', {
+            detail: { id: message.id, present: !!selected.files.length },
+          }),
+        );
       const card = (f) =>
         `<div class="attachment-card ${f.cached_only ? 'attachment-cached' : ''}"><div><strong title="${esc(displayName(f.name))}">${esc(displayName(f.name))}</strong><small>${esc(bytes(f.size))}${f.inline ? ' · Inline' : ''}${f.cached_only ? ' · Cached metadata' : ''}</small>${reason(f) ? `<small class="attachment-note">${esc(reason(f))}</small>` : ''}</div><button type="button" class="secondary" data-attachment-download="${f.id}" aria-label="Download ${esc(displayName(f.name))}" ${!f.downloadable || fetching.has(f.id) ? 'disabled' : ''}>${fetching.has(f.id) ? 'Downloading…' : 'Download'}</button></div>`;
-      root.innerHTML = `<div class="attachment-heading"><h3>Attachments${data ? ' · ' + count : ''}</h3><button type="button" class="secondary" data-attachment-refresh ${busy || !data?.connected ? 'disabled' : ''}>Refresh attachments</button></div><p class="attachment-status" role="status">${esc(data?.error || data?.warning || (busy ? 'Checking attachments…' : !data ? 'Loading attachment details…' : data.complete ? (count ? 'Attachment check complete.' : 'No attachments found in the checked messages.') : 'Attachment check is incomplete.'))}</p>${data?.scope === 'thread' ? '<p class="attachment-scope">Entire Outlook conversation, including other folders · grouped by source message</p>' : data?.scope === 'message' ? '<p class="attachment-scope">This message only. Full conversation discovery is available for Outlook accounts with a conversation ID.</p>' : ''}${data?.retry_at > Date.now() / 1000 ? `<p>Retry after ${esc(new Date(data.retry_at * 1000).toLocaleTimeString())}.</p>` : ''}<div class="attachment-groups">${groups
+      root.innerHTML = `<div class="attachment-heading"><button type="button" class="attachment-counter" data-attachment-info title="${esc(info)}" aria-label="Attachments${data ? ' · ' + count : ''}: details">Attachments${data ? ' · ' + count : ''}</button><button type="button" class="secondary" data-attachment-refresh ${busy || !data?.connected ? 'disabled' : ''}>Refresh attachments</button></div>${!data?.complete || data?.error || data?.warning ? `<p class="attachment-status" role="status">${esc(statusText)}</p>` : ''}${data?.retry_at > Date.now() / 1000 ? `<p>Retry after ${esc(new Date(data.retry_at * 1000).toLocaleTimeString())}.</p>` : ''}<div class="attachment-groups">${groups
         .filter((g) => g.files.length)
         .sort((a, b) => Number(b.selected) - Number(a.selected) || b.date.localeCompare(a.date))
         .map(
           (g) =>
-            `<section class="attachment-source"><h4>${g.selected ? 'This message' : esc(g.subject)}</h4><p>${esc(g.sender)}${g.date ? ' · ' + esc(Number.isNaN(Date.parse(g.date)) ? g.date : new Date(g.date).toLocaleString()) : ''}${g.cached_only ? ' · Earlier cached listing' : ''}</p><div class="attachment-grid">${g.files
+            `<section class="attachment-source" aria-label="${esc(sourceText(g))}" title="${esc(sourceText(g))}"><div class="attachment-grid">${g.files
               .filter((f) => !f.inline)
               .map(card)
               .join('')}</div>${
@@ -77,7 +108,7 @@ window.InkwellAttachments = (() => {
         )
         .join(
           '',
-        )}</div>${!busy && data?.connected && !data.complete ? '<button type="button" class="secondary" data-attachment-more>Continue attachment check</button>' : ''}<p class="attachment-note">Files are saved only when you choose Download, never opened automatically. Cached lists contain metadata, not file contents. Only server-returned and previously discovered attachments can be listed.</p>`;
+        )}</div>${!busy && data?.connected && !data.complete ? '<button type="button" class="secondary" data-attachment-more>Continue attachment check</button>' : ''}`;
       root.querySelector('.attachment-groups').scrollTop = scroll;
       root.setAttribute('aria-busy', String(busy));
       if (focused)
@@ -117,6 +148,29 @@ window.InkwellAttachments = (() => {
       }
     };
     root.onclick = async (event) => {
+      const counter = event.target.closest('[data-attachment-info]');
+      if (counter) {
+        root.querySelector('.attachment-tooltip')?.remove();
+        const tooltip = document.createElement('div');
+        tooltip.className = 'attachment-tooltip';
+        tooltip.setAttribute('popover', 'auto');
+        tooltip.setAttribute('role', 'note');
+        tooltip.textContent = counter.title;
+        root.append(tooltip);
+        const zoom = Number(getComputedStyle(document.documentElement).zoom) || 1,
+          box = counter.getBoundingClientRect();
+        tooltip.style.left = Math.max(8, Math.min(box.left / zoom, innerWidth / zoom - 376)) + 'px';
+        tooltip.style.top =
+          Math.max(
+            8,
+            Math.min(
+              box.bottom / zoom + 4,
+              innerHeight / zoom - Math.min(320, innerHeight / zoom - 16) - 8,
+            ),
+          ) + 'px';
+        tooltip.showPopover();
+        return;
+      }
       if (event.target.closest('[data-attachment-refresh]')) return run(true);
       if (event.target.closest('[data-attachment-more]')) return run(false);
       const button = event.target.closest('[data-attachment-download]');

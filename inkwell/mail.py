@@ -130,6 +130,11 @@ def sync_account(account):
                         str(msg.get("Bcc", "")),
                     ),
                 )
+                from .attachment_status import record, imap_hint
+
+                row = conn.execute("SELECT id FROM messages WHERE remote_key=?", (key,)).fetchone()
+                if row:
+                    record(conn, row["id"], imap_hint(msg))
                 addresses.remember(
                     conn, *[str(msg.get(key, "")) for key in ("From", "To", "Cc", "Bcc")]
                 )

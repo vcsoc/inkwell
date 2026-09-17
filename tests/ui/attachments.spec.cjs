@@ -104,8 +104,18 @@ test('top reader shows full-thread files, separate inline parts, safe downloads 
   await page.evaluate(() => (window.attachmentReader = document.querySelector('.message-body')));
   release();
   await expect(root).toContainText('Earlier.pdf');
-  await expect(root).toContainText('Earlier thread message');
-  await expect(root).toContainText('Entire Outlook conversation');
+  const counter = root.locator('[data-attachment-info]');
+  await expect(counter).toHaveAttribute('title', /Earlier thread message/);
+  await expect(counter).toHaveAttribute('title', /Entire Outlook conversation/);
+  await expect(root).not.toContainText('Attachment check complete.');
+  await expect(root).not.toContainText('Files are saved only');
+  await counter.click();
+  await expect(root.locator('.attachment-tooltip')).toContainText('Entire Outlook conversation');
+  await page.keyboard.press('Escape');
+  await expect(page.locator(`[data-message="${id}"] .message-paperclip`)).toHaveAttribute(
+    'data-attachment-state',
+    'yes',
+  );
   await expect(page.getByRole('switch', { name: 'Enable text links', exact: true })).toBeChecked();
   expect(
     await page.evaluate(() => window.attachmentReader === document.querySelector('.message-body')),

@@ -15,7 +15,12 @@
   gap: 8px;
   flex-wrap: wrap;
 }
-.attachment-heading h3 {
+.attachment-heading .attachment-counter {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: help;
+  color: inherit;
   font: 600 13px var(--font-family, sans-serif);
   margin: 0;
 }
@@ -46,6 +51,27 @@
   border-top: 1px solid var(--line);
   margin-top: 8px;
   padding-top: 8px;
+}
+.attachment-source:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.attachment-tooltip {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 12px;
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(50vh, 320px);
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #0004;
+  font-size: 12px;
 }
 .attachment-source h4 {
   font-size: 13px;

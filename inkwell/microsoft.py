@@ -290,7 +290,7 @@ def sync_account(
         GRAPH
         + "/me/mailFolders/"
         + quote(remote_id, safe="")
-        + "/messages?$top=100&$orderby=receivedDateTime%20desc&$select=id,from,toRecipients,ccRecipients,bccRecipients,subject,body,receivedDateTime,isRead,flag"
+        + "/messages?$top=100&$orderby=receivedDateTime%20desc&$select=id,from,toRecipients,ccRecipients,bccRecipients,subject,body,receivedDateTime,isRead,flag,hasAttachments"
     )
     if delta:
         url = url.replace("/messages?$top=100&", "/messages/delta?")
@@ -418,7 +418,18 @@ def sync_account(
                             bcc,
                         ),
                     )
-                    from . import addresses
+                    from . import addresses, attachment_status
+
+                    hint = message.get("hasAttachments")
+                    if hint is False and "cid:" in html_body.lower():
+                        hint = None  # Graph's flag excludes inline-only attachments.
+                    if isinstance(hint, bool):
+                        row = db.execute(
+                            "SELECT id FROM messages WHERE remote_key=?",
+                            (f"{account['id']}:graph:{message['id']}",),
+                        ).fetchone()
+                        if row:
+                            attachment_status.record(db, row["id"], hint)
 
                     if cursor.rowcount:
                         addresses.remember(db, sender, recipient, cc, bcc)

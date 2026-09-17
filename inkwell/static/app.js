@@ -923,6 +923,23 @@ async function renderMail({ listOnly = false } = {}) {
     await renderMail();
   });
 }
+function paintMessageAttachment(icon, present) {
+  icon.dataset.attachmentState = present === true ? 'yes' : present === false ? 'no' : 'unknown';
+  icon.title =
+    present === true
+      ? 'Attachments recorded for this message'
+      : present === false
+        ? 'No attachments reported for this message'
+        : 'Attachment status not yet checked';
+  icon.setAttribute('aria-label', icon.title);
+}
+window.addEventListener('InkwellAttachmentStatus', (event) => {
+  const { id, present } = event.detail;
+  const message = state.messages.find((m) => m.id === id);
+  if (message) message.has_attachments = present;
+  const icon = $(`[data-message="${Number(id)}"] .message-paperclip`);
+  if (icon) paintMessageAttachment(icon, present);
+});
 function renderMessageList() {
   const messages = state.messages;
   const dateGroup = InkwellDateGroups();
@@ -996,7 +1013,13 @@ function renderMessageList() {
     flag.dataset.flag = message.id;
     flag.innerHTML =
       '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 21V3h14l-3 5 3 5H5"/></svg>';
-    row.querySelector('.message-more').before(flag);
+    const paperclip = document.createElement('span');
+    paperclip.className = 'message-paperclip';
+    paperclip.setAttribute('role', 'img');
+    paperclip.innerHTML =
+      '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21 11-9 9a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>';
+    paintMessageAttachment(paperclip, message.has_attachments);
+    row.querySelector('.message-more').before(flag, paperclip);
     paintFlagButton(flag, !!message.flagged);
     on(flag, 'click', async (event) => {
       event.stopPropagation();
@@ -2191,14 +2214,17 @@ $('#today').textContent = new Date().toLocaleDateString([], {
 });
 async function bootstrap() {
   try {
-    [state.accounts, state.contacts, state.counts, preferences] = await Promise.all([
-      api('/accounts'),
-      api('/contacts'),
-      api('/counts'),
-      api('/preferences'),
-    ]);
-    state.remoteFolders = await api('/remote-folders');
-    installLocalFolders(await api('/local-folders'));
+    let localFolders;
+    [state.accounts, state.contacts, state.counts, preferences, state.remoteFolders, localFolders] =
+      await Promise.all([
+        api('/accounts'),
+        api('/contacts'),
+        api('/counts'),
+        api('/preferences'),
+        api('/remote-folders'),
+        api('/local-folders'),
+      ]);
+    installLocalFolders(localFolders);
     await navigate(routeFromLocation(), { historyMode: 'replace' });
     state.routerReady = true;
     if (location.hash !== state.route) await navigate(routeFromLocation(), { historyMode: 'none' });

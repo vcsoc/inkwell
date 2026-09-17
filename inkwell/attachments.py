@@ -79,6 +79,11 @@ def save(id, state):
             "INSERT INTO attachment_views(message_id,state) VALUES (?,?) ON CONFLICT(message_id) DO UPDATE SET state=excluded.state",
             (id, json.dumps(state)),
         )
+        from .attachment_status import record
+
+        selected = next((g for g in state["groups"] if g.get("selected")), None)
+        if selected and (selected["files"] or selected.get("checked")):
+            record(db, id, bool(selected["files"]))
 
 
 def public(state, connected):

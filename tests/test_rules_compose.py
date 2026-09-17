@@ -216,7 +216,7 @@ def test_drafts_cc_bcc_history_survive_resume_delete_and_schema_upgrade(client):
     store.init()
     assert client.get("/api/addresses?q=old").json()[0]["address"] == "old@example.com"
     with store.db() as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 15
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 16
 
 
 def test_send_multiple_recipients_and_bcc_only_preserve_local_sent(client, monkeypatch):

@@ -65,4 +65,7 @@ def query(data: Query):
                 (*params, data.offset),
             )
         ]
+        from .attachment_status import annotate
+
+        annotate(db, messages)
     return {"total": total, "folders": folders, "messages": messages}

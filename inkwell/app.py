@@ -432,6 +432,9 @@ def messages(
                 (*params, max(0, offset)),
             )
         ]
+        from .attachment_status import annotate
+
+        annotate(db, result)
         if not summary:
             return result
         total = db.execute(f"SELECT count(*) FROM messages WHERE {clause}", params).fetchone()[0]

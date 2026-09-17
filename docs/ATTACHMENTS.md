@@ -1,6 +1,8 @@
 # Reader attachments and conversation scope
 
-The reader shows **Attachments** between the sender/date header and message body. Filenames, sizes, download controls and source-message details appear here. Files from other conversation messages are grouped separately; inline attachments are in labelled expandable groups rather than automatically rendered. The attachment list has its own bounded scroll area, so a long thread does not expand the reader indefinitely.
+The reader shows **Attachments** between the sender/date header and message body. Hover the attachment counter for status, conversation scope, source-message information and download/privacy details; click it (or press Enter/Space) for a readable popup. Successful-scan and source-description paragraphs no longer consume reader space. Incomplete, offline and error notices remain visible. Filenames, sizes, download controls and source-message details appear here. Files from other conversation messages are grouped separately; inline attachments are in labelled expandable groups rather than automatically rendered. The attachment list has its own bounded scroll area, so a long thread does not expand the reader indefinitely.
+
+A paperclip beside each message's flag indicates recorded attachments; confirmed/reported absence is greyed out. An unchecked older copy uses a faint dashed paperclip labelled **Attachment status not yet checked**, rather than claiming there are no files. Hints come from provider synchronization or inspection of that specific message, not other attachments elsewhere in its conversation. Graph's presence flag excludes inline-only files; inspection can refine the hint. No per-row network requests are made just to display icons. Schema 16 adds a small cascading `message_attachment_status` table without changing existing message columns.
 
 ## Outlook conversations
 
