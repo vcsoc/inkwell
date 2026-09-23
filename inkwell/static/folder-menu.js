@@ -1,5 +1,5 @@
 'use strict';
-window.InkwellFolderMenu = (navigation, create, onError, move) => {
+window.InkwellFolderMenu = (navigation, create, onError, move, togglePin, isPinned) => {
   const menu = document.createElement('div');
   menu.id = 'folder-menu';
   menu.className = 'folder-context-menu hidden';
@@ -13,7 +13,10 @@ window.InkwellFolderMenu = (navigation, create, onError, move) => {
   moveItem.type = 'button';
   moveItem.textContent = 'Move folder…';
   moveItem.setAttribute('role', 'menuitem');
-  menu.append(item, moveItem);
+  const pinItem = document.createElement('button');
+  pinItem.type = 'button';
+  pinItem.setAttribute('role', 'menuitem');
+  menu.append(item, moveItem, pinItem);
   document.body.append(menu);
   let trigger = null,
     parent = null,
@@ -43,6 +46,8 @@ window.InkwellFolderMenu = (navigation, create, onError, move) => {
       document.scrollingElement.scrollTop,
     ]);
     moveItem.hidden = !move || !t.key.startsWith('local-');
+    pinItem.hidden = !togglePin;
+    pinItem.textContent = isPinned?.(t.key) ? 'Unpin folder' : 'Pin folder';
     menu.classList.remove('hidden');
     const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
     menu.style.maxWidth = Math.max(1, (innerWidth - 16) / zoom) + 'px';
@@ -111,6 +116,11 @@ window.InkwellFolderMenu = (navigation, create, onError, move) => {
     close(true);
     Promise.resolve(move(selected)).catch((e) => onError(e.message));
   };
+  pinItem.onclick = () => {
+    const selected = parent;
+    close(true);
+    Promise.resolve(togglePin(selected.key)).catch((e) => onError(e.message));
+  };
   menu.onkeydown = (e) => {
     e.stopPropagation();
     if (['Escape', 'Tab'].includes(e.key)) {
@@ -118,7 +128,7 @@ window.InkwellFolderMenu = (navigation, create, onError, move) => {
       close(true);
     } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
       e.preventDefault();
-      const items = [item, moveItem].filter((b) => !b.hidden),
+      const items = [item, moveItem, pinItem].filter((b) => !b.hidden),
         index = items.indexOf(document.activeElement);
       items[
         e.key === 'Home'

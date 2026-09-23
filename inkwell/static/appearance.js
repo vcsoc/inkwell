@@ -167,7 +167,7 @@ window.InkwellAppearance = (() => {
       y = luminance(b);
     return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
   }
-  function mount(root, preferences, save, toast, section) {
+  function mount(root, preferences, save, toast, section, api, savedThemes = []) {
     let savedLayout = preferences.layout || 'focus';
     let draft = validate(preferences.theme),
       saved = validate(preferences.theme);
@@ -267,7 +267,53 @@ window.InkwellAppearance = (() => {
     sample.setAttribute('aria-label', 'Live theme preview');
     sample.innerHTML =
       '<h2>Live preview</h2><p>Sample content · changes are not saved until you choose Save theme.</p><div class="theme-sample"><div class="theme-sample-sidebar"><strong>Folders</strong><div class="sample-selected">Inbox <span class="mail-pill unread-pill">3</span></div><div>Sent</div><div>Projects</div></div><div class="theme-sample-mail"><div class="theme-sample-row"><strong>Alex Morgan</strong><p>Plans for the week</p><span class="mail-pill unread-pill">Unread</span> <span class="mail-pill tag-pill">Project</span></div><div class="theme-sample-reader"><h3>A little room to think.</h3><p>This is your message text. Colors, fonts, sizing, radius and spacing update as you edit.</p><span class="primary">Reply</span> <span class="sample-danger">Delete</span></div></div></div>';
-    studio.append(sample);
+    const previewColumn = document.createElement('div');
+    previewColumn.className = 'theme-preview-column';
+    previewColumn.append(sample);
+    studio.append(previewColumn);
+    const library = document.createElement('section');
+    library.className = 'theme-library card';
+    library.innerHTML =
+      '<h2>Saved themes</h2><p>Apply a saved theme or remove it from your library.</p><div class="theme-library-list"></div>';
+    previewColumn.append(library);
+    const list = library.querySelector('.theme-library-list');
+    function renderThemes() {
+      list.innerHTML = savedThemes.length
+        ? savedThemes
+            .map(
+              (theme, index) =>
+                `<div class="theme-library-item"><div class="theme-thumbnail" aria-hidden="true" style="--thumb-bg:${theme.background};--thumb-surface:${theme.surface};--thumb-accent:${theme.accent};--thumb-text:${theme.text};--thumb-border:${theme.border}"><span></span><span></span><span></span></div><strong title="${escape(theme.name)}">${escape(theme.name)}</strong><div class="theme-library-actions"><button type="button" class="icon-button" data-apply-theme="${index}" title="Apply ${escape(theme.name)}" aria-label="Apply ${escape(theme.name)}">✓</button><button type="button" class="icon-button danger" data-delete-theme="${index}" title="Delete ${escape(theme.name)}" aria-label="Delete ${escape(theme.name)}">×</button></div></div>`,
+            )
+            .join('')
+        : '<p>No saved themes yet. Save a theme to add it here.</p>';
+    }
+    renderThemes();
+    list.addEventListener('click', async (event) => {
+      const button = event.target.closest('button');
+      if (!button || !list.contains(button)) return;
+      const applying = button.hasAttribute('data-apply-theme');
+      const index = Number(button.dataset[applying ? 'applyTheme' : 'deleteTheme']);
+      const theme = savedThemes[index];
+      if (!theme) return;
+      button.disabled = true;
+      try {
+        if (applying) {
+          await save({ form_mode: preferences.form_mode, layout: savedLayout, theme });
+          saved = validate(theme);
+          draft = structuredClone(saved);
+          fill();
+          toast('Theme applied.');
+        } else {
+          await api('/preferences/themes/' + encodeURIComponent(theme.name), { method: 'DELETE' });
+          savedThemes.splice(index, 1);
+          renderThemes();
+          toast('Theme removed from library. Your current appearance is unchanged.');
+        }
+      } catch (error) {
+        button.disabled = false;
+        toast(error.message);
+      }
+    });
     const form = root.querySelector('#theme-editor');
     const updateColors = InkwellColorEditor(form, colors);
     function preview() {
@@ -310,8 +356,18 @@ window.InkwellAppearance = (() => {
           theme: validate(draft),
         });
         saved = structuredClone(draft);
+        try {
+          await api('/preferences/themes', { method: 'PUT', body: saved });
+          savedThemes = savedThemes.filter(
+            (theme) => theme.name.toLowerCase() !== saved.name.toLowerCase(),
+          );
+          savedThemes.push(structuredClone(saved));
+          renderThemes();
+          toast('Theme saved.');
+        } catch (error) {
+          toast('Theme applied, but could not add it to the library: ' + error.message);
+        }
         preview();
-        toast('Theme saved.');
       } catch (e) {
         toast(e.message);
       }

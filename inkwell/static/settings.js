@@ -93,7 +93,9 @@ window.InkwellSettings = (() => {
       return;
     }
     if (['layout', 'forms', 'theme'].includes(page)) {
-      InkwellAppearance.mount(content, preferences, savePreferences, toast, page);
+      const themes = page === 'theme' ? await api('/preferences/themes') : [];
+      if (!isCurrent() || !content.isConnected) return;
+      InkwellAppearance.mount(content, preferences, savePreferences, toast, page, api, themes);
       return;
     }
     if (page === 'rules') {

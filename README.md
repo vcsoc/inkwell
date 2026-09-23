@@ -8,7 +8,7 @@ A desktop/mobile-first email, calendar, contacts and AI workspace. The desktop a
 
 ## Install on this Linux machine
 
-Build a bundled installer with `npm run build:linux`, then run `sh dist/inkwell-0.1.0-linux-x64.run`. The installed app appears as **inkwell** in your launcher and includes its Python backend—no development tools are required to run it. This is an unsigned Linux x86_64 user installer. See [Installing](docs/INSTALLING.md).
+Build a bundled installer with `npm run build:linux`, then run `sh dist/inkwell-0.1.1-linux-x64.run`. The installed app appears as **inkwell** in your launcher and includes its Python backend—no development tools are required to run it. This is an unsigned Linux x86_64 user installer. See [Installing](docs/INSTALLING.md).
 
 ## Start testing from source
 

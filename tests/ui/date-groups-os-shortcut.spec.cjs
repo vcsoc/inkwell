@@ -33,7 +33,9 @@ test.afterEach(async ({ page }) => {
 test('date grouping persists across folders/reload, supports tables and keeps the reader intact', async ({
   page,
 }) => {
-  await page.clock.setFixedTime(new Date('2026-09-17T16:00:00Z'));
+  // Keep other tests' sample messages in Older, never in a future date group.
+  const year = new Date().getFullYear() + 10;
+  await page.clock.setFixedTime(new Date(`${year}-09-17T16:00:00Z`));
   await api(page, '/preferences', 'PUT', {
     ...original,
     layout: 'classic',
@@ -54,7 +56,7 @@ test('date grouping persists across folders/reload, supports tables and keeps th
         });
         ids.push(m.id);
         await api(page, '/messages/' + m.id, 'PATCH', { folder });
-        db.prepare('UPDATE messages SET date=? WHERE id=?').run(`2026-${day}T12:00:00Z`, m.id);
+        db.prepare('UPDATE messages SET date=? WHERE id=?').run(`${year}-${day}T12:00:00Z`, m.id);
       }
   } finally {
     db.close();
@@ -81,7 +83,7 @@ test('date grouping persists across folders/reload, supports tables and keeps th
   ).toBe(true);
   await expect(page.getByRole('switch', { name: 'Enable text links', exact: true })).toBeChecked();
   await expect(page.locator('#quick-sort')).toBeDisabled();
-  await page.clock.setFixedTime(new Date('2026-09-18T16:00:00Z'));
+  await page.clock.setFixedTime(new Date(`${year}-09-18T16:00:00Z`));
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page.locator('.mail-date-heading')).toHaveText(['This Week', 'This Month', 'Older']);
   expect(
@@ -89,7 +91,7 @@ test('date grouping persists across folders/reload, supports tables and keeps th
       () => window.savedGroupReader === document.querySelector('#message-preview'),
     ),
   ).toBe(true);
-  await page.clock.setFixedTime(new Date('2026-09-17T16:00:00Z'));
+  await page.clock.setFixedTime(new Date(`${year}-09-17T16:00:00Z`));
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.reload();
   await expect(page.getByRole('switch', { name: 'Group by date', exact: true })).toBeChecked();

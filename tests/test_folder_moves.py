@@ -55,6 +55,19 @@ def test_cycles_conflicts_and_missing_targets_are_atomic(client):
     assert move(client, 999999, "inbox").status_code == 404
 
 
+def test_pinned_folders_persist_and_validate_destinations(client):
+    folder = client.post('/api/local-folders', json={'name': 'Pinned project'}).json()['id']
+    key = f'local-{folder}'
+    assert client.put('/api/pinned-folders', json={'folders': ['inbox', key]}).json() == ['inbox', key]
+    assert client.get('/api/pinned-folders').json() == ['inbox', key]
+    for folders in [['inbox', 'inbox'], ['remote:999999'], ['local-999999'], ['inbox<script>']]:
+        assert client.put('/api/pinned-folders', json={'folders': folders}).status_code == 422
+    assert client.get('/api/pinned-folders').json() == ['inbox', key]
+    assert client.delete(f'/api/local-folders/{folder}').status_code == 200
+    assert client.get('/api/pinned-folders').json() == ['inbox']
+    assert client.put('/api/pinned-folders', json={'folders': []}).json() == []
+
+
 def test_subtree_move_preserves_mail_rules_and_provider_metadata(client):
     a = create(client, "Parent")
     b = create(client, "Child", f"local-{a}")

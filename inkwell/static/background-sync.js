@@ -1,9 +1,16 @@
 'use strict';
-window.InkwellBackgroundSync = ({ api, refresh, toast, hasAccounts = () => false }) => {
+window.InkwellBackgroundSync = ({
+  api,
+  refresh,
+  toast,
+  onComplete = () => {},
+  hasAccounts = () => false,
+}) => {
   let active = false,
     timer = null,
     last = '',
-    polling = false;
+    polling = false,
+    completed = 0;
   const badge = document.createElement('div');
   badge.id = 'sync-progress';
   badge.className = 'sync-progress';
@@ -29,6 +36,10 @@ window.InkwellBackgroundSync = ({ api, refresh, toast, hasAccounts = () => false
     if (revision !== last) {
       last = revision;
       await refresh();
+    }
+    if (!active && status.id > completed) {
+      completed = status.id;
+      if (status.added > 0) await onComplete(status);
     }
     clearTimeout(timer);
     if (active) timer = setTimeout(poll, 2000);

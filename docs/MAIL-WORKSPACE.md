@@ -18,6 +18,14 @@ For inclusive From/To dates, local flags, double-click folder expansion and conf
 
 Schema version 3 adds stable local folder IDs and message membership. Renaming a discovered server folder preserves its local ID. Missing folders are removed from navigation only after complete discovery; cached messages are not deleted. An older executable cannot reopen a version-3 workspace—retain a pre-upgrade backup if downgrading.
 
+## New-mail sound
+
+Use the bell in the Classic app rail (or the top bar in other layouts) to turn local new-mail audio on or off. It is **off by default**. Right-click the bell, use Shift+F10, or long-press it to choose **all new mail**, **pinned folders only**, or **selected senders only**. In the sender mode, turn on a sender's small bell beside their name in the message list; the exact email address is remembered across this workspace. Choose an optional WAV/MP3 under 2 MB from the same menu, or reset to Inkwell's included short chime. Files are saved only on this backend machine, not sent to a mail provider. The active tab plays once per completed sync collection with matching newly imported incoming mail (not once per message); existing cached messages, drafts/sent copies and old historical backfills do not ring. Browser audio autoplay policies may require you to interact with the app first. This is not a system notification, and nothing sounds while the app is closed.
+
+## Pinned folders
+
+Right-click a built-in, local or server folder (or use Shift+F10 / touch-and-hold), then choose **Pin folder**. A **Pinned** group above Inbox shows a shortcut with the folder's name, full path and cached message count. Choose **Unpin folder** from the shortcut or original folder to remove it. Pins are saved in this workspace and never move messages or change the provider. Selecting a folder displays an open-folder icon; other folders use a closed-folder icon. Hierarchical indentation reflects actual parent folders; local branches use the same level spacing as their siblings.
+
 ## Create local subfolders
 
 Right-click Inbox, Archive, Sent, Drafts, Trash, a local folder or a displayed server folder and choose **New subfolder…**. Enter a name and click **Create subfolder**. Keyboard users can use Shift+F10/Context Menu; on touch screens, hold a folder. Escape dismisses the menu and restores focus. The name form can be closed without creating anything.

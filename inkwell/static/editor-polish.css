@@ -47,8 +47,8 @@ html .server-folders {
   padding-left: calc(8px * var(--sidebar-space-scale));
 }
 html .folder-children {
-  margin-left: calc(12px * var(--sidebar-space-scale));
-  padding-left: calc(4px * var(--sidebar-space-scale));
+  margin-left: calc(8px * var(--sidebar-space-scale));
+  padding-left: 0;
 }
 html[data-density='compact'] .sidebar {
   padding: 8px 6px 0;

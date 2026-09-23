@@ -375,10 +375,19 @@ dialog,
     min-height: 135px;
   }
 }
+#settings-theme {
+  container-type: inline-size;
+  container-name: themeeditor;
+}
 .theme-colors {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+}
+@container themeeditor (max-width: 680px) {
+  .theme-colors {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .theme-colors input[type='color'] {
   height: 46px;

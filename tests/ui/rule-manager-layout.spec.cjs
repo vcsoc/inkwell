@@ -113,6 +113,32 @@ test('Selected rule tools preserve editor changes and advanced settings reopen w
   await expect(page.locator('.rule-entry.active')).toHaveCount(0);
   expect((await api(page, '/rules')).filter((r) => r.name.includes(prefix))).toHaveLength(2);
 });
+test('Action type stays narrow and Remove shares the action row', async ({ page }, info) => {
+  await page.locator('#create-rule').click();
+  const type = page.getByLabel('Action 1 type');
+  const row = page.locator('[data-action-index="0"]');
+  for (const action of ['move', 'star']) {
+    await type.selectOption(action);
+    const bounds = await row.evaluate((element) => {
+      const box = (selector) => {
+        const { x, y, width, height } = element.querySelector(selector).getBoundingClientRect();
+        return { x, y, width, height };
+      };
+      return {
+        field: document.querySelector('[data-condition="0"] label').getBoundingClientRect().width,
+        type: box('label:first-child'),
+        remove: box('[data-remove-action]'),
+      };
+    });
+    if (info.project.name === 'desktop') {
+      expect(bounds.type.width).toBeLessThan(bounds.field * 1.25);
+      expect(
+        Math.abs(bounds.remove.y + bounds.remove.height - bounds.type.y - bounds.type.height),
+      ).toBeLessThan(3);
+      expect(bounds.remove.x).toBeGreaterThan(bounds.type.x + bounds.type.width);
+    }
+  }
+});
 test('Resizing the split workspace keeps editor values and controls inside the page', async ({
   page,
 }) => {

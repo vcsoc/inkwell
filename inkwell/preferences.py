@@ -3,7 +3,7 @@
 import json
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .shortcuts import DEFAULTS as SHORTCUTS, validate as validate_shortcuts
@@ -111,6 +111,46 @@ def get_preferences():
     return Preferences.model_validate(value).model_dump()
 
 
+def theme_library(db):
+    row = db.execute("SELECT value FROM settings WHERE key='saved_themes'").fetchone()
+    if row:
+        return [Theme.model_validate(item).model_dump() for item in json.loads(row['value'])]
+    # Existing workspaces already have one saved active theme; migrate it lazily.
+    row = db.execute("SELECT value FROM settings WHERE key='preferences'").fetchone()
+    current = json.loads(row['value']).get('theme', {}) if row else {}
+    return [Theme.model_validate(current).model_dump()]
+
+
+@router.get('/themes')
+def list_themes():
+    with store.db() as db:
+        return theme_library(db)
+
+
+@router.put('/themes')
+def save_theme(theme: Theme):
+    with store.db() as db:
+        db.execute('BEGIN IMMEDIATE')
+        themes = theme_library(db)
+        value = theme.model_dump()
+        themes = [t for t in themes if t['name'].casefold() != theme.name.casefold()]
+        themes.append(value)
+        db.execute("INSERT OR REPLACE INTO settings(key,value) VALUES ('saved_themes',?)", (json.dumps(themes),))
+    return value
+
+
+@router.delete('/themes/{name}')
+def delete_theme(name: str):
+    with store.db() as db:
+        db.execute('BEGIN IMMEDIATE')
+        themes = theme_library(db)
+        remaining = [t for t in themes if t['name'] != name]
+        if len(remaining) == len(themes):
+            raise HTTPException(404, 'Theme not found')
+        db.execute("INSERT OR REPLACE INTO settings(key,value) VALUES ('saved_themes',?)", (json.dumps(remaining),))
+    return {'ok': True}
+
+
 @router.get("/startup.js")
 def startup_theme():
     # Parser-blocking, same-origin and authenticated; only validated presentation data.
@@ -123,5 +163,15 @@ def startup_theme():
 
 @router.put("")
 def save_preferences(data: Preferences):
-    store.set_setting("preferences", json.dumps(data.model_dump()))
+    with store.db() as db:
+        db.execute('BEGIN IMMEDIATE')
+        if not db.execute("SELECT 1 FROM settings WHERE key='saved_themes'").fetchone():
+            db.execute(
+                "INSERT INTO settings(key,value) VALUES ('saved_themes',?)",
+                (json.dumps(theme_library(db)),),
+            )
+        db.execute(
+            "INSERT OR REPLACE INTO settings(key,value) VALUES ('preferences',?)",
+            (data.model_dump_json(),),
+        )
     return data.model_dump()

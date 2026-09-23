@@ -33,6 +33,27 @@ def test_preferences_roundtrip_and_validation(client):
     assert client.get("/api/preferences").json() == prefs
 
 
+def test_saved_theme_library_and_active_theme_are_independent(client):
+    initial = client.get('/api/preferences/themes').json()
+    assert len(initial) == 1 and initial[0]['name'] == 'Sage'
+    alternate = {**initial[0], 'name': 'Night & day', 'background': '#101010'}
+    assert client.put('/api/preferences/themes', json=alternate).status_code == 200
+    assert client.put('/api/preferences/themes', json={**alternate, 'name': 'night & day'}).status_code == 200
+    themes = client.get('/api/preferences/themes').json()
+    assert len(themes) == 2 and themes[1]['name'] == 'night & day'
+    assert client.get('/api/preferences').json()['theme']['name'] == 'Sage'
+    prefs = client.get('/api/preferences').json()
+    prefs['theme'] = alternate
+    assert client.put('/api/preferences', json=prefs).status_code == 200
+    assert [t['name'] for t in client.get('/api/preferences/themes').json()] == ['Sage', 'night & day']
+    assert client.put('/api/preferences/themes', json={**alternate, 'text': 'url(x)'}).status_code == 422
+    assert client.delete('/api/preferences/themes/unknown').status_code == 404
+    assert client.delete('/api/preferences/themes/night%20%26%20day').status_code == 200
+    assert client.delete('/api/preferences/themes/Sage').status_code == 200
+    assert client.get('/api/preferences/themes').json() == []
+    assert client.get('/api/preferences').json()['theme']['name'] == 'Night & day'
+
+
 def test_provider_catalog_and_key_isolation(client):
     catalog = client.get("/api/ai/providers").json()
     assert {

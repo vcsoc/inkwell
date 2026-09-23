@@ -94,7 +94,7 @@ window.InkwellFolderDrag = (navigation, { folders, onMove, onError }) => {
     lastPointer = { clientX: e.clientX, clientY: e.clientY, dataTransfer: e.dataTransfer };
     clear();
     const button = e.target.closest('[data-view],[data-remote-folder],#folder-root-drop');
-    if (!button || !navigation.contains(button)) {
+    if (!button || !navigation.contains(button) || button.classList.contains('pinned-link')) {
       stopHover();
       return;
     }
@@ -160,7 +160,7 @@ window.InkwellFolderDrag = (navigation, { folders, onMove, onError }) => {
   navigation.addEventListener('dragstart', (e) => {
     const button = e.target.closest('[data-view]'),
       folder = local(key(button));
-    if (!folder) return;
+    if (!folder || button.classList.contains('pinned-link')) return;
     source = folder.id;
     e.dataTransfer.clearData();
     e.dataTransfer.setData(mime, String(source));
@@ -208,7 +208,7 @@ window.InkwellFolderDrag = (navigation, { folders, onMove, onError }) => {
   );
   return {
     bind() {
-      navigation.querySelectorAll('[data-view]').forEach((b) => {
+      navigation.querySelectorAll('[data-view]:not(.pinned-link)').forEach((b) => {
         if (local(key(b))) {
           b.draggable = true;
           b.title =

@@ -23,6 +23,7 @@ from . import (
     sending_identities,
     not_junk,
     mail_search,
+    mail_notifications,
     addresses,
     tag_store,
     mail_filters,
@@ -68,6 +69,7 @@ async def lifespan(app):
 
 app = FastAPI(title="inkwell", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.include_router(preferences.router)
+app.include_router(mail_notifications.router)
 app.include_router(microsoft.router)
 app.include_router(collections.router)
 app.include_router(html_mail.router)
@@ -428,7 +430,7 @@ def messages(
         result = [
             dict(row)
             for row in db.execute(
-                f"SELECT id,account_id,remote_folder_id,local_destination_id,local_folder_override,tags,folder,sender,recipient,subject,substr(body,1,180) AS preview,date,unread,starred,flagged,demo FROM messages WHERE {clause} ORDER BY {filters.order()} LIMIT 100 OFFSET ?",
+                f"SELECT id,account_id,remote_folder_id,local_destination_id,local_folder_override,tags,folder,sender,sender_key,recipient,subject,substr(body,1,180) AS preview,date,unread,starred,flagged,demo FROM messages WHERE {clause} ORDER BY {filters.order()} LIMIT 100 OFFSET ?",
                 (*params, max(0, offset)),
             )
         ]
@@ -439,6 +441,54 @@ def messages(
             return result
         total = db.execute(f"SELECT count(*) FROM messages WHERE {clause}", params).fetchone()[0]
         return {"messages": result, "total": total}
+
+
+class PinnedFolders(BaseModel):
+    folders: list[str] = Field(max_length=100)
+
+    @field_validator('folders')
+    @classmethod
+    def valid_folders(cls, folders):
+        if len(set(folders)) != len(folders) or any(
+            not re.fullmatch(r'(inbox|archive|sent|drafts|trash|local-[1-9][0-9]*|remote:[1-9][0-9]*)', key)
+            or (key.startswith(('local-', 'remote:')) and int(re.split('[-:]', key)[1]) >= 2**63)
+            for key in folders
+        ):
+            raise ValueError('Choose unique folders')
+        return folders
+
+
+@app.get('/api/pinned-folders')
+def pinned_folders():
+    with store.db() as db:
+        row = db.execute("SELECT value FROM settings WHERE key='pinned_folders'").fetchone()
+        keys = json.loads(row['value']) if row else []
+        local = {f'local-{r[0]}' for r in db.execute('SELECT id FROM local_folders')}
+        remote = {f'remote:{r[0]}' for r in db.execute('SELECT id FROM remote_folders')}
+        return [
+            key for key in keys
+            if key in {'inbox', 'archive', 'sent', 'drafts', 'trash'} | local | remote
+        ]
+
+
+@app.put('/api/pinned-folders')
+def update_pinned_folders(data: PinnedFolders):
+    with store.db() as db:
+        db.execute('BEGIN IMMEDIATE')
+        for key in data.folders:
+            if key.startswith('local-') and not db.execute(
+                'SELECT 1 FROM local_folders WHERE id=?', (int(key[6:]),)
+            ).fetchone():
+                raise HTTPException(422, 'Local folder no longer exists')
+            if key.startswith('remote:') and not db.execute(
+                'SELECT 1 FROM remote_folders WHERE id=?', (int(key[7:]),)
+            ).fetchone():
+                raise HTTPException(422, 'Server folder no longer exists')
+        db.execute(
+            "INSERT OR REPLACE INTO settings(key,value) VALUES ('pinned_folders',?)",
+            (json.dumps(data.folders),),
+        )
+    return data.folders
 
 
 @app.get("/api/counts")

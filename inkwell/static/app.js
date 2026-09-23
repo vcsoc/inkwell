@@ -54,6 +54,7 @@ const state = {
   events: [],
   contacts: [],
   counts: [],
+  pinnedFolders: [],
   filter: 'all',
   query: '',
   offset: 0,
@@ -281,6 +282,27 @@ function requestModalClose() {
 window.inkwellFlushBeforeClose = () =>
   state.composer ? requestModalClose() : Promise.resolve(true);
 const collapsedFolders = new Set();
+const folderIcon = () =>
+  '<svg class="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path class="folder-closed" d="M2.5 6.5a2 2 0 0 1 2-2h5l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2z"/><path class="folder-open" d="M2.5 8.5v-2a2 2 0 0 1 2-2h5l2 2h8a2 2 0 0 1 2 2v2M2.5 20.5l3-9h16l-3 9z"/></svg>';
+function pinnedRows() {
+  const builtins = new Set(['inbox', 'archive', 'sent', 'drafts', 'trash']);
+  const rows = state.pinnedFolders
+    .map((key) => {
+      const local = state.localFolders?.find((f) => 'local-' + f.id === key);
+      const remote = state.remoteFolders.find((f) => 'remote:' + f.id === key);
+      if (!local && !remote && !builtins.has(key)) return '';
+      const name = local?.name || remote?.name || folders.find((f) => f[0] === key)?.[2] || key;
+      const path = (local?.path || remote?.path || name).replace(/\s*\/\s*/g, ' \\ ');
+      const total = remote
+        ? remote.cached_total || 0
+        : state.counts.find((c) => c.folder === key)?.total || 0;
+      const target = remote ? `data-remote-folder="${remote.id}"` : `data-view="${key}"`;
+      return `<button class="nav-item pinned-link" ${target} title="${esc(path)}" aria-label="${esc(name + ' (' + path + ') ' + total)}"><span>${folderIcon()}</span><span class="pinned-label">${esc(name)} <span class="pinned-path">(${esc(path)})</span></span><small class="pinned-count">${total}</small></button>`;
+    })
+    .filter(Boolean)
+    .join('');
+  return `<section class="pinned-folders" aria-label="Pinned folders"><h3>Pinned</h3>${rows || '<p class="pinned-empty">Right-click a folder to pin it here.</p>'}</section>`;
+}
 function localChildren(parent, seen = new Set()) {
   return (state.localFolders || [])
     .filter((f) => f.parent === parent && !seen.has(f.id))
@@ -288,7 +310,7 @@ function localChildren(parent, seen = new Set()) {
       const next = new Set(seen);
       next.add(f.id);
       const key = 'local-' + f.id;
-      const button = `<button class="nav-item ${state.view === key ? 'active' : ''}" data-view="${key}" aria-label="${esc(f.path || f.name)}" title="${esc(f.path || f.name)} · Local folder"><span aria-hidden="true">▱</span><span class="folder-name">${esc(f.name)}</span></button>`;
+      const button = `<button class="nav-item ${state.view === key ? 'active' : ''}" data-view="${key}" aria-label="${esc(f.path || f.name)}" title="${esc(f.path || f.name)} · Local folder"><span>${folderIcon()}</span><span class="folder-name">${esc(f.name)}</span></button>`;
       return localBranch(key, button, localChildren(key, next));
     })
     .join('');
@@ -312,7 +334,7 @@ function remoteTree() {
               .map((folder) => {
                 if (seen.has(folder.id)) return '';
                 seen.add(folder.id);
-                const button = `<button class="nav-item remote-folder ${state.remoteFolder?.id === folder.id && state.view === 'remote' ? 'active' : ''}" data-remote-folder="${folder.id}" title="${esc(folder.path)} · ${folder.cached_total ?? 0} cached · ${folder.total_count} server items (may include non-mail) · ${folder.unread_count || 0} unread items on server" aria-label="${esc(folder.path)}"><span aria-hidden="true">▱</span><span class="folder-name">${esc(folder.name)}</span><small>${(folder.cached_unread ?? folder.unread_count) || ''}</small></button>`;
+                const button = `<button class="nav-item remote-folder ${state.remoteFolder?.id === folder.id && state.view === 'remote' ? 'active' : ''}" data-remote-folder="${folder.id}" title="${esc(folder.path)} · ${folder.cached_total ?? 0} cached · ${folder.total_count} server items (may include non-mail) · ${folder.unread_count || 0} unread items on server" aria-label="${esc(folder.path)}"><span>${folderIcon()}</span><span class="folder-name">${esc(folder.name)}</span><small>${(folder.cached_unread ?? folder.unread_count) || ''}</small></button>`;
                 const children =
                   branch(folder.remote_id, depth + 1) + localChildren('remote:' + folder.id);
                 return children
@@ -331,12 +353,19 @@ function paintNavigation() {
   for (const b of $$('#navigation [data-remote-folder]')) {
     const f = state.remoteFolders.find((f) => f.id === Number(b.dataset.remoteFolder));
     b.classList.toggle('active', state.view === 'remote' && state.remoteFolder?.id === f?.id);
-    if (f) {
+    if (f && !b.classList.contains('pinned-link')) {
       b.querySelector('small').textContent = (f.cached_unread ?? f.unread_count) || '';
       b.title = `${f.path} · ${f.cached_total ?? 0} cached · ${f.total_count} server items (may include non-mail) · ${f.unread_count || 0} unread items on server`;
     }
   }
-  const inbox = $('#navigation [data-view=inbox]'),
+  $$('#navigation .pinned-link').forEach((button) => {
+    const key = button.dataset.view || 'remote:' + button.dataset.remoteFolder;
+    const remote = state.remoteFolders.find((f) => 'remote:' + f.id === key);
+    button.querySelector('.pinned-count').textContent = remote
+      ? remote.cached_total || 0
+      : state.counts.find((c) => c.folder === key)?.total || 0;
+  });
+  const inbox = $('#navigation [data-view=inbox]:not(.pinned-link)'),
     unread = state.counts.find((c) => c.folder === 'inbox')?.unread || 0;
   let count = inbox?.querySelector('.nav-count');
   if (unread && !count) {
@@ -370,6 +399,7 @@ $('#navigation').addEventListener('dblclick', (event) => {
 function navigation() {
   const key = JSON.stringify([
     state.localFolders,
+    state.pinnedFolders,
     state.accounts.map((a) => [a.id, a.email, a.provider]),
     state.remoteFolders.map((f) => [
       f.id,
@@ -385,36 +415,40 @@ function navigation() {
     return;
   }
   navigationKey = key;
-  $('#navigation').innerHTML = folders
-    .map(([id, icon, name], i) => {
-      const local = state.localFolders?.find((f) => 'local-' + f.id === id);
-      const parent = local?.parent;
-      const divider =
-        i === 6
-          ? '<div class="nav-divider"></div>' +
-            (state.localFolders?.length
-              ? '<div id="folder-root-drop" aria-label="Move folder to top level" title="Move folder to top level"></div>'
-              : '')
-          : '';
-      if (
-        parent &&
-        (['inbox', 'archive', 'sent', 'drafts', 'trash'].includes(parent) ||
-          state.localFolders.some((f) => 'local-' + f.id === parent) ||
-          state.remoteFolders.some((f) => 'remote:' + f.id === parent))
-      )
-        return divider;
-      const button = `<button class="nav-item ${state.view === id ? 'active' : ''}" data-view="${id}" aria-label="${esc(name)}"><span aria-hidden="true">${icon}</span>${local ? `<span class="folder-name">${esc(local.name)}</span>` : esc(name)}${id === 'inbox' && state.counts.find((c) => c.folder === id)?.unread ? `<span class="nav-count">${state.counts.find((c) => c.folder === id).unread}</span>` : ''}</button>`;
-      return divider + localBranch(id, button);
-    })
-    .join('');
+  $('#navigation').innerHTML =
+    pinnedRows() +
+    folders
+      .map(([id, icon, name], i) => {
+        const local = state.localFolders?.find((f) => 'local-' + f.id === id);
+        const parent = local?.parent;
+        const divider =
+          i === 6
+            ? '<div class="nav-divider"></div>' +
+              (state.localFolders?.length
+                ? '<div id="folder-root-drop" aria-label="Move folder to top level" title="Move folder to top level"></div>'
+                : '')
+            : '';
+        if (
+          parent &&
+          (['inbox', 'archive', 'sent', 'drafts', 'trash'].includes(parent) ||
+            state.localFolders.some((f) => 'local-' + f.id === parent) ||
+            state.remoteFolders.some((f) => 'remote:' + f.id === parent))
+        )
+          return divider;
+        const button = `<button class="nav-item ${state.view === id ? 'active' : ''}" data-view="${id}" aria-label="${esc(name)}"><span aria-hidden="true">${local || ['inbox', 'sent', 'drafts', 'archive', 'trash'].includes(id) ? folderIcon() : icon}</span>${local ? `<span class="folder-name">${esc(local.name)}</span>` : esc(name)}${id === 'inbox' && state.counts.find((c) => c.folder === id)?.unread ? `<span class="nav-count">${state.counts.find((c) => c.folder === id).unread}</span>` : ''}</button>`;
+        return divider + localBranch(id, button);
+      })
+      .join('');
   const serverTree = remoteTree();
   if (serverTree)
     $('#navigation [data-view=calendar]').insertAdjacentHTML(
       'beforebegin',
       '<div class="nav-divider"></div>' + serverTree,
     );
-  $('#navigation [data-view=inbox]').title = 'All cached Inbox mail in inkwell, across accounts';
-  $('#navigation [data-view=drafts]').title = 'Editable drafts saved locally in inkwell';
+  $('#navigation [data-view=inbox]:not(.pinned-link)').title =
+    'All cached Inbox mail in inkwell, across accounts';
+  $('#navigation [data-view=drafts]:not(.pinned-link)').title =
+    'Editable drafts saved locally in inkwell';
   $$('#navigation [data-account-folder-group]').forEach((d) =>
     d.addEventListener('toggle', () => {
       const key = 'account:' + d.dataset.accountFolderGroup;
@@ -475,6 +509,7 @@ function navigation() {
     : 'No account connected';
   $('#tag-manager-link').classList.toggle('active', state.view === 'tags');
   $('#rule-manager-link').classList.toggle('active', state.view === 'rules');
+  paintNavigation();
   selection.bindFolders();
   folderDrag.bind();
 }
@@ -627,15 +662,26 @@ InkwellFolderMenu(
   },
   toast,
   moveFolderForm,
+  async (key) => {
+    const pinned = state.pinnedFolders.includes(key);
+    const next = pinned
+      ? state.pinnedFolders.filter((item) => item !== key)
+      : [...state.pinnedFolders, key];
+    state.pinnedFolders = await api('/pinned-folders', { method: 'PUT', body: { folders: next } });
+    navigation();
+    toast(pinned ? 'Folder unpinned.' : 'Folder pinned for quick access.');
+  },
+  (key) => state.pinnedFolders.includes(key),
 );
 async function refreshCounts() {
-  const [counts, accounts, remoteFolders, localFolders] = await Promise.all([
+  const [counts, accounts, remoteFolders, localFolders, pinnedFolders] = await Promise.all([
     api('/counts'),
     api('/accounts'),
     api('/remote-folders'),
     api('/local-folders'),
+    api('/pinned-folders'),
   ]);
-  Object.assign(state, { counts, accounts, remoteFolders, localFolders });
+  Object.assign(state, { counts, accounts, remoteFolders, localFolders, pinnedFolders });
   installLocalFolders(localFolders);
   navigation();
 }
@@ -956,7 +1002,7 @@ function renderMessageList() {
     ? messages
         .map(
           (m) =>
-            `${groupHeading(m)}<div class="message-row ${m.unread ? 'unread' : ''} ${state.selected?.id === m.id ? 'selected' : ''}" data-message="${m.id}" role="button" tabindex="0" aria-label="${esc(m.subject)}">${m.unread ? '<span class="unread-dot"></span>' : ''}<div class="avatar">${esc(initials(m.sender))}</div><div class="message-content"><div class="message-top"><span class="sender">${esc(displayName(['sent', 'drafts'].includes(state.view) ? m.recipient || 'New draft' : m.sender))}</span><time class="message-date">${esc(timeLabel(m.date))}</time></div><div class="subject">${state.view === 'collection' || state.searchScope !== 'folder' ? `<span class="folder-badge">${esc(['inbox', 'remote'].includes(m.folder) ? state.remoteFolders.find((f) => f.id === (m.local_folder_override ? m.local_destination_id : m.remote_folder_id))?.path || m.folder : m.folder)}</span>` : ''}${esc(m.subject || '(No subject)')}</div><div class="message-pills">${m.unread ? '<span class="mail-pill unread-pill">Unread</span>' : ''}${tagPills(m)}</div><div class="preview">${esc(m.preview)}</div></div><button class="star-button ${m.starred ? 'on' : ''}" data-star="${m.id}" aria-label="${m.starred ? 'Unstar' : 'Star'} message" aria-pressed="${!!m.starred}">${m.starred ? '★' : '☆'}</button><button class="message-more" data-more="${m.id}" aria-label="More email actions" aria-haspopup="menu" aria-expanded="false">⋯</button></div>`,
+            `${groupHeading(m)}<div class="message-row ${m.unread ? 'unread' : ''} ${state.selected?.id === m.id ? 'selected' : ''}" data-message="${m.id}" role="button" tabindex="0" aria-label="${esc(m.subject)}">${m.unread ? '<span class="unread-dot"></span>' : ''}<div class="avatar">${esc(initials(m.sender))}</div><div class="message-content"><div class="message-top"><span class="sender-wrap"><span class="sender">${esc(displayName(['sent', 'drafts'].includes(state.view) ? m.recipient || 'New draft' : m.sender))}</span>${m.sender_key && m.sender_key.includes('@') && !['sent', 'drafts'].includes(state.view) ? `<button type="button" class="sender-bell" data-sender-key="${esc(m.sender_key)}" aria-pressed="${notifications.senders.includes(m.sender_key)}" aria-label="${notifications.senders.includes(m.sender_key) ? 'Stop notifying for this sender' : 'Notify for this sender'}" title="${notifications.senders.includes(m.sender_key) ? 'Stop notifying for this sender' : 'Notify for this sender'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 8-3 9h18c0-1-3-2-3-9ZM10 21h4"/></svg></button>` : ''}</span><time class="message-date">${esc(timeLabel(m.date))}</time></div><div class="subject">${state.view === 'collection' || state.searchScope !== 'folder' ? `<span class="folder-badge">${esc(['inbox', 'remote'].includes(m.folder) ? state.remoteFolders.find((f) => f.id === (m.local_folder_override ? m.local_destination_id : m.remote_folder_id))?.path || m.folder : m.folder)}</span>` : ''}${esc(m.subject || '(No subject)')}</div><div class="message-pills">${m.unread ? '<span class="mail-pill unread-pill">Unread</span>' : ''}${tagPills(m)}</div><div class="preview">${esc(m.preview)}</div></div><button class="star-button ${m.starred ? 'on' : ''}" data-star="${m.id}" aria-label="${m.starred ? 'Unstar' : 'Star'} message" aria-pressed="${!!m.starred}">${m.starred ? '★' : '☆'}</button><button class="message-more" data-more="${m.id}" aria-label="More email actions" aria-haspopup="menu" aria-expanded="false">⋯</button></div>`,
         )
         .join('')
     : `<div class="empty-state"><div class="empty-icon">▤</div><h2>${state.query ? 'Nothing found.' : 'A little breathing room.'}</h2><p>${state.query ? 'Try a sender, subject, phrase or tag name. Use tag:Work to search only tags. Folder scope and quick filters still apply.' : state.accounts.length ? 'There are no messages here. Sync your account or start a new conversation.' : 'Connect your email to get started, or explore a sample workspace first.'}</p><div class="empty-actions">${!state.accounts.length && !state.query ? '<button class="primary" id="connect-empty">Connect email</button><button class="secondary" id="demo-empty">Explore demo</button>' : ''}</div></div>`;
@@ -984,6 +1030,12 @@ function renderMessageList() {
     on(b, 'click', (e) => {
       e.stopPropagation();
       showMessageMenu(Number(b.dataset.more), b);
+    }),
+  );
+  $$('.sender-bell').forEach((button) =>
+    on(button, 'click', async (event) => {
+      event.stopPropagation();
+      await notifications.toggleSender(button.dataset.senderKey);
     }),
   );
   $$('[data-star]').forEach((b) =>
@@ -1517,7 +1569,13 @@ function renderReader() {
   );
 }
 let notJunkPolling = false;
+const notifications = InkwellMailNotifications({
+  api,
+  toast,
+  pinnedFolders: () => state.pinnedFolders,
+});
 const backgroundSync = InkwellBackgroundSync({
+  onComplete: () => notifications.completed(),
   hasAccounts: () => state.routerReady && state.accounts.length > 0,
   api,
   toast,
@@ -2215,22 +2273,32 @@ $('#today').textContent = new Date().toLocaleDateString([], {
 async function bootstrap() {
   try {
     let localFolders;
-    [state.accounts, state.contacts, state.counts, preferences, state.remoteFolders, localFolders] =
-      await Promise.all([
-        api('/accounts'),
-        api('/contacts'),
-        api('/counts'),
-        api('/preferences'),
-        api('/remote-folders'),
-        api('/local-folders'),
-      ]);
+    [
+      state.accounts,
+      state.contacts,
+      state.counts,
+      preferences,
+      state.remoteFolders,
+      localFolders,
+      state.pinnedFolders,
+    ] = await Promise.all([
+      api('/accounts'),
+      api('/contacts'),
+      api('/counts'),
+      api('/preferences'),
+      api('/remote-folders'),
+      api('/local-folders'),
+      api('/pinned-folders'),
+    ]);
     installLocalFolders(localFolders);
+    await notifications.initialize();
     await navigate(routeFromLocation(), { historyMode: 'replace' });
     state.routerReady = true;
     if (location.hash !== state.route) await navigate(routeFromLocation(), { historyMode: 'none' });
     if (state.accounts.length) {
       api('/sync', { method: 'POST' })
         .then(async (results) => {
+          if (results.some((result) => result.added > 0)) await notifications.completed();
           void backgroundSync.start();
           const errors = results.filter((r) => r.error || r.folder_error);
           if (errors.length)

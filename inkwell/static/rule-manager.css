@@ -252,10 +252,13 @@ main:has(#workspace .rule-manager) #page-title {
   grid-template-columns: minmax(100px, 1fr) minmax(95px, 0.9fr) minmax(140px, 1.5fr) auto;
 }
 .rule-manager [data-action-index] {
-  grid-template-columns: minmax(120px, 1fr) minmax(140px, 1.4fr) auto auto;
+  grid-template-columns: minmax(120px, 1fr) minmax(140px, 2.5fr) auto auto;
 }
-.rule-manager [data-action-index]:not(:has(select[data-part='value'])) {
-  grid-template-columns: minmax(120px, 1fr) auto auto;
+.rule-manager [data-action-index]:not(:has(> label:nth-of-type(2))) {
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 2.5fr) auto auto;
+}
+.rule-manager [data-action-index]:not(:has(> label:nth-of-type(2))) > [data-up-action] {
+  grid-column: 3;
 }
 .rule-manager .rule-builder-row label {
   font-size: 12px;
