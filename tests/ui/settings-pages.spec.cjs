@@ -7,6 +7,8 @@ const pages = [
   ['forms', 'Forms', '#form-mode-settings'],
   ['theme', 'Theme studio', '#theme-editor'],
   ['mail', 'Mail accounts', '#settings-mail'],
+  ['notifications', 'Notifications', '#settings-notifications'],
+  ['about', 'About', '#settings-about'],
   ['assistant', 'AI assistant', '#ai-settings'],
   ['privacy', 'Privacy & data', '#privacy-card'],
 ];

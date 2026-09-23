@@ -1751,6 +1751,7 @@ async function renderSettings() {
     preferences,
     accountForm,
     loadDemo,
+    notifications,
     navigate: (section) => navigate(section === 'overview' ? 'settings' : 'settings/' + section),
     isCurrent: () =>
       state.generation === generation && state.view === 'settings' && state.settingsPage === page,

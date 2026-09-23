@@ -38,6 +38,18 @@ window.InkwellSettings = (() => {
       description: 'Connect and manage your email accounts.',
     },
     {
+      id: 'notifications',
+      name: 'Notifications',
+      icon: '♬',
+      description: 'Choose when new mail sounds and select a notification sound.',
+    },
+    {
+      id: 'about',
+      name: 'About',
+      icon: 'ⓘ',
+      description: 'Version, developer and project information.',
+    },
+    {
       id: 'assistant',
       name: 'AI assistant',
       icon: '✦',
@@ -60,6 +72,7 @@ window.InkwellSettings = (() => {
       toast,
       preferences,
       savePreferences,
+      notifications,
       navigate,
       accountForm,
       loadDemo,
@@ -100,6 +113,57 @@ window.InkwellSettings = (() => {
     }
     if (page === 'rules') {
       await InkwellRules(content, deps);
+      return;
+    }
+    if (page === 'notifications') {
+      const current = await notifications.refresh();
+      if (!isCurrent() || !content.isConnected) return;
+      content.innerHTML = `<section class="card" id="settings-notifications"><h2>New mail sound</h2><p>Play one sound after a completed sync batch with matching new mail. Sound is off by default; no sound plays while the app is closed.</p><form id="notification-settings"><label class="check-label"><input type="checkbox" name="enabled" ${current.enabled ? 'checked' : ''}> Enable new-mail sound</label><label class="field">Notify for<select name="scope" aria-label="Notification scope"><option value="all">All new mail</option><option value="pinned">Pinned folders only</option><option value="senders">Selected senders only</option></select></label><p class="fine-print">Pin folders in the sidebar or use the small bell beside a sender in the message list. Selected senders: ${current.senders.length}.</p><button class="primary" type="submit">Save notification settings</button></form><h3>Notification sound</h3><p id="notification-sound-choice" role="status"></p><div class="form-actions"><label class="secondary notification-file-label">Choose WAV or MP3<input id="notification-sound-file" type="file" accept=".wav,.mp3,audio/wav,audio/mpeg"></label><button class="secondary" type="button" id="notification-play">Play sound</button><button class="secondary" type="button" id="notification-reset">Use default sound</button></div><p class="fine-print">Inkwell includes a short chime. A custom sound is stored only on this computer (maximum 2 MB) and replaces the default until you reset it. Browser audio may require a click first.</p></section>`;
+      const form = content.querySelector('#notification-settings');
+      form.elements.scope.value = current.scope;
+      let filename = '';
+      const paintSound = () => {
+        const custom = notifications.current.custom_sound;
+        content.querySelector('#notification-sound-choice').textContent = custom
+          ? `Custom notification sound${filename ? ': ' + filename : ' (WAV or MP3)'}`
+          : 'Default: Inkwell chime';
+        content.querySelector('#notification-reset').disabled = !custom;
+      };
+      paintSound();
+      on(form, 'submit', async (event) => {
+        event.preventDefault();
+        await notifications.update({
+          enabled: form.elements.enabled.checked,
+          scope: form.elements.scope.value,
+        });
+        toast('Notification settings saved.');
+      });
+      on(content.querySelector('#notification-sound-file'), 'change', async (event) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+        await notifications.uploadSound(file);
+        filename = file.name;
+        if (isCurrent()) {
+          paintSound();
+          toast('Custom notification sound saved.');
+        }
+      });
+      on(content.querySelector('#notification-reset'), 'click', async () => {
+        await notifications.resetSound();
+        filename = '';
+        if (isCurrent()) {
+          paintSound();
+          toast('Default sound restored.');
+        }
+      });
+      on(content.querySelector('#notification-play'), 'click', () => notifications.previewSound());
+      return;
+    }
+    if (page === 'about') {
+      const info = await api('/about');
+      if (!isCurrent() || !content.isConnected) return;
+      content.innerHTML = `<section class="card" id="settings-about"><h2>About inkwell</h2><p>A local-first workspace for email, calendar, contacts and optional AI assistance.</p><dl class="about-details"><div><dt>Version</dt><dd id="app-version">${esc(info.version)}</dd></div><div><dt>Last commit ID</dt><dd id="app-commit"><code>${esc(info.commit)}</code></dd></div><div><dt>Developer</dt><dd>Developed by Chris Visser</dd></div></dl><p><a class="about-github" href="https://github.com/vcsoc/inkwell" target="_blank" rel="noopener noreferrer" aria-label="Inkwell on GitHub"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 .8a11.2 11.2 0 0 0-3.54 21.82c.56.1.77-.24.77-.54v-2.1c-3.12.67-3.78-1.32-3.78-1.32-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.69.08-.69 1.13.08 1.73 1.16 1.73 1.16 1 .1.78 2.35 3.08 1.67.1-.72.4-1.21.72-1.49-2.49-.28-5.11-1.25-5.11-5.54 0-1.23.44-2.23 1.16-3.01-.12-.28-.51-1.43.11-2.97 0 0 .95-.31 3.08 1.15a10.7 10.7 0 0 1 5.6 0c2.13-1.46 3.07-1.15 3.07-1.15.62 1.54.23 2.69.12 2.97.72.78 1.15 1.78 1.15 3 0 4.31-2.62 5.27-5.12 5.55.4.34.76 1.03.76 2.08v3.08c0 .3.2.65.78.54A11.2 11.2 0 0 0 12 .8Z"/></svg><span>github.com/vcsoc/inkwell ↗</span></a></p></section>`;
       return;
     }
     if (page === 'privacy') {

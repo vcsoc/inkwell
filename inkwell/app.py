@@ -21,6 +21,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .background_sync import BackgroundSync
 from . import (
     sending_identities,
+    app_info,
     not_junk,
     mail_search,
     mail_notifications,
@@ -69,6 +70,7 @@ async def lifespan(app):
 
 app = FastAPI(title="inkwell", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.include_router(preferences.router)
+app.include_router(app_info.router)
 app.include_router(mail_notifications.router)
 app.include_router(microsoft.router)
 app.include_router(collections.router)

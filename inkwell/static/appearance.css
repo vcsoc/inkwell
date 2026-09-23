@@ -314,6 +314,59 @@ dialog,
   padding-left: 20px;
   line-height: 2;
 }
+#settings-notifications form {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+  margin: 20px 0 30px;
+}
+#settings-notifications .field {
+  width: min(100%, 360px);
+}
+#settings-notifications .notification-file-label {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  cursor: pointer;
+}
+.notification-file-label input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.notification-file-label:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+#settings-notifications .form-actions {
+  flex-wrap: wrap;
+}
+#settings-about .about-details {
+  display: grid;
+  gap: 14px;
+  margin: 24px 0;
+}
+#settings-about .about-details div {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 12px;
+}
+#settings-about dt {
+  color: var(--muted);
+}
+#settings-about dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+#settings-about .about-github {
+  display: inline-flex;
+  gap: 9px;
+  align-items: center;
+}
+#settings-about .about-github svg {
+  flex: none;
+}
 .settings-overview {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

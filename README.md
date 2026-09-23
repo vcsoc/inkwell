@@ -8,7 +8,7 @@ A desktop/mobile-first email, calendar, contacts and AI workspace. The desktop a
 
 ## Install on this Linux machine
 
-Build a bundled installer with `npm run build:linux`, then run `sh dist/inkwell-0.1.3-linux-x64.run`. The installed app appears as **inkwell** in your launcher and includes its Python backend—no development tools are required to run it. This is an unsigned Linux x86_64 user installer. See [Installing](docs/INSTALLING.md).
+Build a bundled installer with `npm run build:linux`, then run `sh dist/inkwell-0.1.4-linux-x64.run`. The installed app appears as **inkwell** in your launcher and includes its Python backend—no development tools are required to run it. This is an unsigned Linux x86_64 user installer. See [Installing](docs/INSTALLING.md).
 
 ## Start testing from source
 
@@ -77,7 +77,7 @@ Optional **From / To** search dates are inclusive in your local time zone and cl
 
 ### Appearance and internal forms
 
-Settings has dedicated **Layout**, **Forms**, **Theme studio**, **Mail accounts**, **AI assistant**, and **Privacy & data** sub-pages—not scrolling anchors. Each has a direct link and supports reload and Back/Forward. In **Settings → Forms**, choose **Internal pages** to replace popup forms with in-app forms, then save. Open **Settings → Theme studio** for live color, typography, sizing and density editing, with a live sample preview panel, readable 16px defaults, separate sidebar font/size and spacing controls, in-app color pickers, YAML/JSON import/export, revert and saved persistence. See [Appearance](docs/APPEARANCE.md). [Rules and calendar](docs/RULES-CALENDAR.md) explains import rules, one-field live search, repeat options and the theme-colored wordmark.
+Settings has dedicated **Layout**, **Forms**, **Theme studio**, **Mail accounts**, **Notifications**, **About**, **AI assistant**, and **Privacy & data** sub-pages—not scrolling anchors. Use **Settings → Notifications** to enable new-mail audio and choose or preview a WAV/MP3 sound; a short original chime is included as the default. **Settings → About** shows the running version, build commit, developer and project link. Each has a direct link and supports reload and Back/Forward. In **Settings → Forms**, choose **Internal pages** to replace popup forms with in-app forms, then save. Open **Settings → Theme studio** for live color, typography, sizing and density editing, with a live sample preview panel, readable 16px defaults, separate sidebar font/size and spacing controls, in-app color pickers, YAML/JSON import/export, revert and saved persistence. See [Appearance](docs/APPEARANCE.md). [Rules and calendar](docs/RULES-CALENDAR.md) explains import rules, one-field live search, repeat options and the theme-colored wordmark.
 
 ### Calendar imports and reminders
 

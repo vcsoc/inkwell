@@ -31,6 +31,16 @@ if (
 )
   throw Error('INKWELL_MICROSOFT_CLIENT_ID must be a registered public application UUID.');
 await fs.writeFile(path.join(build, 'oauth.json'), JSON.stringify(oauth));
+const revision = spawnSync('git', ['rev-parse', '--verify', 'HEAD'], {
+  cwd: root,
+  encoding: 'utf8',
+});
+if (revision.error || revision.status !== 0 || !/^[a-f0-9]{40}$/i.test(revision.stdout.trim()))
+  throw Error('A Git commit is required to identify the packaged release.');
+await fs.writeFile(
+  path.join(build, 'build-info.json'),
+  JSON.stringify({ version: metadata.version, commit: revision.stdout.trim() }),
+);
 if (!oauth.microsoft_client_id)
   console.warn(
     'Microsoft publisher registration is not configured; this build requires advanced manual registration.',
@@ -65,6 +75,8 @@ run(process.env.INKWELL_UV || 'uv', [
   `${path.join(root, 'inkwell/static')}:inkwell/static`,
   '--add-data',
   `${path.join(build, 'oauth.json')}:inkwell`,
+  '--add-data',
+  `${path.join(build, 'build-info.json')}:inkwell`,
   'desktop/backend.py',
 ]);
 await fs.rm(source, { recursive: true, force: true });

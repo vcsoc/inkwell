@@ -39,6 +39,36 @@ window.InkwellMailNotifications = ({ api, toast, pinnedFolders }) => {
     settings = { ...settings, ...value };
     paint();
   }
+  async function uploadSound(selected) {
+    const format = selected.name.toLowerCase().endsWith('.wav')
+      ? 'wav'
+      : selected.name.toLowerCase().endsWith('.mp3')
+        ? 'mp3'
+        : '';
+    if (!format || !selected.size || selected.size > 2_000_000)
+      throw Error('Choose a WAV or MP3 smaller than 2 MB.');
+    const response = await fetch('/api/mail-notifications/sound?format=' + format, {
+      method: 'PUT',
+      headers: { 'X-Inkwell': '1', 'Content-Type': 'application/octet-stream' },
+      body: selected,
+      credentials: 'same-origin',
+    });
+    if (!response.ok) throw Error((await response.json()).detail || 'Sound could not be saved');
+    settings.custom_sound = true;
+    return format;
+  }
+  async function resetSound() {
+    await api('/mail-notifications/sound', { method: 'DELETE' });
+    settings.custom_sound = false;
+  }
+  async function previewSound() {
+    const sample = new Audio(
+      settings.custom_sound
+        ? '/api/mail-notifications/sound?t=' + Date.now()
+        : '/static/new-mail.wav',
+    );
+    await sample.play();
+  }
   const close = () => menu.classList.add('hidden');
   function show(button) {
     for (const choice of menu.querySelectorAll('[data-scope]'))
@@ -107,8 +137,7 @@ window.InkwellMailNotifications = ({ api, toast, pinnedFolders }) => {
           senders: settings.senders,
         });
       if (option.dataset.sound === 'reset') {
-        await api('/mail-notifications/sound', { method: 'DELETE' });
-        settings.custom_sound = false;
+        await resetSound();
         toast('Default sound restored.');
       }
     } catch (error) {
@@ -126,22 +155,8 @@ window.InkwellMailNotifications = ({ api, toast, pinnedFolders }) => {
     const selected = file.files?.[0];
     file.value = '';
     if (!selected) return;
-    const format = selected.name.toLowerCase().endsWith('.wav')
-      ? 'wav'
-      : selected.name.toLowerCase().endsWith('.mp3')
-        ? 'mp3'
-        : '';
-    if (!format || selected.size > 2_000_000)
-      return toast('Choose a WAV or MP3 smaller than 2 MB.');
     try {
-      const response = await fetch('/api/mail-notifications/sound?format=' + format, {
-        method: 'PUT',
-        headers: { 'X-Inkwell': '1', 'Content-Type': 'application/octet-stream' },
-        body: selected,
-        credentials: 'same-origin',
-      });
-      if (!response.ok) throw Error((await response.json()).detail || 'Sound could not be saved');
-      settings.custom_sound = true;
+      await uploadSound(selected);
       toast('Custom new-mail sound saved.');
     } catch (error) {
       toast(error.message);
@@ -156,6 +171,22 @@ window.InkwellMailNotifications = ({ api, toast, pinnedFolders }) => {
     get senders() {
       return settings.senders;
     },
+    get current() {
+      return { ...settings, senders: [...settings.senders] };
+    },
+    async refresh() {
+      const latest = await api('/mail-notifications');
+      settings = { ...settings, ...latest };
+      paint();
+      return this.current;
+    },
+    async update(options) {
+      await persist({ enabled: options.enabled, scope: options.scope, senders: settings.senders });
+      return this.current;
+    },
+    uploadSound,
+    resetSound,
+    previewSound,
     get enabled() {
       return settings.enabled;
     },
