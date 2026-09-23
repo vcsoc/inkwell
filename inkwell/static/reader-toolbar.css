@@ -239,12 +239,38 @@
   color: #17212b !important;
   border-radius: 2px;
 }
-.sync-progress {
-  max-width: 420px;
-  max-height: 3.2em;
-  overflow: auto;
-  padding: 2px 0;
-  color: var(--ink);
+.sync-footer {
+  position: fixed;
+  bottom: 0;
+  left: var(--sidebar-width, 260px);
+  right: 0;
+  z-index: 10;
+  height: 38px;
+  padding: 9px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
   font-size: 12px;
-  overflow-wrap: anywhere;
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sync-footer[hidden] {
+  display: none;
+}
+main:has(.sync-footer:not([hidden])) {
+  padding-bottom: 38px;
+}
+@media (min-width: 761px) {
+  [data-layout='classic'] .sync-footer {
+    left: calc(var(--sidebar-width, 260px) + 44px);
+  }
+}
+@media (max-width: 760px) {
+  .sync-footer {
+    left: 0;
+    bottom: calc(64px + env(safe-area-inset-bottom));
+    padding-inline: 12px;
+  }
 }

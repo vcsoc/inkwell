@@ -6,7 +6,7 @@
 
 The quick Inbox/current-folder pull remains available. After startup/manual quick sync, Outlook downloads run in the background. While an app is open, automatic checks are requested about every **15 seconds**. Native desktop timers remain active when minimized; browsers, sleep, connectivity, provider latency and throttling can delay checks. This is polling, **not push or a delivery-time guarantee**. Folder discovery normally refreshes about once a minute; manual Sync requests discovery sooner.
 
-The default **F9** shortcut requests a quick pull and a full background scan. When idle, full scanning resets completed checkpoints but retains unfinished history. During an active job it requests a fresh-mail check without restarting the download. Shortcuts are customizable in Settings. Progress and errors appear beneath the page heading. Updates preserve the reader DOM, position, permissions and open editors.
+The default **F9** shortcut requests a quick pull and a full background scan. When idle, full scanning resets completed checkpoints but retains unfinished history. During an active job it requests a fresh-mail check without restarting the download. Shortcuts are customizable in Settings. Progress and errors appear in a fixed footer along the bottom of the main application pane, never beneath the folder sidebar (on phones, above the bottom tabs). The footer appears only while syncing or when pending work/errors remain. Updates preserve the reader DOM, position, permissions and open editors.
 
 ## Resumable Graph synchronization
 

@@ -13,10 +13,10 @@ window.InkwellBackgroundSync = ({
     completed = 0;
   const badge = document.createElement('div');
   badge.id = 'sync-progress';
-  badge.className = 'sync-progress';
+  badge.className = 'sync-footer';
   badge.setAttribute('role', 'status');
   badge.hidden = true;
-  document.querySelector('#page-title').parentElement.append(badge);
+  document.querySelector('main').append(badge);
   const apply = async (status) => {
     active = status.active;
     document.documentElement.dataset.syncing = String(active);
