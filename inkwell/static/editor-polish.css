@@ -127,7 +127,6 @@ html .quiet-note {
   font-size: calc(var(--font-size) - 2px);
 }
 html .sidebar .nav-label,
-html .sidebar .privacy,
 html .sidebar .profile small {
   font-size: calc(var(--sidebar-font-size) - 3px);
   font-family: var(--sidebar-font);

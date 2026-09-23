@@ -6,6 +6,8 @@ async function settings(page) {
       .locator('.mobile-tabs')
       .getByRole('button', { name: 'Settings', exact: true })
       .click();
+  else if (await page.locator('.app-rail').isVisible())
+    await page.locator('.app-rail').getByRole('button', { name: 'Settings' }).click();
   else await page.locator('#settings').click();
   await settingsSection(page, 'Layout');
 }

@@ -113,6 +113,10 @@
           </svg>
         </button>
         <button data-view="settings" aria-label="Settings" title="Settings">⚙</button>
+        <div class="rail-profile" role="status" title="Your workspace">
+          <div class="avatar" aria-hidden="true">Y</div>
+          <span id="rail-account-status" class="sr-only">Ready when you are</span>
+        </div>
       </nav>
       <aside class="sidebar" id="sidebar">
         <div
@@ -128,7 +132,6 @@
         ></a>
         <nav id="navigation" aria-label="Workspace"></nav>
         <div class="sidebar-bottom">
-          <div class="privacy"><span class="status-dot"></span> Local-first. Yours by design.</div>
           <button class="nav-item" id="rule-manager-link">
             <span aria-hidden="true">☷</span> Rule Manager
           </button>
@@ -148,6 +151,7 @@
       <main>
         <header class="topbar">
           <button class="icon-button mobile-menu" id="menu" aria-label="Open navigation">☰</button>
+          <div id="topbar-heading" class="topbar-heading"></div>
           <div class="breadcrumb">
             Workspace <span>/</span> <strong id="breadcrumb">Inbox</strong>
           </div>
@@ -233,17 +237,26 @@
             ><button class="assistant-toggle" id="assistant-toggle">
               ✦ <span>Ask inkwell</span>
             </button>
+            <div id="page-actions"></div>
           </div>
         </header>
         <section class="page-heading">
-          <div>
+          <div id="page-heading-text">
             <div class="eyebrow" id="eyebrow">A LITTLE CLARITY, EVERY DAY</div>
             <h1 id="page-title" tabindex="-1">Your inbox<span>.</span></h1>
             <p id="page-description">Good conversations start here.</p>
           </div>
-          <div id="page-actions"></div>
         </section>
         <div id="workspace" class="workspace"></div>
+        <footer id="app-footer" class="app-footer" aria-label="Application footer">
+          <div class="mail-footer">
+            <span id="mail-count"></span>
+            <div>
+              <button id="prev-page" disabled>← Previous</button>
+              <button id="next-page" disabled>Next →</button>
+            </div>
+          </div>
+        </footer>
       </main>
       <aside class="ai-panel hidden" id="ai-panel" aria-label="AI assistant">
         <div class="panel-heading">

@@ -1,6 +1,6 @@
 [project]
 name = "inkwell-mail"
-version = "0.1.5"
+version = "0.1.6"
 description = "A local-first email, calendar and contacts workspace"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"

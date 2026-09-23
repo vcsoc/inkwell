@@ -54,8 +54,12 @@ test.afterEach(async ({ page }) => {
 test('Auto-tag shortcut creates and selects a tag without losing the domain rule', async ({
   page,
 }) => {
-  if (await page.locator('#menu').isVisible()) await page.locator('#menu').click();
-  await page.locator('#rule-manager-link').click();
+  if (await page.locator('.app-rail').isVisible())
+    await page.locator('.app-rail [data-view="rules"]').click();
+  else {
+    if (await page.locator('#menu').isVisible()) await page.locator('#menu').click();
+    await page.locator('#rule-manager-link').click();
+  }
   await page.getByRole('button', { name: 'Create auto-tag rule', exact: true }).click();
   await page.getByLabel('Rule name', { exact: true }).fill(prefix + ' auto tag');
   await expect(page.getByLabel('Condition 1 field', { exact: true })).toHaveValue('domain');

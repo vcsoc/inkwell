@@ -22,6 +22,15 @@ async function readerAction(page, name, menuName) {
   }
 }
 async function sidebarClick(page, selector) {
+  const railView = {
+    '#rule-manager-link': 'rules',
+    '#tag-manager-link': 'tags',
+    '#settings': 'settings',
+  }[selector];
+  if (railView && (await page.locator('.app-rail').isVisible())) {
+    await page.locator(`.app-rail [data-view="${railView}"]`).click();
+    return;
+  }
   await expect(page.locator(selector)).toBeAttached();
   if (!(await page.locator(selector).isVisible()) && (await page.locator('#menu').isVisible()))
     await page.locator('#menu').click();

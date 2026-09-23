@@ -16,7 +16,7 @@ window.InkwellBackgroundSync = ({
   badge.className = 'sync-footer';
   badge.setAttribute('role', 'status');
   badge.hidden = true;
-  document.querySelector('main').append(badge);
+  document.querySelector('#app-footer').prepend(badge);
   const apply = async (status) => {
     active = status.active;
     document.documentElement.dataset.syncing = String(active);

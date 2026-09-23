@@ -188,19 +188,6 @@ a {
   margin-top: auto;
   padding-top: 28px;
 }
-.privacy {
-  font-size: 10px;
-  color: var(--muted);
-  padding: 14px 8px;
-}
-.status-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 100%;
-  background: #7d9d6e;
-  margin-right: 6px;
-}
 .profile {
   display: flex;
   gap: 10px;

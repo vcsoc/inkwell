@@ -301,7 +301,7 @@ function pinnedRows() {
     })
     .filter(Boolean)
     .join('');
-  return `<section class="pinned-folders" aria-label="Pinned folders"><h3>Pinned</h3>${rows || '<p class="pinned-empty">Right-click a folder to pin it here.</p>'}</section>`;
+  return `<section class="pinned-folders" aria-label="Pinned folders"><h3>Pinned <button type="button" class="pinned-help" title="Right-click a folder to pin it here." aria-label="Pinned folders help: Right-click a folder to pin it here." data-tooltip="Right-click a folder to pin it here.">?</button></h3>${rows}</section>`;
 }
 function localChildren(parent, seen = new Set()) {
   return (state.localFolders || [])
@@ -387,6 +387,11 @@ function paintNavigation() {
   );
   $('#tag-manager-link').classList.toggle('active', state.view === 'tags');
   $('#rule-manager-link').classList.toggle('active', state.view === 'rules');
+  const accountLabel = state.accounts.length
+    ? `${state.accounts.length} connected account${state.accounts.length === 1 ? '' : 's'}`
+    : 'No account connected';
+  $('#rail-account-status').textContent = accountLabel;
+  $('.rail-profile').title = `Your workspace · ${accountLabel}`;
 }
 $('#navigation').addEventListener('dblclick', (event) => {
   if (event.button !== 0) return;
@@ -744,6 +749,10 @@ async function navigate(route, { historyMode = 'push' } = {}) {
   document.documentElement.dataset.mail = String(
     !['calendar', 'contacts', 'settings', 'tags', 'rules'].includes(view),
   );
+  (document.documentElement.dataset.mail === 'true'
+    ? $('#topbar-heading')
+    : $('#page-heading-text')
+  ).append($('#page-title'));
   state.view = view;
   state.selected = null;
   state.query = '';
@@ -882,6 +891,13 @@ async function refreshQuickMail() {
   await renderMail();
   if (focus) document.getElementById(focus)?.focus({ preventScroll: true });
 }
+function paintMailFooter(messages, collection) {
+  $('#mail-count').textContent =
+    `${messages.length}${state.total !== null ? ' of ' + state.total : ''} conversations${state.offset ? ' · page ' + (state.offset / 100 + 1) : ''} · ${collection ? 'grouped collection' : 'local mailbox'}`;
+  $('#prev-page').disabled = state.offset === 0;
+  $('#next-page').disabled =
+    state.total !== null ? state.offset + messages.length >= state.total : messages.length < 100;
+}
 async function renderMail({ listOnly = false } = {}) {
   const generation = state.generation;
   const ticket = (state.mailRequest = (state.mailRequest || 0) + 1);
@@ -913,18 +929,14 @@ async function renderMail({ listOnly = false } = {}) {
   const messages = Array.isArray(response) ? response : response.messages;
   state.total = Array.isArray(response) ? null : response.total;
   state.messages = messages;
+  paintMailFooter(messages, collection);
   if (listOnly && $('#message-list')) {
     renderMessageList();
-    $('.mail-footer > span').textContent =
-      `${messages.length}${state.total !== null ? ' of ' + state.total : ''} conversations${state.offset ? ' · page ' + (state.offset / 100 + 1) : ''} · ${collection ? 'grouped collection' : 'local mailbox'}`;
-    $('#prev-page').disabled = state.offset === 0;
-    $('#next-page').disabled =
-      state.total !== null ? state.offset + messages.length >= state.total : messages.length < 100;
     return;
   }
   const persistentReader = ['classic', 'stacked'].includes(preferences.layout);
   $('#workspace').innerHTML =
-    `<div class="mail-shell ${state.selected ? 'has-selection' : ''}"><div id="mail-activity" class="mail-activity" role="progressbar" aria-label="Background activity" aria-hidden="${pendingWork === 0}"><span></span></div>${collection ? `<section class="collection-banner" aria-label="Grouped collection"><div><strong>${esc(state.collection.label)}</strong><p>${collection.total} messages · all local folders and accounts, including Trash</p><div>${collection.folders.map((f) => `<span class="folder-badge">${esc(f.folder)} · ${f.total}</span>`).join('')}</div></div><button class="secondary" id="exit-collection">Back to inbox</button></section>` : ''}<div class="mail-toolbar"><div class="filter-tabs"><button class="filter-tab ${state.filter === 'all' ? 'active' : ''}" data-filter="all">All mail</button><button class="filter-tab ${state.filter === 'unread' ? 'active' : ''}" data-filter="unread">Unread</button></div></div><div class="mail-columns"><div class="message-list" id="message-list"></div><div id="message-resizer" class="pane-resizer" role="separator" aria-label="Resize message list" aria-orientation="vertical" tabindex="0"></div><article class="reader ${state.selected || persistentReader ? '' : 'hidden'}" id="reader"><div class="empty-state reader-placeholder"><div class="empty-icon">▤</div><h2>Select a conversation</h2><p>Your message will appear here. Remote content stays blocked.</p></div></article></div><div class="mail-footer"><span>${messages.length}${state.total !== null ? ' of ' + state.total : ''} conversations${state.offset ? ' · page ' + (state.offset / 100 + 1) : ''} · ${collection ? 'grouped collection' : 'local mailbox'}</span><div><button id="prev-page" ${state.offset === 0 ? 'disabled' : ''}>← Previous</button> <button id="next-page" ${(state.total !== null ? state.offset + messages.length >= state.total : messages.length < 100) ? 'disabled' : ''}>Next →</button></div></div></div><div class="quiet-note"><span>♧</span> A little less noise. A little more room to think.</div>`;
+    `<div class="mail-shell ${state.selected ? 'has-selection' : ''}"><div id="mail-activity" class="mail-activity" role="progressbar" aria-label="Background activity" aria-hidden="${pendingWork === 0}"><span></span></div>${collection ? `<section class="collection-banner" aria-label="Grouped collection"><div><strong>${esc(state.collection.label)}</strong><p>${collection.total} messages · all local folders and accounts, including Trash</p><div>${collection.folders.map((f) => `<span class="folder-badge">${esc(f.folder)} · ${f.total}</span>`).join('')}</div></div><button class="secondary" id="exit-collection">Back to inbox</button></section>` : ''}<div class="mail-toolbar"><div class="filter-tabs"><button class="filter-tab ${state.filter === 'all' ? 'active' : ''}" data-filter="all">All mail</button><button class="filter-tab ${state.filter === 'unread' ? 'active' : ''}" data-filter="unread">Unread</button></div></div><div class="mail-columns"><div class="message-list" id="message-list"></div><div id="message-resizer" class="pane-resizer" role="separator" aria-label="Resize message list" aria-orientation="vertical" tabindex="0"></div><article class="reader ${state.selected || persistentReader ? '' : 'hidden'}" id="reader"><div class="empty-state reader-placeholder"><div class="empty-icon">▤</div><h2>Select a conversation</h2><p>Your message will appear here. Remote content stays blocked.</p></div></article></div></div><div class="quiet-note"><span>♧</span> A little less noise. A little more room to think.</div>`;
   if ($('#exit-collection')) on($('#exit-collection'), 'click', () => navigate('inbox'));
   renderMessageList();
   bindWorkspaceControls();
@@ -958,17 +970,17 @@ async function renderMail({ listOnly = false } = {}) {
       return renderMail({ listOnly: true });
     }),
   );
-  on($('#prev-page'), 'click', async () => {
-    state.offset = Math.max(0, state.offset - 100);
-    state.selected = null;
-    await renderMail();
-  });
-  on($('#next-page'), 'click', async () => {
-    state.offset += 100;
-    state.selected = null;
-    await renderMail();
-  });
 }
+on($('#prev-page'), 'click', async () => {
+  state.offset = Math.max(0, state.offset - 100);
+  state.selected = null;
+  await renderMail();
+});
+on($('#next-page'), 'click', async () => {
+  state.offset += 100;
+  state.selected = null;
+  await renderMail();
+});
 function paintMessageAttachment(icon, present) {
   icon.dataset.attachmentState = present === true ? 'yes' : present === false ? 'no' : 'unknown';
   icon.title =
