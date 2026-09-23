@@ -101,7 +101,10 @@ test('Rule Manager builds AND/OR conditions and multiple actions, preserves edit
   await page.getByLabel('Condition 1 value', { exact: true }).fill('ABC');
   await page.getByRole('button', { name: 'Add condition', exact: true }).click();
   await page.getByLabel('Condition 2 field', { exact: true }).selectOption('unread');
-  await page.getByLabel('Match conditions', { exact: true }).selectOption('any');
+  await page
+    .getByRole('group', { name: 'Match conditions' })
+    .getByRole('button', { name: 'Any OR' })
+    .click();
   await openRuleSection(page, 'rule-resource-tools');
   await page.getByLabel('New local folder', { exact: true }).fill(prefix + ' XYZ');
   await page.getByRole('button', { name: 'Create local folder', exact: true }).click();
@@ -121,7 +124,10 @@ test('Rule Manager builds AND/OR conditions and multiple actions, preserves edit
   const saved = (await api(page, '/rules')).find((r) => r.name === prefix + ' ABC rule');
   expect(saved.actions).toHaveLength(3);
   await page.locator(`[data-edit-rule="${saved.id}"]`).click();
-  await page.getByLabel('Match conditions', { exact: true }).selectOption('all');
+  await page
+    .getByRole('group', { name: 'Match conditions' })
+    .getByRole('button', { name: 'All AND' })
+    .click();
   await page.getByRole('button', { name: 'Save rule', exact: true }).click();
   await page.locator('#apply-rules').click();
   await expect(page.locator('#toast')).toContainText('1 local copies matched');

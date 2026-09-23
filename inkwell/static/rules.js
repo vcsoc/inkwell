@@ -234,7 +234,7 @@ window.InkwellRules = async (
     );
     let actions = structuredClone(rule.actions || [{ type: 'move', value: 'archive' }]);
     root.querySelector('#rule-editor').innerHTML =
-      `<h2>${rule.id ? 'Edit rule' : 'New rule'}</h2>${context ? `<p class="rule-context" title="${esc(context.subject)}">From message: ${esc(context.subject)}</p>` : ''}<form id="rule-form"><div class="rule-name-row">${field('Rule name', 'name', rule.name || '', 'text', 'required maxlength="100"')}<label class="check-label"><input type="checkbox" name="enabled" ${rule.enabled !== false ? 'checked' : ''}> Enabled</label></div><div class="rule-condition-heading"><h3>Conditions</h3><label class="field rule-match">Match<select name="mode" aria-label="Match conditions"><option value="all">All (AND)</option><option value="any">Any (OR)</option></select></label></div><p class="rule-match-help" id="rule-match-help"></p><div id="rule-conditions"></div><button type="button" class="secondary" id="add-condition">Add condition</button><h3>Actions</h3><div id="rule-actions"></div><button type="button" class="secondary" id="add-action">Add action</button><label class="check-label rule-stop"><input type="checkbox" name="stop_processing" ${rule.stop_processing !== false ? 'checked' : ''}> Stop processing further rules after this rule matches</label><details id="rule-advanced" ${rule.exclude_unread || rule.older_than_days ? 'open' : ''}><summary>Advanced options</summary><label class="check-label"><input name="exclude_unread" type="checkbox" ${rule.exclude_unread ? 'checked' : ''}> Exclude unread messages</label>${field('Only messages older than days (0 = any age)', 'older_than_days', rule.older_than_days || 0, 'number', 'required min="0" max="36500"')}</details><div class="form-actions"><button class="primary">Save rule</button><button class="primary" name="apply_message">Save and run</button><button type="button" class="secondary" id="run-saved-rule" ${savedId ? '' : 'disabled'}>Run saved rule</button><p class="fine-print">${savedId ? 'Run saved rule executes the selected saved rule.' : 'This is a new rule: save it first, or choose an existing rule from the list to run it.'} Save and run applies only this rule. Run saved rule ignores unsaved edits. Run all enabled rules uses priority and Stop settings.</p></div></form>`;
+      `<h2>${rule.id ? 'Edit rule' : 'New rule'}</h2>${context ? `<p class="rule-context" title="${esc(context.subject)}">From message: ${esc(context.subject)}</p>` : ''}<form id="rule-form"><div class="rule-name-row">${field('Rule name', 'name', rule.name || '', 'text', 'required maxlength="100"')}<label class="check-label"><input type="checkbox" name="enabled" ${rule.enabled !== false ? 'checked' : ''}> Enabled</label></div><div class="rule-condition-heading"><h3>Conditions</h3><div class="rule-match" role="group" aria-label="Match conditions"><span>Match</span><button type="button" data-rule-mode="all" aria-pressed="false">All <small>AND</small></button><button type="button" data-rule-mode="any" aria-pressed="false">Any <small>OR</small></button><input type="hidden" name="mode" value="all"></div></div><p class="rule-match-help" id="rule-match-help"></p><div id="rule-conditions"></div><button type="button" class="secondary" id="add-condition">Add condition</button><h3>Actions</h3><div id="rule-actions"></div><button type="button" class="secondary" id="add-action">Add action</button><label class="check-label rule-stop"><input type="checkbox" name="stop_processing" ${rule.stop_processing !== false ? 'checked' : ''}> Stop processing further rules after this rule matches</label><details id="rule-advanced" ${rule.exclude_unread || rule.older_than_days ? 'open' : ''}><summary>Advanced options</summary><label class="check-label"><input name="exclude_unread" type="checkbox" ${rule.exclude_unread ? 'checked' : ''}> Exclude unread messages</label>${field('Only messages older than days (0 = any age)', 'older_than_days', rule.older_than_days || 0, 'number', 'required min="0" max="36500"')}</details><div class="form-actions"><button class="primary">Save rule</button><button class="primary" name="apply_message">Save and run</button><button type="button" class="secondary" id="run-saved-rule" ${savedId ? '' : 'disabled'}>Run saved rule</button><p class="fine-print">${savedId ? 'Run saved rule executes the selected saved rule.' : 'This is a new rule: save it first, or choose an existing rule from the list to run it.'} Save and run applies only this rule. Run saved rule ignores unsaved edits. Run all enabled rules uses priority and Stop settings.</p></div></form>`;
     const form = root.querySelector('#rule-form');
     form.querySelector('.form-actions').before(runPanel);
     paintRunScope();
@@ -260,7 +260,20 @@ window.InkwellRules = async (
       },
       true,
     );
-    form.elements.mode.value = rule.mode || 'all';
+    const setMode = (mode) => {
+      form.elements.mode.value = mode;
+      form
+        .querySelectorAll('[data-rule-mode]')
+        .forEach((button) =>
+          button.setAttribute('aria-pressed', String(button.dataset.ruleMode === mode)),
+        );
+    };
+    setMode(rule.mode || 'all');
+    form
+      .querySelectorAll('[data-rule-mode]')
+      .forEach((button) =>
+        button.addEventListener('click', () => setMode(button.dataset.ruleMode)),
+      );
     const renderConditions = () => {
       form.querySelector('#rule-match-help').textContent =
         conditions.length === 1

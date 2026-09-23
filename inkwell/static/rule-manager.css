@@ -228,13 +228,29 @@ main:has(#workspace .rule-manager) #page-title {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 12px;
+  gap: 5px;
   flex-wrap: wrap;
   font-size: 13px;
 }
-.rule-manager .rule-match select {
-  width: auto;
-  max-width: 100%;
+.rule-manager .rule-match > span {
+  margin-right: 5px;
+}
+.rule-manager .rule-match button {
+  min-height: 36px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  background: var(--surface);
+  cursor: pointer;
+}
+.rule-manager .rule-match button[aria-pressed='true'] {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.rule-manager .rule-match button small {
+  font-size: 11px;
 }
 .rule-manager #rule-editor h3 {
   font-size: 14px;
