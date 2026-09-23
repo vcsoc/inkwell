@@ -954,6 +954,43 @@ dialog::backdrop {
   max-width: 90%;
   white-space: pre-wrap;
 }
+.update-toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: min(420px, calc(100vw - 32px));
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: 0 8px 32px #0003;
+  z-index: 999;
+}
+.update-toast strong {
+  font-size: 17px;
+}
+.update-toast p {
+  margin: 10px 0 16px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.update-toast progress {
+  width: 100%;
+  height: 16px;
+  margin-bottom: 14px;
+  accent-color: var(--accent);
+}
+.update-toast .form-actions {
+  flex-wrap: wrap;
+  margin: 0;
+}
+@media (max-width: 760px) {
+  .update-toast {
+    right: 16px;
+    bottom: 76px;
+  }
+}
 .mobile-tabs,
 .mobile-menu {
   display: none;

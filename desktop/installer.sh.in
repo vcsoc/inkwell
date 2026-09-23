@@ -3,6 +3,7 @@
 set -eu
 VERSION='@VERSION@'
 EXPECTED_SHA='@SHA256@'
+progress() { [ "${INKWELL_UPDATE_PROGRESS:-}" = 1 ] && printf 'INKWELL_UPDATE_STEP=%s:%s\n' "$1" "$2" || true; }
 case "${1:-}" in
   --help|-h) printf 'inkwell %s Linux x86_64 installer\nUsage: sh %s [--install]\nInstalls under ~/.local/opt/inkwell; preserves ~/.inkwell.\n' "$VERSION" "$0"; exit 0 ;;
   ''|--install) ;;
@@ -42,20 +43,24 @@ LINE=$(awk '/^__INKWELL_PAYLOAD__$/{print NR + 1; exit}' "$0")
 tail -n +"$LINE" "$0" > "$TMP/payload.tar.gz"
 ACTUAL_SHA=$(sha256sum "$TMP/payload.tar.gz" | awk '{print $1}')
 [ "$ACTUAL_SHA" = "$EXPECTED_SHA" ] || { echo 'Integrity check failed. Installer may be corrupted.' >&2; exit 1; }
+progress 15 'Archive integrity verified'
 printf 'Installing inkwell %s for %s…\n' "$VERSION" "$(id -un)"
 mkdir -p "$ROOT/releases" "$BIN" "$DATA/applications" "$DATA/icons/hicolor/512x512/apps"
 printf '%s\n' 'Inkwell user installation v1' > "$ROOT/.inkwell-managed"
 printf '%s\n' "$DATA" > "$ROOT/desktop-data-dir"
 STAGE=$(mktemp -d "$ROOT/.stage-XXXXXX")
 tar -xzf "$TMP/payload.tar.gz" -C "$STAGE" --no-same-owner
+progress 60 'Application extracted'
 [ -x "$STAGE/inkwell" ] && [ -x "$STAGE/resources/inkwell-server/inkwell-server" ] || { echo 'Incomplete app payload.' >&2; exit 1; }
 "$STAGE/resources/inkwell-server/inkwell-server" --help >/dev/null || { echo 'Bundled backend cannot run on this Linux system.' >&2; exit 1; }
+progress 78 'Bundled backend validated'
 RELEASE="$VERSION-$(printf '%s' "$EXPECTED_SHA" | cut -c1-12)-$(date +%s)-$$"
 mv "$STAGE" "$ROOT/releases/$RELEASE"
 STAGE=''
 printf '%s\n' 'Inkwell user installation v1' > "$ROOT/.inkwell-managed"
 ln -s "releases/$RELEASE" "$ROOT/.current-$$"
 mv -Tf "$ROOT/.current-$$" "$ROOT/current"
+progress 90 'New version activated'
 cat > "$BIN/inkwell" <<'LAUNCHER'
 #!/bin/sh
 # Inkwell managed launcher
@@ -85,6 +90,7 @@ chmod 755 "$ROOT/uninstall.sh"
 command -v desktop-file-validate >/dev/null && desktop-file-validate "$DESKTOP" || true
 command -v update-desktop-database >/dev/null && update-desktop-database "$DATA/applications" || true
 command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -f -t "$DATA/icons/hicolor" >/dev/null 2>&1 || true
+progress 98 'Desktop shortcuts updated'
 printf '\nInstalled: %s/current\nLaunch: %s/inkwell (or search inkwell in your app launcher)\nUninstall: %s/uninstall.sh\nYour ~/.inkwell workspace was not changed.\n' "$ROOT" "$BIN" "$ROOT"
 exit 0
 __INKWELL_PAYLOAD__

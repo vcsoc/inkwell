@@ -25,6 +25,10 @@ The installer does **not** modify or delete the existing `~/.inkwell` workspace.
 
 Existing managed releases are retained for rollback; the active symlink is replaced atomically after extraction and backend validation. The installer refuses to overwrite an unrelated existing launcher or installation directory. Quit an already-running old Inkwell window before launching a newly installed version. Do not downgrade an active database to an older schema version.
 
+### Updates
+
+Managed Linux x86_64 installations check the official `vcsoc/inkwell` GitHub **latest stable release** on startup and every six hours while open, or on demand through **Settings → About → Check for updates**. The update toast offers **Update** (download, verify, install and restart), **Later** (ask again on next startup) and **Skip version** (remember only this version; a newer release still prompts). Desktop update preferences live in Electron's user-data directory, not your mail workspace. If offline, manual checks report an error and automatic checks stay quiet. Downloads use HTTPS and the published `SHA256SUMS` manifest, and both download bytes and installer stages are shown in the progress bar. The updater trusts the GitHub repository release publisher and its checksum manifest; these releases are not independently signed. Updates run only when launched from an Inkwell-managed release folder, without sudo. Inkwell flushes unsaved drafts before restarting; if saving fails, the installed version is ready but Inkwell stays open so you can save and restart manually. Keep enough free space for the download and a second installed release.
+
 ## Uninstall
 
 Quit Inkwell, then:

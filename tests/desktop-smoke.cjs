@@ -64,6 +64,9 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
     window.setDefaultTimeout(3000);
     window.setDefaultNavigationTimeout(5000);
     await expect(window.locator('#page-title')).toContainText('Your inbox');
+    expect(await window.evaluate(() => window.inkwellUpdates.status())).toEqual({
+      supported: Boolean(process.env.INKWELL_TEST_EXECUTABLE?.includes('/.local/opt/inkwell/current/inkwell')),
+    });
     expect(await app.evaluate(({ app }) => app.getName())).toBe('inkwell');
     expect(
       await app.evaluate(({ BrowserWindow }) =>

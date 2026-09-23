@@ -2481,4 +2481,5 @@ setInterval(refreshDateGroupDay, 60000);
 window.addEventListener('focus', refreshDateGroupDay);
 document.addEventListener('visibilitychange', refreshDateGroupDay);
 bootstrap();
+window.InkwellUpdater.start({ toast });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});

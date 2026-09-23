@@ -102,7 +102,7 @@ await fs.copyFile(path.join(root, 'desktop/email-links.cjs'), path.join(source, 
 await fs.copyFile(path.join(root, 'desktop/calendar-reminders.cjs'), path.join(source, 'desktop/calendar-reminders.cjs'));
 await fs.copyFile(path.join(root, 'desktop/calendar-files.cjs'), path.join(source, 'desktop/calendar-files.cjs'));
 await fs.copyFile(path.join(root, 'desktop/os-shortcut.cjs'), path.join(source, 'desktop/os-shortcut.cjs'));
-for (const file of ['preload.cjs','file-export.cjs']) await fs.copyFile(path.join(root,'desktop',file),path.join(source,'desktop',file));
+for (const file of ['preload.cjs','file-export.cjs','updates.cjs']) await fs.copyFile(path.join(root,'desktop',file),path.join(source,'desktop',file));
 await fs.copyFile(
   path.join(root, 'inkwell/static/icon-512.png'),
   path.join(source, 'inkwell/static/icon-512.png'),

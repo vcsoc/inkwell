@@ -1,5 +1,17 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
+contextBridge.exposeInMainWorld('inkwellUpdates', {
+  status: () => ipcRenderer.invoke('inkwell-updates', 'status'),
+  check: (manual = false) =>
+    ipcRenderer.invoke('inkwell-updates', manual ? 'check-manual' : 'check'),
+  skip: (version) => ipcRenderer.invoke('inkwell-updates', 'skip', version),
+  install: (version) => ipcRenderer.invoke('inkwell-updates', 'install', version),
+  onProgress: (callback) => {
+    const listener = (_event, status) => callback(status);
+    ipcRenderer.on('inkwell-update-progress', listener);
+    return () => ipcRenderer.removeListener('inkwell-update-progress', listener);
+  },
+});
 contextBridge.exposeInMainWorld('inkwellOsShortcut', {
   status: () => ipcRenderer.invoke('inkwell-os-shortcut', 'status'),
   enable: () => ipcRenderer.invoke('inkwell-os-shortcut', 'enable'),

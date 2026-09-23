@@ -348,6 +348,18 @@
       <button role="menuitem" tabindex="-1" data-action="save-eml">Save email file (.eml)</button>
     </div>
     <div id="toast" class="toast hidden" role="status"></div>
+    <aside
+      id="update-toast"
+      class="update-toast hidden"
+      role="status"
+      aria-live="polite"
+      aria-label="Application update"
+    >
+      <strong id="update-title"></strong>
+      <p id="update-detail"></p>
+      <progress id="update-progress" value="0" max="100" hidden></progress>
+      <div id="update-actions" class="form-actions"></div>
+    </aside>
     <script src="/static/theme-files.js" defer></script>
     <script src="/static/color-editor.js" defer></script>
     <script src="/static/message-menu.js" defer></script>
@@ -368,6 +380,7 @@
     <script src="/static/destination-picker.js" defer></script>
     <script src="/static/rules.js" defer></script>
     <script src="/static/settings.js" defer></script>
+    <script src="/static/updater.js" defer></script>
     <script src="/static/tag-color-picker.js" defer></script>
     <script src="/static/tag-manager.js" defer></script>
     <script src="/static/quick-filter.js" defer></script>

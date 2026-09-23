@@ -178,6 +178,44 @@ async function launch() {
         );
       });
   });
+  const updates = require('./updates.cjs').createUpdater({
+    version: app.getVersion(),
+    home: app.getPath('home'),
+    executable: process.execPath,
+    packaged: app.isPackaged,
+    userData: app.getPath('userData'),
+    emit: (status) => {
+      if (!window.isDestroyed()) window.webContents.send('inkwell-update-progress', status);
+    },
+    beforeRestart: async () => {
+      if (window.isDestroyed()) return false;
+      return window.webContents.executeJavaScript(
+        'window.inkwellFlushBeforeClose ? window.inkwellFlushBeforeClose() : false',
+      );
+    },
+    restart: (executable) => {
+      closeAllowed = true; // Drafts were flushed before scheduling the restart.
+      app.relaunch({ execPath: executable, args: [] });
+      app.quit();
+    },
+  });
+  ipcMain.handle('inkwell-updates', (event, action, version) => {
+    const url = new URL(event.senderFrame?.url || 'about:blank');
+    if (
+      event.sender !== window.webContents ||
+      event.senderFrame?.frameTreeNodeId !== window.webContents.mainFrame.frameTreeNodeId ||
+      url.origin !== origin ||
+      url.pathname !== '/'
+    )
+      throw Error('Untrusted update request');
+    if (action === 'status') return { supported: updates.supported };
+    if (action === 'check' || action === 'check-manual')
+      return updates.check(action === 'check-manual');
+    if (action === 'skip') return updates.skip(version);
+    if (action === 'install') return updates.install(version);
+    throw Error('Unknown update action');
+  });
+  window.once('closed', () => ipcMain.removeHandler('inkwell-updates'));
   // Fixed trusted commands only; also works while the script-free email frame has focus.
   let capturingShortcut = false;
   let nativeKeys = {
