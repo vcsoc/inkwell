@@ -172,6 +172,7 @@ test('internal calendar editor sits to the right when wide and preserves edits o
   await expect(page.locator('#calendar-editor-layout > #workspace')).toBeVisible();
   await page.getByRole('button', { name: 'Save event', exact: true }).click();
   await expect(page.locator('#calendar-editor-layout')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Expand monthly agenda' }).click();
   await page.locator('.agenda-row').filter({ hasText: title }).click();
   await expect(page.locator('#calendar-editor-layout > #workspace')).toBeVisible();
   await expect(page.getByLabel('Event title', { exact: true })).toHaveValue(title);

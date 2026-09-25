@@ -27,13 +27,15 @@
 }
 #navigation [data-local-branch] > summary {
   display: flex;
+  position: relative;
   align-items: center;
   cursor: pointer;
   list-style: none;
 }
 #navigation [data-local-branch] > summary::before {
   content: '▸';
-  flex: none;
+  position: absolute;
+  left: var(--folder-indent, 7px);
   width: 14px;
   color: var(--muted);
 }
@@ -42,6 +44,10 @@
 }
 #navigation [data-local-branch] > summary > button {
   min-width: 0;
+}
+#navigation > .nav-item[data-view^='local-'],
+#navigation > details[data-local-branch] > summary > .nav-item {
+  padding-inline-start: 24px;
 }
 #navigation .folder-children .nav-item {
   min-width: 0;

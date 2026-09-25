@@ -58,7 +58,7 @@ test('calendar and contacts CRUD', async ({ page }, testInfo) => {
   const card = page
     .locator('.contact-card')
     .filter({ hasText: 'UI Test ' + testInfo.project.name });
-  await card.getByRole('button', { name: 'Edit', exact: true }).click();
+  await card.getByRole('button', { name: 'Edit UI Test ' + testInfo.project.name }).click();
   page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Delete person' }).click();
   await expect(card).toHaveCount(0);
@@ -67,9 +67,9 @@ test('assistant settings and safe rendering', async ({ page }) => {
   await page.goto('/');
   await view(page, 'Settings');
   await settingsSection(page, 'AI assistant');
-  await page.getByRole('textbox', { name: 'Model', exact: true }).fill('test-model');
+  await page.getByLabel('Model', { exact: true }).fill('test-model');
   await page.getByRole('button', { name: 'Save assistant' }).click();
-  await expect(page.getByRole('textbox', { name: 'Model', exact: true })).toHaveValue('test-model');
+  await expect(page.getByLabel('Model', { exact: true })).toHaveValue('test-model');
   await page.locator('#assistant-toggle').click();
   await expect(page.locator('#ai-context')).not.toBeChecked();
   await page.route('**/api/ai/chat', (route) =>

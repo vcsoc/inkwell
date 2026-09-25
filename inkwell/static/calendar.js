@@ -65,8 +65,30 @@ window.InkwellCalendar = ({ api, modal, state, esc, field, textarea, toast, impo
         date(e, 'start') < new Date(year, month + 1, 1) &&
         date(e, 'end') > new Date(year, month, 1),
     );
+    const agendaRows = visible.length
+      ? visible
+          .map(
+            (e) =>
+              `<button class="agenda-row" data-event="${e.id}"><div class="agenda-date">${date(e, 'start').toLocaleDateString([], { month: 'short' })}<strong>${date(e, 'start').getDate()}</strong></div><div><h3>${esc(e.title)}</h3><p>${e.all_day ? 'All day' : esc(date(e, 'start').toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}${JSON.parse(e.recurrence || '{}').frequency && JSON.parse(e.recurrence).frequency !== 'none' ? ' · Repeating series' : ''}${e.location ? ' · ' + esc(e.location) : ''}</p></div></button>`,
+          )
+          .join('')
+      : '<div class="notice">A clear calendar. Tap a date to make room for something good.</div>';
+    const agendaOpen = !!state.calendarAgendaOpen;
     $('#workspace').innerHTML =
-      `<div class="calendar-header"><h2>${state.month.toLocaleDateString([], { month: 'long', year: 'numeric' })}</h2><div class="calendar-controls"><button class="secondary" id="import-calendar">Import .ics</button><button class="secondary" id="select-range" aria-pressed="false">Select date range</button><button class="icon-button" id="month-prev" aria-label="Previous month">‹</button><button class="secondary" id="month-today">Today</button><button class="icon-button" id="month-next" aria-label="Next month">›</button></div></div><p id="range-hint" class="notice" role="status">Click a date, drag across days, or use Select date range to choose two endpoints.</p><div class="calendar-grid">${['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((d) => `<div class="day-label">${d}</div>`).join('')}${days}</div><section class="agenda"><div class="calendar-header"><h2>This month’s agenda</h2><a class="secondary" href="/api/calendar.ics" download>Export .ics ↗</a></div>${visible.length ? visible.map((e) => `<button class="agenda-row" data-event="${e.id}"><div class="agenda-date">${date(e, 'start').toLocaleDateString([], { month: 'short' })}<strong>${date(e, 'start').getDate()}</strong></div><div><h3>${esc(e.title)}</h3><p>${e.all_day ? 'All day' : esc(date(e, 'start').toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}${JSON.parse(e.recurrence || '{}').frequency && JSON.parse(e.recurrence).frequency !== 'none' ? ' · Repeating series' : ''}${e.location ? ' · ' + esc(e.location) : ''}</p></div></button>`).join('') : '<div class="notice">A clear calendar. Tap a date to make room for something good.</div>'}</section><div class="quiet-note">Local calendar · not provider-synced · Desktop reminders for timed events: 15 minutes before, while Inkwell is open. Sleep or OS notification settings may delay/suppress alerts. All-day events have no timed alert.</div>`;
+      `<div id="calendar-layout" class="calendar-layout"><div class="calendar-main"><div class="calendar-header"><h2>${state.month.toLocaleDateString([], { month: 'long', year: 'numeric' })}</h2><div class="calendar-controls"><button class="secondary" id="import-calendar">Import .ics</button><button class="secondary" id="select-range" aria-pressed="false" title="Choose the first and last day of an event">Select date range</button><button class="icon-button" id="month-prev" aria-label="Previous month">‹</button><button class="secondary" id="month-today">Today</button><button class="icon-button" id="month-next" aria-label="Next month">›</button></div></div><p id="range-hint" class="sr-only" role="status">Click a date, drag across days, or use Select date range to choose two endpoints.</p><div class="calendar-grid" aria-describedby="range-hint">${['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((d) => `<div class="day-label">${d}</div>`).join('')}${days}</div></div><aside class="calendar-agenda-panel ${agendaOpen ? 'open' : ''}" aria-label="Monthly agenda"><button type="button" id="agenda-toggle" class="calendar-agenda-toggle" aria-expanded="${agendaOpen}" aria-controls="calendar-agenda" aria-label="${agendaOpen ? 'Collapse' : 'Expand'} monthly agenda" title="${agendaOpen ? 'Collapse' : 'Expand'} monthly agenda"><span aria-hidden="true">▤</span><strong>Agenda</strong><small>${visible.length}</small></button><section class="agenda" id="calendar-agenda" ${agendaOpen ? '' : 'hidden'}><div class="calendar-header"><h2>This month’s agenda</h2><a class="secondary" href="/api/calendar.ics" download>Export .ics ↗</a></div>${agendaRows}<div class="quiet-note">Local calendar · not provider-synced · Desktop reminders for timed events: 15 minutes before, while Inkwell is open. Sleep or OS notification settings may delay/suppress alerts. All-day events have no timed alert.</div></section></aside></div>`;
+    $('#agenda-toggle').onclick = () => {
+      state.calendarAgendaOpen = !state.calendarAgendaOpen;
+      const panel = $('#calendar-layout .calendar-agenda-panel');
+      const toggle = $('#agenda-toggle');
+      panel.classList.toggle('open', state.calendarAgendaOpen);
+      $('#calendar-agenda').hidden = !state.calendarAgendaOpen;
+      toggle.setAttribute('aria-expanded', String(state.calendarAgendaOpen));
+      toggle.setAttribute(
+        'aria-label',
+        `${state.calendarAgendaOpen ? 'Collapse' : 'Expand'} monthly agenda`,
+      );
+      toggle.title = toggle.getAttribute('aria-label');
+    };
     $('#month-prev').onclick = () => {
       state.month = new Date(year, month - 1, 1);
       render().catch((e) => toast(e.message));

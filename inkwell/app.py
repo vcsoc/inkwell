@@ -976,7 +976,8 @@ class AIConfig(BaseModel):
     endpoint: str = Field(default="http://127.0.0.1:11434/v1", max_length=2000)
     model: str = Field(default="llama3.2", min_length=1, max_length=200)
     api_key: str = Field(default="", max_length=4096)
-    instructions: str = Field(default="Be concise, thoughtful and professional.", max_length=5000)
+    instructions: str = Field(default="Be concise, thoughtful and professional. Assist with inkwell and administrative tasks only; do not help develop or change inkwell's codebase.", max_length=5000)
+    thinking_level: Literal['default', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] = 'default'
 
     @model_validator(mode="after")
     def validate_codex(self):
@@ -1008,6 +1009,11 @@ def ai_providers():
 @app.get("/api/ai/codex/status")
 def codex_status():
     return ai.codex_status()
+
+
+@app.get('/api/ai/codex/models')
+def codex_models():
+    return ai.codex_models()
 
 
 @app.get("/api/ai/config")

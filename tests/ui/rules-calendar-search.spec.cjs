@@ -101,7 +101,7 @@ test('rule editor creates local destinations and saves sender exclusions', async
   await page.getByRole('button', { name: 'Save rule', exact: true }).click();
   await expect(page.locator('#rules-list')).toContainText('Disabled');
   await page.goto('/#/local-' + folderId);
-  await expect(page.locator('#page-title')).toContainText(name);
+  await expect(page.locator('#page-title')).toContainText(name.toLowerCase());
 });
 
 test('all-day range and repeating series render across all selected days', async ({ page }) => {

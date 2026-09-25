@@ -291,7 +291,7 @@ main:has(.sync-footer:not([hidden])) {
   padding-bottom: 38px;
 }
 @media (min-width: 761px) {
-  [data-layout='classic'] .app-footer {
+  .app-footer {
     left: calc(var(--sidebar-width, 260px) + 44px);
   }
 }

@@ -8,7 +8,7 @@ async function view(page, name) {
 }
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('#page-title')).toContainText('Your inbox');
+  await expect(page.locator('#page-title')).toContainText('your inbox');
   await view(page, 'Settings');
 });
 test.afterEach(async ({ page }) => {
@@ -27,7 +27,7 @@ test('internal forms persist, save, cancel and switch back to popup', async ({ p
   await page.getByRole('button', { name: 'Save form preference' }).click();
   await expect(page.locator('#toast')).toContainText('Form preference saved');
   await page.reload();
-  await expect(page.locator('#page-title')).toContainText('Forms');
+  await expect(page.locator('#page-title')).toContainText('forms');
   await expect(page.getByLabel('Form presentation')).toHaveValue('inline');
   await settingsSection(page, 'Mail accounts');
   await page.getByRole('button', { name: 'Connect email' }).click();
@@ -92,7 +92,7 @@ test('theme preview, save, persistence, export, import validation and revert', a
   await page.getByRole('button', { name: 'Save theme', exact: true }).click();
   await expect(page.locator('#theme-status')).toHaveText('Saved theme');
   await page.reload();
-  await expect(page.locator('#page-title')).toContainText('Theme studio');
+  await expect(page.locator('#page-title')).toContainText('theme studio');
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(21, 26, 32)');
   await expect(page.getByLabel('Theme name')).toHaveValue('My midnight');
   await expect(page.getByLabel('Corner radius')).toHaveValue('18');

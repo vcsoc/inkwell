@@ -21,7 +21,7 @@ test('Classic inbox has a single top bar, folder-only sidebar, bottom rail profi
       info.project.name === 'mobile' ? { width: 390, height: 844 } : { width: 1920, height: 965 },
     );
     await page.reload();
-    await expect(page.locator('#topbar-heading #page-title')).toHaveText('Your inbox.');
+    await expect(page.locator('#topbar-heading #page-title')).toHaveText('your inbox.');
     await expect(page.locator('.page-heading')).toBeHidden();
     await expect(page.locator('.top-actions #heading-compose')).toBeVisible();
     const position = await page.evaluate(() => ({

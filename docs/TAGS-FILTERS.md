@@ -31,7 +31,7 @@ The message view includes All mail/Unread, Starred, Tagged/Untagged, and an exac
 
 Sort by Date, From, Recipient, Subject, Unread, Starred, Tags, or local Import order, ascending or descending. Date ordering respects stored timestamp offsets. Import order means local insertion order, not provider arrival order. Cards and table-style lists are available; table columns can also select the sort field. Narrow table lists scroll inside their pane rather than overflowing the app.
 
-Quick filter collapses/expands the controls without removing active filters; active filters remain summarized. Clear filters resets quick predicates while retaining the top text query. Clearing the top search resets the predicates as well. Ctrl/Command+Shift+K reveals the bar and focuses the existing mail search instead of adding a duplicate text-search box.
+The filter icon directly beside **Unread** uses the same tab styling and collapses/expands quick-filter controls without removing active filters; active filters remain summarized. Clear filters resets quick predicates while retaining the top text query. Clearing the top search resets the predicates as well. Ctrl/Command+Shift+K reveals the bar and focuses the existing mail search instead of adding a duplicate text-search box.
 
 Pin retains the current predicates when switching folders during this session. View, sort, direction, bar visibility, and pin preference persist in workspace settings; active predicates themselves reset on client reload. Without Pin, switching folders clears predicates. Selecting a message under Unread removes its read copy from the filtered results while keeping the reader open.
 

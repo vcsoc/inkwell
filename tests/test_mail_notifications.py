@@ -47,3 +47,23 @@ def test_uploaded_sound_is_private_and_can_be_reset(client):
     assert client.delete(url).status_code == 200
     assert client.get(url).status_code == 404
     assert client.get('/api/mail-notifications').json()['custom_sound'] is False
+
+
+def test_sound_library_preserves_choices_and_previews_default(client):
+    url = '/api/mail-notifications/sounds'
+    wave = b'RIFF' + b'\x00' * 4 + b'WAVE' + b'\x00' * 40
+    assert client.get(url).status_code == 200
+    assert client.get(url + '/default/preview').content.startswith(b'RIFF')
+    first = client.post(url + '?format=wav&name=First.wav', content=wave).json()['id']
+    second = client.post(url + '?format=mp3&name=Second.mp3', content=b'ID3' + b'\x00' * 40).json()['id']
+    assert client.get(url).json()[-1]['active'] is True
+    assert client.get(url + '/' + first + '/preview').content == wave
+    assert client.put(url + '/' + first + '/activate').status_code == 200
+    assert client.get('/api/mail-notifications/sound').content == wave
+    assert client.put(url + '/default/activate').status_code == 200
+    assert client.get('/api/mail-notifications').json()['custom_sound'] is False
+    assert len(client.get(url).json()) == 3
+    assert client.delete(url + '/' + second).status_code == 200
+    assert client.get(url + '/' + second + '/preview').status_code == 404
+    assert client.put(url + '/not-valid/activate').status_code == 404
+    assert client.post(url + '?format=wav&name=invalid', content=b'bad').status_code == 422

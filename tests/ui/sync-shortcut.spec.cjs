@@ -75,7 +75,7 @@ test('F9 triggers a fresh sync, ignores repeats and overlap, and recovers after 
 });
 test('F9 uses the open server folder rather than an unrelated inbox', async ({ page }) => {
   await page.goto('/#/remote/991');
-  await expect(page.locator('#page-title')).toContainText('Shortcut folder');
+  await expect(page.locator('#page-title')).toContainText('shortcut folder');
   await expect(page.locator('html')).toHaveAttribute('data-busy', 'false');
   calls = [];
   await page.keyboard.press('F9');
@@ -101,9 +101,9 @@ test('A delayed F9 cannot replace a newly opened settings page', async ({ page }
   await page.keyboard.press('F9');
   await expect.poll(() => queued.length).toBe(1);
   await page.evaluate(() => (location.hash = '/settings/layout'));
-  await expect(page.locator('#page-title')).toContainText('Layout');
+  await expect(page.locator('#page-title')).toContainText('layout');
   hold = false;
   await queued.pop().fulfill({ json: [{ email: 'sync@example.org', added: 0 }] });
   await expect(page.locator('#sync')).toBeEnabled();
-  await expect(page.locator('#page-title')).toContainText('Layout');
+  await expect(page.locator('#page-title')).toContainText('layout');
 });

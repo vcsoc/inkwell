@@ -545,8 +545,8 @@ async function applyFolderMove(data) {
   if (state.view.startsWith('local-')) {
     const title = folders.find((f) => f[0] === state.view)?.[2];
     if (title) {
-      $('#breadcrumb').textContent = title;
-      $('#page-title').innerHTML = esc(title) + '<span>.</span>';
+      $('#breadcrumb').textContent = title.toLocaleLowerCase() + '.';
+      $('#page-title').innerHTML = esc(title.toLocaleLowerCase()) + '<span>.</span>';
       document.title = title + ' — inkwell';
     }
   }
@@ -749,7 +749,8 @@ async function navigate(route, { historyMode = 'push' } = {}) {
   document.documentElement.dataset.mail = String(
     !['calendar', 'contacts', 'settings', 'tags', 'rules'].includes(view),
   );
-  (document.documentElement.dataset.mail === 'true'
+  document.documentElement.dataset.calendar = String(view === 'calendar');
+  (document.documentElement.dataset.mail === 'true' || view === 'calendar'
     ? $('#topbar-heading')
     : $('#page-heading-text')
   ).append($('#page-title'));
@@ -787,7 +788,9 @@ async function navigate(route, { historyMode = 'push' } = {}) {
             ? 'Rule Manager'
             : 'Settings');
   $('#breadcrumb').textContent =
-    view === 'settings' && settingsPage ? 'Settings / ' + settingsPage.name : title;
+    view === 'settings' && settingsPage
+      ? 'settings.  ' + settingsPage.name.toLocaleLowerCase() + '.'
+      : title.toLocaleLowerCase().replace(/\.$/, '') + '.';
   document.title =
     (view === 'settings' && settingsPage ? settingsPage.name + ' · Settings' : title) +
     ' — inkwell';
@@ -795,11 +798,11 @@ async function navigate(route, { historyMode = 'push' } = {}) {
     esc(
       {
         inbox: 'Your inbox',
-        calendar: 'Room for what matters',
+        calendar: 'Calendar',
         contacts: 'Your people',
         settings: settingsPage?.name || 'Settings',
       }[view] || title,
-    ) + '<span>.</span>';
+    ).toLocaleLowerCase() + '<span>.</span>';
   $('#page-description').textContent = {
     inbox: 'Good conversations start here.',
     calendar: 'Less juggling. More being present.',
@@ -1716,7 +1719,7 @@ async function renderContacts() {
   if (generation !== state.generation) return;
   state.contacts = contacts;
   $('#workspace').innerHTML =
-    `<div class="contacts-grid">${contacts.map((c) => `<article class="card contact-card"><div class="avatar">${esc(initials(c.name))}</div><h2>${esc(c.name)}</h2><p>${esc(c.company || 'A good connection')}</p><p>${esc(c.email)}</p><div class="contact-actions"><button class="secondary" data-write="${c.id}">↗ Write email</button><button class="secondary" data-contact="${c.id}">Edit</button></div></article>`).join('')}</div>${contacts.length ? '' : '<div class="empty-state"><div class="empty-icon">♙</div><h2>Better, together.</h2><p>Add your first contact to keep a good connection close.</p></div>'}`;
+    `<div class="contacts-grid">${contacts.map((c) => `<article class="card contact-card"><div class="avatar">${esc(initials(c.name))}</div><h2>${esc(c.name)}</h2><p>${esc(c.company || 'A good connection')}</p><p>${esc(c.email)}</p><div class="contact-actions"><button class="icon-button secondary" data-write="${c.id}" aria-label="Write email to ${esc(c.name)}" title="Write email to ${esc(c.name)}"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="m3 7 9 7 9-7"/></svg></button><button class="icon-button secondary" data-contact="${c.id}" aria-label="Edit ${esc(c.name)}" title="Edit ${esc(c.name)}"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 4 4L8 20H4zM12 8l4 4M15 5l2-2 4 4-2 2"/></svg></button></div></article>`).join('')}</div>${contacts.length ? '' : '<div class="empty-state"><div class="empty-icon">♙</div><h2>Better, together.</h2><p>Add your first contact to keep a good connection close.</p></div>'}`;
   $$('[data-contact]').forEach((b) =>
     on(b, 'click', () => contactForm(contacts.find((c) => c.id === Number(b.dataset.contact)))),
   );

@@ -106,6 +106,16 @@
 .mail-toolbar .filter-tab {
   min-height: 40px;
 }
+.mail-toolbar .quick-filter-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  padding-inline: 8px;
+}
+.quick-filter-tab svg {
+  flex: none;
+}
 .quick-filter {
   display: flex;
   align-items: center;

@@ -40,7 +40,7 @@ for (const [kind, label] of [
     if (info.project.name === 'desktop') await row.click({ button: 'right' });
     else await row.getByRole('button', { name: 'More email actions' }).click();
     await selectEmailMenuAction(page, label);
-    await expect(page.locator('#breadcrumb')).toHaveText('Grouped mail');
+    await expect(page.locator('#breadcrumb')).toHaveText('grouped mail.');
     await expect(page.locator('.collection-banner')).toContainText(`${setup.total} messages`);
     await expect(page.locator('.message-row')).toHaveCount(setup.total);
     if (kind === 'organisation')
@@ -50,7 +50,7 @@ for (const [kind, label] of [
     await page.locator('#global-search').fill('no-match-unique-713bb');
     await expect(page.locator('.message-row')).toHaveCount(0);
     await page.getByRole('button', { name: 'Back to inbox', exact: true }).click();
-    await expect(page.locator('#breadcrumb')).toHaveText('Inbox');
+    await expect(page.locator('#breadcrumb')).toHaveText('inbox.');
     if (setup.draft)
       await page.evaluate(
         (id) => fetch('/api/messages/' + id, { method: 'DELETE', headers: { 'X-Inkwell': '1' } }),

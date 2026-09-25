@@ -21,7 +21,7 @@ test('saved layouts, three-pane reference, bottom reader and list-first', async 
   page,
 }, info) => {
   await page.goto('/');
-  await expect(page.locator('#page-title')).toContainText('Your inbox');
+  await expect(page.locator('#page-title')).toContainText('your inbox');
   await page.evaluate(() => fetch('/api/demo', { method: 'POST', headers: { 'X-Inkwell': '1' } }));
   for (const layout of ['classic', 'stacked', 'list', 'focus']) {
     await settings(page);
@@ -33,9 +33,9 @@ test('saved layouts, three-pane reference, bottom reader and list-first', async 
     await page.getByRole('button', { name: 'Save theme', exact: true }).click();
     await expect(page.locator('#theme-status')).toHaveText('Saved theme');
     await page.reload();
-    await expect(page.locator('#page-title')).toContainText('Theme studio');
+    await expect(page.locator('#page-title')).toContainText('theme studio');
     await inbox(page);
-    await expect(page.locator('#page-title')).toContainText('Your inbox');
+    await expect(page.locator('#page-title')).toContainText('your inbox');
     await expect(page.locator('html')).toHaveAttribute('data-layout', layout);
     await expect(page.locator('.message-row')).toHaveCount(5);
     await page.locator('.message-row').first().click();

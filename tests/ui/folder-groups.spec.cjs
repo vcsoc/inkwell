@@ -117,9 +117,9 @@ test('Deep Outlook folders fit the sidebar and classic app shortcuts sit above S
       expect((await rules.boundingBox()).y).toBeLessThan((await tags.boundingBox()).y);
       expect((await tags.boundingBox()).y).toBeLessThan((await settings.boundingBox()).y);
       await rules.click();
-      await expect(page.locator('#page-title')).toContainText('Rule Manager');
+      await expect(page.locator('#page-title')).toContainText('rule manager');
       await tags.click();
-      await expect(page.locator('#page-title')).toContainText('Tag Manager');
+      await expect(page.locator('#page-title')).toContainText('tag manager');
     }
   } finally {
     await prefs(original);

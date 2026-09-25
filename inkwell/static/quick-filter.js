@@ -19,7 +19,7 @@ window.InkwellMailFilters = {
     const toolbar = document.querySelector('.mail-toolbar');
     toolbar.insertAdjacentHTML(
       'beforeend',
-      `<button class="secondary" id="quick-filter-toggle" aria-expanded="${preferences.quick_filter_visible !== false}" aria-controls="quick-filter">Quick filter</button><span class="quick-active-note" id="quick-active-note"></span><div id="quick-filter" class="quick-filter" ${preferences.quick_filter_visible === false ? 'hidden' : ''}><button class="secondary" id="quick-starred" aria-pressed="${!!state.quick?.starred}">Starred</button><label>Tags<select id="quick-tag-state"><option value="all">Any</option><option value="tagged">Tagged</option><option value="untagged">Untagged</option></select></label><label>Tag<select id="quick-tag"><option value="">Any tag</option>${(state.tagCatalog || []).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></label><label>Sort by<select id="quick-sort">${Object.entries(
+      `<button class="filter-tab quick-filter-tab ${preferences.quick_filter_visible !== false ? 'active' : ''}" id="quick-filter-toggle" type="button" aria-label="Quick filter" title="Show or hide quick filters" aria-expanded="${preferences.quick_filter_visible !== false}" aria-controls="quick-filter"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></button><span class="quick-active-note" id="quick-active-note"></span><div id="quick-filter" class="quick-filter" ${preferences.quick_filter_visible === false ? 'hidden' : ''}><button class="secondary" id="quick-starred" aria-pressed="${!!state.quick?.starred}">Starred</button><label>Tags<select id="quick-tag-state"><option value="all">Any</option><option value="tagged">Tagged</option><option value="untagged">Untagged</option></select></label><label>Tag<select id="quick-tag"><option value="">Any tag</option>${(state.tagCatalog || []).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></label><label>Sort by<select id="quick-sort">${Object.entries(
         {
           date: 'Date',
           sender: 'From',
@@ -36,6 +36,8 @@ window.InkwellMailFilters = {
           '',
         )}</select></label><label>Order<select id="quick-order"><option value="desc">Descending</option><option value="asc">Ascending</option></select></label><label>View<select id="quick-view"><option value="cards">Cards</option><option value="table">Table</option></select></label><label class="quick-pin" title="Group by message date in your local timezone; weeks start Monday. Uses date sorting while enabled."><input type="checkbox" role="switch" id="group-by-date"> Group by date</label><label class="quick-pin" title="Keep current filters when switching folders in this session"><input type="checkbox" id="quick-pin"> Pin</label><button class="secondary" id="clear-quick-filter">Clear filters</button></div>`,
     );
+    const toggle = toolbar.querySelector('#quick-filter-toggle');
+    toolbar.querySelector('.filter-tabs').append(toggle);
     const root = toolbar.querySelector('#quick-filter');
     root.querySelector('#quick-tag-state').value = state.quick?.tag_state || 'all';
     root.querySelector('#quick-tag').value = state.quick?.tag_id || '';
@@ -65,11 +67,10 @@ window.InkwellMailFilters = {
     ]
       .filter(Boolean)
       .join(' · ');
-    toolbar.querySelector('#quick-filter-toggle').onclick = () => {
+    toggle.onclick = () => {
       root.hidden = !root.hidden;
-      toolbar
-        .querySelector('#quick-filter-toggle')
-        .setAttribute('aria-expanded', String(!root.hidden));
+      toggle.setAttribute('aria-expanded', String(!root.hidden));
+      toggle.classList.toggle('active', !root.hidden);
       saveWorkspace({ quick_filter_visible: !root.hidden });
     };
     root.querySelector('#quick-starred').onclick = () => {

@@ -1,8 +1,8 @@
 # AI providers and subscriptions
 
-In **Settings → AI assistant**, select a provider. Presets fill the base URL and a starting model ID; both are editable (the URL is unused/read-only for Codex). Model availability, pricing and account eligibility can change. Choose an identifier your account/server actually supports.
+In **Settings → AI assistant**, select a provider. Presets fill the base URL and a starting model ID; both are editable for HTTP providers. Codex hides API URL/key fields because its official CLI owns authentication. Model availability, pricing and account eligibility can change. Choose an identifier your account/server actually supports.
 
-Save configuration, open **Ask Inkwell**, enter a prompt and explicitly choose whether to include the selected email or local calendar. Click **Ask assistant**. Merely saving settings does not send a prompt or test billing. The optional Codex status check checks the backend's CLI login only.
+Save configuration, open **Ask Inkwell**, enter a prompt and explicitly choose whether to include the selected email or local calendar. Click **Ask assistant**. Merely saving settings does not send a prompt or test billing. Codex login is checked on opening its settings, with the result next to **Check Codex login**; the button refreshes that result. The assistant is limited to Inkwell and personal administrative help, not developing or changing the Inkwell codebase. This restriction is part of the non-editable system instructions as well as the editable default prompt.
 
 Changing a provider or URL clears its saved key unless you enter a replacement. Changing just the model retains the key. Secrets are never included in the provider catalog, theme files or config responses.
 
@@ -26,7 +26,7 @@ Changing a provider or URL clears its saved key unless you enter a replacement. 
 | Unsloth exported/served models | An OpenAI-compatible inference server you run | Depends on that server |
 | Custom | Any OpenAI-compatible Chat Completions base URL | Depends on that server |
 
-All remote HTTP providers require HTTPS. Plain HTTP is allowed only for literal loopback hosts. The URL is resolved by the **backend**, never by the phone. Streaming, tools, multimodal inputs and provider model discovery are not implemented. Responses are single-turn text suggestions.
+All remote HTTP providers require HTTPS. Plain HTTP is allowed only for literal loopback hosts. The URL is resolved by the **backend**, never by the phone. Codex model autocomplete reads the official CLI's locally cached model catalog if available; it cannot guarantee subscription entitlement or force a fresh network refresh. Other providers have no model discovery. Streaming, tools and multimodal inputs are not implemented. Responses are single-turn text suggestions.
 
 ## ChatGPT / Codex subscription
 
@@ -42,8 +42,8 @@ codex login status
 Choose **ChatGPT sign-in**, not an API key. CLI status must report a ChatGPT login. Inkwell's adapter requires a recent CLI supporting `exec --ignore-user-config --ignore-rules --ephemeral` and the feature flags in `inkwell/ai.py` (developed against CLI 0.152.0). Unsupported flags fail the request rather than falling back to an unrestricted invocation.
 
 1. Select **ChatGPT / Codex subscription (local CLI)** in Inkwell.
-2. Enter a Codex model available to your subscription. The preset is a starting point, not a guaranteed entitlement.
-3. Click **Check Codex login**, then **Save assistant**.
+2. Enter a Codex model available to your subscription. Autocomplete suggestions come from the CLI's local model cache, not a guaranteed entitlement. Choose a thinking level or keep **Model default** (often Medium, depending on model).
+3. Confirm the inline login result or click **Check Codex login** to refresh it, then **Save assistant**.
 4. Ask a question. Subscription limits still apply. Requests time out after 120 seconds.
 
 The backend OS user must have access to the installed CLI and its login. Use `INKWELL_CODEX` to specify the native executable path if it isn't on PATH. On Windows, point this variable to the official native `codex.exe`, not a `.cmd`/`.bat` shim. Restart Inkwell after changing environment variables. Inkwell does not provide an embedded OAuth login window; authentication remains managed by the CLI. To revoke it, run `codex logout` on the backend. Disconnecting the provider inside Inkwell does **not** log out the CLI or other Codex applications.

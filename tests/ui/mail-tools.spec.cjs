@@ -99,7 +99,7 @@ test('server hierarchy, deep links and top search scopes work on desktop and mob
     return r.fulfill({ json: [] });
   });
   await page.goto('/#/remote/810');
-  await expect(page.locator('#page-title')).toHaveText('Inbox.');
+  await expect(page.locator('#page-title')).toHaveText('inbox.');
   if (await page.locator('#menu').isVisible()) await page.locator('#menu').click();
   const child = page
     .locator('#navigation')
@@ -108,7 +108,7 @@ test('server hierarchy, deep links and top search scopes work on desktop and mob
   await expect(page.locator('.folder-children')).toContainText('Projects <test>');
   await child.click();
   await expect(page).toHaveURL(/#\/remote\/811$/);
-  await expect(page.locator('#page-title')).toHaveText('Projects <test>.');
+  await expect(page.locator('#page-title')).toHaveText('projects <test>.');
   for (const scope of ['folder', 'subfolders', 'all']) {
     await page.getByRole('searchbox', { name: 'Search email', exact: true }).fill('needle');
     await page.getByLabel('Search scope', { exact: true }).selectOption(scope);
@@ -118,7 +118,7 @@ test('server hierarchy, deep links and top search scopes work on desktop and mob
     expect(urls.at(-1).searchParams.get('q')).toBe('needle');
   }
   await page.reload();
-  await expect(page.locator('#page-title')).toHaveText('Projects <test>.');
+  await expect(page.locator('#page-title')).toHaveText('projects <test>.');
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });
 

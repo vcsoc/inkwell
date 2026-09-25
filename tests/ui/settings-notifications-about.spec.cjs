@@ -8,7 +8,8 @@ test('sound settings allow selecting, previewing and resetting a local WAV', asy
   await page.goto('/#/settings/notifications');
   const settings = page.locator('#settings-notifications');
   await expect(settings).toBeVisible();
-  await expect(settings.getByText('Default: Inkwell chime')).toBeVisible();
+  await expect(settings.getByRole('radio', { name: 'Inkwell chime' })).toBeChecked();
+  await settings.getByRole('button', { name: 'Play Inkwell chime' }).click();
   const before = await page.evaluate(() => fetch('/api/mail-notifications').then((r) => r.json()));
   try {
     await settings.getByLabel('Enable new-mail sound').check();
@@ -17,25 +18,39 @@ test('sound settings allow selecting, previewing and resetting a local WAV', asy
     await expect
       .poll(() => page.evaluate(() => fetch('/api/mail-notifications').then((r) => r.json())))
       .toMatchObject({ enabled: true, scope: 'pinned' });
-    await settings.locator('#notification-sound-file').setInputFiles({
-      name: 'my-alert.wav',
-      mimeType: 'audio/wav',
-      buffer: defaultSound,
-    });
-    await expect(settings.getByText('Custom notification sound: my-alert.wav')).toBeVisible();
+    await settings.locator('#notification-sound-file').setInputFiles([
+      { name: 'batch-first.wav', mimeType: 'audio/wav', buffer: defaultSound },
+      { name: 'my-alert.wav', mimeType: 'audio/wav', buffer: defaultSound },
+    ]);
+    await expect(settings.getByRole('radio', { name: 'batch-first.wav' })).toBeVisible();
+    await expect(settings.getByRole('radio', { name: 'my-alert.wav' })).toBeChecked();
     await expect
       .poll(() => page.evaluate(() => fetch('/api/mail-notifications').then((r) => r.json())))
       .toMatchObject({ custom_sound: true });
     await page.reload();
-    await expect(settings.getByText('Custom notification sound (WAV or MP3)')).toBeVisible();
-    await settings.getByRole('button', { name: 'Play sound' }).click();
+    await expect(settings.getByRole('radio', { name: 'my-alert.wav' })).toBeChecked();
+    await settings.locator('#notification-sound-file').setInputFiles({
+      name: 'second.wav',
+      mimeType: 'audio/wav',
+      buffer: defaultSound,
+    });
+    await expect(settings.getByRole('radio', { name: 'second.wav' })).toBeChecked();
+    await settings.getByRole('radio', { name: 'my-alert.wav' }).check();
+    await settings.getByRole('button', { name: 'Play my-alert.wav' }).click();
     await settings.getByRole('button', { name: 'Use default sound' }).click();
-    await expect(settings.getByText('Default: Inkwell chime')).toBeVisible();
+    await expect(settings.getByRole('radio', { name: 'Inkwell chime' })).toBeChecked();
+    await expect(settings.getByRole('radio', { name: 'second.wav' })).toBeVisible();
     await expect
       .poll(() => page.evaluate(() => fetch('/api/mail-notifications').then((r) => r.json())))
       .toMatchObject({ custom_sound: false });
   } finally {
     await page.evaluate(async (original) => {
+      for (const sound of await fetch('/api/mail-notifications/sounds').then((r) => r.json()))
+        if (sound.id !== 'default')
+          await fetch('/api/mail-notifications/sounds/' + sound.id, {
+            method: 'DELETE',
+            headers: { 'X-Inkwell': '1' },
+          });
       await fetch('/api/mail-notifications', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'X-Inkwell': '1' },

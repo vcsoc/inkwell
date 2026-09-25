@@ -95,11 +95,11 @@ html .sidebar .brand {
   right: 0;
 }
 #navigation .folder-account-heading {
-  min-height: 44px;
+  min-height: 29px;
   cursor: pointer;
   color: var(--text);
   font-size: 14px;
-  padding: 8px 4px;
+  padding: 3px 4px;
 }
 .folder-account-heading > span {
   min-width: 0;
@@ -141,6 +141,7 @@ html .sidebar .brand {
   display: none;
 }
 #navigation .server-folders .nav-item {
+  gap: 6px;
   width: 100%;
   min-width: 0;
   box-sizing: border-box;

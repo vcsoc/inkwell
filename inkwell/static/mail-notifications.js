@@ -47,27 +47,41 @@ window.InkwellMailNotifications = ({ api, toast, pinnedFolders }) => {
         : '';
     if (!format || !selected.size || selected.size > 2_000_000)
       throw Error('Choose a WAV or MP3 smaller than 2 MB.');
-    const response = await fetch('/api/mail-notifications/sound?format=' + format, {
-      method: 'PUT',
-      headers: { 'X-Inkwell': '1', 'Content-Type': 'application/octet-stream' },
-      body: selected,
-      credentials: 'same-origin',
-    });
+    const response = await fetch(
+      '/api/mail-notifications/sounds?format=' +
+        format +
+        '&name=' +
+        encodeURIComponent(selected.name),
+      {
+        method: 'POST',
+        headers: { 'X-Inkwell': '1', 'Content-Type': 'application/octet-stream' },
+        body: selected,
+        credentials: 'same-origin',
+      },
+    );
     if (!response.ok) throw Error((await response.json()).detail || 'Sound could not be saved');
     settings.custom_sound = true;
     return format;
   }
   async function resetSound() {
-    await api('/mail-notifications/sound', { method: 'DELETE' });
+    await api('/mail-notifications/sounds/default/activate', { method: 'PUT' });
     settings.custom_sound = false;
   }
-  async function previewSound() {
+  async function previewSound(id = 'default') {
     const sample = new Audio(
-      settings.custom_sound
-        ? '/api/mail-notifications/sound?t=' + Date.now()
-        : '/static/new-mail.wav',
+      '/api/mail-notifications/sounds/' + encodeURIComponent(id) + '/preview?t=' + Date.now(),
     );
     await sample.play();
+  }
+  async function chooseSound(id) {
+    await api('/mail-notifications/sounds/' + encodeURIComponent(id) + '/activate', {
+      method: 'PUT',
+    });
+    settings.custom_sound = id !== 'default';
+  }
+  async function removeSound(id) {
+    await api('/mail-notifications/sounds/' + encodeURIComponent(id), { method: 'DELETE' });
+    settings.custom_sound = (await api('/mail-notifications')).custom_sound;
   }
   const close = () => menu.classList.add('hidden');
   function show(button) {
@@ -187,6 +201,9 @@ window.InkwellMailNotifications = ({ api, toast, pinnedFolders }) => {
     uploadSound,
     resetSound,
     previewSound,
+    chooseSound,
+    removeSound,
+    listSounds: () => api('/mail-notifications/sounds'),
     get enabled() {
       return settings.enabled;
     },

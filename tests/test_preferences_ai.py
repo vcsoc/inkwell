@@ -174,7 +174,7 @@ def test_codex_bridge_arguments_and_cleanup(client, monkeypatch):
 
     monkeypatch.setattr(ai.subprocess, "run", run)
     assert client.get("/api/ai/codex/status").json()["available"]
-    client.put("/api/ai/config", json={"provider": "codex", "model": "gpt-5.4"})
+    client.put("/api/ai/config", json={"provider": "codex", "model": "gpt-5.4", "thinking_level": "high"})
     result = client.post("/api/ai/chat", json={"prompt": "Draft a greeting"})
     assert result.json()["answer"] == "A subscription-backed draft"
     command, options = calls[-1]
@@ -182,10 +182,27 @@ def test_codex_bridge_arguments_and_cleanup(client, monkeypatch):
     assert command[command.index("--sandbox") + 1] == "read-only"
     assert "shell_tool" in command and "unified_exec" in command
     assert "--ephemeral" in command
+    assert 'model_reasoning_effort="high"' in command
+    assert 'Do not assist with software development or modifications to the inkwell codebase' in options['input']
     assert not options.get("shell", False)
     assert "OPENAI_API_KEY" not in options["env"] and "INKWELL_ACCESS_KEY" not in options["env"]
     assert "Draft a greeting" in options["input"]
     assert not Path(options["cwd"]).exists()
+
+
+def test_codex_models_use_installed_cli_cache_without_private_fields(client, monkeypatch, tmp_path):
+    import json
+
+    monkeypatch.setenv('CODEX_HOME', str(tmp_path))
+    assert client.get('/api/ai/codex/models').json() == []
+    (tmp_path / 'models_cache.json').write_text(json.dumps({'models': [
+        {'slug': 'visible', 'visibility': 'list', 'default_reasoning_level': 'medium',
+         'supported_reasoning_levels': [{'effort': 'low'}, {'effort': 'medium'}], 'secret': 'do-not-expose'},
+        {'slug': 'internal', 'visibility': 'hide'},
+    ]}), encoding='utf-8')
+    assert client.get('/api/ai/codex/models').json() == [
+        {'id': 'visible', 'default_thinking': 'medium', 'thinking_levels': ['low', 'medium']}
+    ]
 
 
 def test_codex_absent_and_provider_errors_redacted(client, monkeypatch):

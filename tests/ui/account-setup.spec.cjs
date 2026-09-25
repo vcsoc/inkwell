@@ -3,7 +3,7 @@ const { settingsSection } = require('./helpers.cjs');
 
 async function openSettings(page) {
   await page.goto('/');
-  await expect(page.locator('#page-title')).toContainText('Your inbox');
+  await expect(page.locator('#page-title')).toContainText('your inbox');
   if (await page.locator('.mobile-tabs').isVisible())
     await page.locator('.mobile-tabs').getByRole('button', { name: 'Settings' }).click();
   else await page.locator('#settings').click();
@@ -94,7 +94,7 @@ test('completed Microsoft sign-in imports inbox automatically and opens mail', a
   });
   await page.getByRole('button', { name: 'Sign in with Microsoft', exact: true }).click();
   await expect.poll(() => syncCalls).toBe(1);
-  await expect(page.locator('#page-title')).toContainText('Your inbox');
+  await expect(page.locator('#page-title')).toContainText('your inbox');
   await expect(page.locator('#toast')).toContainText('Imported 200 messages');
 });
 

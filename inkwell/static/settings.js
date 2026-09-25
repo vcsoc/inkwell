@@ -44,12 +44,6 @@ window.InkwellSettings = (() => {
       description: 'Choose when new mail sounds and select a notification sound.',
     },
     {
-      id: 'about',
-      name: 'About',
-      icon: 'ⓘ',
-      description: 'Version, developer and project information.',
-    },
-    {
       id: 'assistant',
       name: 'AI assistant',
       icon: '✦',
@@ -60,6 +54,12 @@ window.InkwellSettings = (() => {
       name: 'Privacy & data',
       icon: '♧',
       description: 'Review privacy boundaries and explore sample data.',
+    },
+    {
+      id: 'about',
+      name: 'About',
+      icon: 'ⓘ',
+      description: 'Version, developer and project information.',
     },
   ];
   async function mount(root, page, deps) {
@@ -118,18 +118,46 @@ window.InkwellSettings = (() => {
     if (page === 'notifications') {
       const current = await notifications.refresh();
       if (!isCurrent() || !content.isConnected) return;
-      content.innerHTML = `<section class="card" id="settings-notifications"><h2>New mail sound</h2><p>Play one sound after a completed sync batch with matching new mail. Sound is off by default; no sound plays while the app is closed.</p><form id="notification-settings"><label class="check-label"><input type="checkbox" name="enabled" ${current.enabled ? 'checked' : ''}> Enable new-mail sound</label><label class="field">Notify for<select name="scope" aria-label="Notification scope"><option value="all">All new mail</option><option value="pinned">Pinned folders only</option><option value="senders">Selected senders only</option></select></label><p class="fine-print">Pin folders in the sidebar or use the small bell beside a sender in the message list. Selected senders: ${current.senders.length}.</p><button class="primary" type="submit">Save notification settings</button></form><h3>Notification sound</h3><p id="notification-sound-choice" role="status"></p><div class="form-actions"><label class="secondary notification-file-label">Choose WAV or MP3<input id="notification-sound-file" type="file" accept=".wav,.mp3,audio/wav,audio/mpeg"></label><button class="secondary" type="button" id="notification-play">Play sound</button><button class="secondary" type="button" id="notification-reset">Use default sound</button></div><p class="fine-print">Inkwell includes a short chime. A custom sound is stored only on this computer (maximum 2 MB) and replaces the default until you reset it. Browser audio may require a click first.</p></section>`;
+      content.innerHTML = `<section class="card" id="settings-notifications"><h2>New mail sound</h2><p>Play one sound after a completed sync batch with matching new mail. Sound is off by default; no sound plays while the app is closed.</p><form id="notification-settings"><label class="check-label"><input type="checkbox" name="enabled" ${current.enabled ? 'checked' : ''}> Enable new-mail sound</label><label class="field">Notify for<select name="scope" aria-label="Notification scope"><option value="all">All new mail</option><option value="pinned">Pinned folders only</option><option value="senders">Selected senders only</option></select></label><p class="fine-print">Pin folders in the sidebar or use the small bell beside a sender in the message list. Selected senders: ${current.senders.length}.</p><button class="primary" type="submit">Save notification settings</button></form><h3>Notification sounds</h3><div id="notification-sounds" role="group" aria-label="Notification sounds"></div><p id="notification-sound-choice" class="sr-only" role="status"></p><div class="form-actions"><label class="secondary notification-file-label">Add WAV or MP3<input id="notification-sound-file" type="file" multiple accept=".wav,.mp3,audio/wav,audio/mpeg"></label><button class="secondary" type="button" id="notification-reset">Use default sound</button></div><p class="fine-print">Choose a sound to use for new mail; the bell beside each sound previews it, even when notifications are off. Up to 20 custom WAV or MP3 files (2 MB each) are stored only on this computer. Browser audio may require a click first.</p></section>`;
       const form = content.querySelector('#notification-settings');
       form.elements.scope.value = current.scope;
-      let filename = '';
-      const paintSound = () => {
-        const custom = notifications.current.custom_sound;
-        content.querySelector('#notification-sound-choice').textContent = custom
-          ? `Custom notification sound${filename ? ': ' + filename : ' (WAV or MP3)'}`
-          : 'Default: Inkwell chime';
-        content.querySelector('#notification-reset').disabled = !custom;
+      const bellIcon =
+        '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 8-3 9h18c0-1-3-2-3-9ZM10 21h4"/></svg>';
+      const paintSound = async () => {
+        const sounds = await notifications.listSounds();
+        if (!isCurrent()) return;
+        content.querySelector('#notification-sounds').innerHTML = sounds
+          .map(
+            (sound) =>
+              `<div class="notification-sound-row"><label><input type="radio" name="active-sound" value="${esc(sound.id)}" ${sound.active ? 'checked' : ''}> <span>${esc(sound.name)}</span></label><button class="icon-button" type="button" data-preview-sound="${esc(sound.id)}" aria-label="Play ${esc(sound.name)}" title="Play ${esc(sound.name)}">${bellIcon}</button>${sound.id === 'default' ? '' : `<button class="icon-button" type="button" data-remove-sound="${esc(sound.id)}" aria-label="Remove ${esc(sound.name)}" title="Remove ${esc(sound.name)}">×</button>`}</div>`,
+          )
+          .join('');
+        content.querySelector('#notification-sound-choice').textContent =
+          'Active: ' + (sounds.find((s) => s.active)?.name || 'Inkwell chime');
+        content.querySelector('#notification-reset').disabled = !!sounds.find(
+          (s) => s.id === 'default' && s.active,
+        );
       };
-      paintSound();
+      await paintSound();
+      on(content.querySelector('#notification-sounds'), 'click', async (event) => {
+        const preview = event.target.closest('[data-preview-sound]');
+        const remove = event.target.closest('[data-remove-sound]');
+        if (preview) {
+          try {
+            await notifications.previewSound(preview.dataset.previewSound);
+          } catch (error) {
+            toast('Could not play this sound: ' + error.message);
+          }
+        } else if (remove) {
+          await notifications.removeSound(remove.dataset.removeSound);
+          await paintSound();
+        }
+      });
+      on(content.querySelector('#notification-sounds'), 'change', async (event) => {
+        if (event.target.name !== 'active-sound') return;
+        await notifications.chooseSound(event.target.value);
+        await paintSound();
+      });
       on(form, 'submit', async (event) => {
         event.preventDefault();
         await notifications.update({
@@ -139,25 +167,30 @@ window.InkwellSettings = (() => {
         toast('Notification settings saved.');
       });
       on(content.querySelector('#notification-sound-file'), 'change', async (event) => {
-        const file = event.target.files?.[0];
+        const files = [...(event.target.files || [])];
         event.target.value = '';
-        if (!file) return;
-        await notifications.uploadSound(file);
-        filename = file.name;
+        if (!files.length) return;
+        let saved = 0;
+        for (const file of files) {
+          try {
+            await notifications.uploadSound(file);
+            saved++;
+          } catch (error) {
+            toast(`${file.name}: ${error.message}`);
+          }
+        }
         if (isCurrent()) {
-          paintSound();
-          toast('Custom notification sound saved.');
+          await paintSound();
+          if (saved) toast(`${saved} notification sound${saved === 1 ? '' : 's'} saved.`);
         }
       });
       on(content.querySelector('#notification-reset'), 'click', async () => {
         await notifications.resetSound();
-        filename = '';
         if (isCurrent()) {
-          paintSound();
+          await paintSound();
           toast('Default sound restored.');
         }
       });
-      on(content.querySelector('#notification-play'), 'click', () => notifications.previewSound());
       return;
     }
     if (page === 'about') {
@@ -211,9 +244,49 @@ window.InkwellSettings = (() => {
     }
     const [config, providers] = await Promise.all([api('/ai/config'), api('/ai/providers')]);
     if (!isCurrent() || !content.isConnected) return;
-    content.innerHTML = `<section class="card" id="settings-assistant"><h2>An assistant on your terms.</h2><p>Choose a cloud provider, a local model server, or your ChatGPT subscription through the official Codex CLI. Nothing is shared automatically.</p><form id="ai-settings"><label class="field">AI provider<select name="provider" id="ai-provider-select" aria-label="AI provider">${providers.map((p) => `<option value="${p.id}" ${p.id === (config.provider || 'custom') ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label><div id="ai-provider-help" class="notice"></div><button class="secondary hidden" type="button" id="codex-status">Check Codex login</button>${field('API base URL', 'endpoint', config.endpoint || 'http://127.0.0.1:11434/v1', 'url', 'required placeholder="https://api.openai.com/v1"')}${field('Model', 'model', config.model || 'llama3.2', 'text', 'required maxlength="200"')}${field('API key', 'api_key', '', 'password', `autocomplete="new-password" placeholder="${config.has_key ? 'Saved securely — leave blank to keep' : 'Optional for local models'}"`)}${textarea('Assistant instructions', 'instructions', config.instructions || 'Be concise, thoughtful and professional.', 'maxlength="5000"')}<div class="notice">Your selected context and prompt will be sent only when you click Ask. Changing provider or URL clears the saved key unless you enter a replacement. Codex uses a restricted local CLI runtime, not a tool-free HTTP API; use it only on a trusted backend. Save before leaving this page to keep edits.</div><div class="form-actions"><button type="button" class="secondary danger" id="clear-ai">Disconnect</button><button class="primary" type="submit">Save assistant</button></div></form></section>`;
+    const defaultInstructions =
+      "Be concise, thoughtful and professional. Assist with inkwell and administrative tasks only; do not help develop or change inkwell's codebase.";
+    const instructions =
+      !config.instructions || config.instructions === 'Be concise, thoughtful and professional.'
+        ? defaultInstructions
+        : config.instructions;
+    content.innerHTML = `<section class="card" id="settings-assistant"><h2>An assistant on your terms.</h2><p>Choose a cloud provider, a local model server, or your ChatGPT subscription through the official Codex CLI. Nothing is shared automatically.</p><form id="ai-settings"><label class="field">AI provider<select name="provider" id="ai-provider-select" aria-label="AI provider">${providers.map((p) => `<option value="${p.id}" ${p.id === (config.provider || 'custom') ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label><div id="ai-provider-help" class="notice"></div><div class="codex-status-row hidden" id="codex-status-row"><button class="secondary" type="button" id="codex-status">Check Codex login</button><span id="codex-status-result" role="status" aria-live="polite"></span></div><div id="ai-api-url">${field('API base URL', 'endpoint', config.endpoint || 'http://127.0.0.1:11434/v1', 'url', 'required placeholder="https://api.openai.com/v1"')}</div>${field('Model', 'model', config.model || 'llama3.2', 'text', 'required maxlength="200" list="codex-models"')}<datalist id="codex-models"></datalist><div id="ai-api-key">${field('API key', 'api_key', '', 'password', `autocomplete="new-password" placeholder="${config.has_key ? 'Saved securely — leave blank to keep' : 'Optional for local models'}"`)}</div><label class="field hidden" id="codex-thinking-field">Thinking level<select name="thinking_level" id="codex-thinking"><option value="default">Model default</option></select><small>Leave on Model default to use the CLI model's default (often Medium).</small></label>${textarea('Assistant instructions', 'instructions', instructions, 'maxlength="5000"')}<div class="notice">Your selected context and prompt will be sent only when you click Ask. Changing provider or URL clears the saved key unless you enter a replacement. Codex uses a restricted local CLI runtime, not a tool-free HTTP API; use it only on a trusted backend. Save before leaving this page to keep edits.</div><div class="form-actions"><button type="button" class="secondary danger" id="clear-ai">Disconnect</button><button class="primary" type="submit">Save assistant</button></div></form></section>`;
     const form = content.querySelector('#ai-settings'),
       provider = content.querySelector('#ai-provider-select');
+    let codexModels = [];
+    const renderThinking = () => {
+      const entry = codexModels.find((m) => m.id === form.elements.model.value);
+      const field = content.querySelector('#codex-thinking');
+      const previous = field.value || config.thinking_level || 'default';
+      field.innerHTML = `<option value="default">Model default${entry ? ' (' + esc(entry.default_thinking) + ')' : ''}</option>${(entry?.thinking_levels || ['low', 'medium', 'high', 'xhigh']).map((level) => `<option value="${esc(level)}">${esc(level)}</option>`).join('')}`;
+      field.value = [...field.options].some((option) => option.value === previous)
+        ? previous
+        : 'default';
+    };
+    const loadCodexModels = async () => {
+      try {
+        codexModels = await api('/ai/codex/models');
+        if (!isCurrent()) return;
+        content.querySelector('#codex-models').innerHTML = codexModels
+          .map((m) => `<option value="${esc(m.id)}"></option>`)
+          .join('');
+        renderThinking();
+      } catch {
+        /* Older or unavailable CLI: allow entering a model manually. */
+      }
+    };
+    const checkCodex = async (showToast = false) => {
+      const resultField = content.querySelector('#codex-status-result');
+      resultField.textContent = 'Checking Codex login…';
+      try {
+        const result = await api('/ai/codex/status');
+        if (!isCurrent()) return;
+        resultField.textContent = result.message;
+        if (showToast) toast(result.message);
+      } catch (error) {
+        if (isCurrent()) resultField.textContent = 'Could not check Codex login: ' + error.message;
+      }
+    };
     const updateProvider = (changed = false) => {
       const p = providers.find((p) => p.id === provider.value);
       if (!p) return;
@@ -224,18 +297,30 @@ window.InkwellSettings = (() => {
         form.elements.api_key.placeholder = 'New provider — enter its key if required';
       }
       content.querySelector('#ai-provider-help').textContent = p.help;
-      form.elements.endpoint.readOnly = p.id === 'codex';
-      form.elements.api_key.disabled = p.id === 'codex';
-      content.querySelector('#codex-status').classList.toggle('hidden', p.id !== 'codex');
+      const codex = p.id === 'codex';
+      content.querySelector('#ai-api-url').hidden = codex;
+      content.querySelector('#ai-api-key').hidden = codex;
+      form.elements.endpoint.disabled = codex;
+      form.elements.api_key.disabled = codex;
+      content.querySelector('#codex-status-row').classList.toggle('hidden', !codex);
+      content.querySelector('#codex-thinking-field').classList.toggle('hidden', !codex);
+      content.querySelector('#codex-thinking').disabled = !codex;
+      form.elements.model.setAttribute('list', codex ? 'codex-models' : '');
+      if (codex) {
+        if (!codexModels.length) void loadCodexModels();
+        if (!content.querySelector('#codex-status-result').textContent) void checkCodex();
+        renderThinking();
+      }
     };
     on(provider, 'change', () => updateProvider(true));
+    on(form.elements.model, 'input', renderThinking);
     updateProvider();
+    content.querySelector('#codex-thinking').value = config.thinking_level || 'default';
     on(content.querySelector('#codex-status'), 'click', async (event) => {
       const button = event.currentTarget;
       button.disabled = true;
       try {
-        const result = await api('/ai/codex/status');
-        if (isCurrent()) toast(result.message);
+        await checkCodex(true);
       } finally {
         button.disabled = false;
       }

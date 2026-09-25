@@ -27,7 +27,7 @@ Save changes before switching pages. Unsaved theme/layout previews are discarded
 In **Settings → Layout → Default mail layout**, choose a layout and click **Save layout**:
 
 - **Focus:** original spacious Inkwell layout with a reader beside selected mail.
-- **Classic:** inspired by the provided traditional mail-client screenshot—slim app rail, folder sidebar, compact message cards and a persistent right-hand reading pane.
+- **Classic:** inspired by the provided traditional mail-client screenshot—slim app rail, folder sidebar, compact message cards and a persistent right-hand reading pane. The slim left app rail remains visible in every desktop layout and theme; mobile uses persistent bottom navigation instead.
 - **Stacked:** message list above a persistent bottom reading pane.
 - **List first:** selecting a message opens a full-width reader; Back returns to the list.
 

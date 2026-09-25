@@ -94,7 +94,7 @@ test('Rule Manager builds AND/OR conditions and multiple actions, preserves edit
   ).run('fixture:' + message, message);
   db.close();
   await page.goto('/#/rules');
-  await expect(page.locator('#page-title')).toContainText('Rule Manager');
+  await expect(page.locator('#page-title')).toContainText('rule manager');
   if (await page.locator('#menu').isVisible()) {
     await page.locator('#menu').click();
     await expect(page.locator('#rule-manager-link')).toBeVisible();

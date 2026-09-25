@@ -54,7 +54,7 @@ test('Right-click creates nested local folders under Inbox and a local folder, s
   const selector = `#navigation [data-view="${parent}"]`;
   await showSidebar(page, selector);
   await page.locator(selector).click();
-  await expect(page.locator('#page-title')).toContainText(prefix + ' Child');
+  await expect(page.locator('#page-title')).toContainText((prefix + ' Child').toLowerCase());
 });
 test('Keyboard folder menu restores focus, rejects sibling duplicates and supports cancel', async ({
   page,
