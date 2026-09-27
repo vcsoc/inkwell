@@ -2,6 +2,7 @@
 .app-rail button[data-view='inbox'] svg,
 .app-rail button[data-view='calendar'] svg,
 .app-rail button[data-view='contacts'] svg,
+.app-rail button[data-view='documents'] svg,
 .app-rail #notify-bell svg {
   width: 23px;
   height: 23px;

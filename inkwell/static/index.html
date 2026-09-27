@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="/static/mail-polish.css" />
     <link rel="stylesheet" href="/static/tag-manager.css" />
     <link rel="stylesheet" href="/static/calendar-rules.css" />
+    <link rel="stylesheet" href="/static/documents.css" />
     <link rel="stylesheet" href="/static/rules-compose.css" />
     <link rel="stylesheet" href="/static/reader-toolbar.css" />
     <link rel="stylesheet" href="/static/message-menu.css" />
@@ -76,6 +77,19 @@
           >
             <circle cx="12" cy="8" r="3.5" />
             <path d="M4.5 20v-2a7.5 7.5 0 0 1 15 0v2z" />
+          </svg>
+        </button>
+        <button data-view="documents" aria-label="Documents" title="Documents">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M5 2h9l5 5v15H5zM14 2v5h5M8 12h8M8 16h8" />
           </svg>
         </button>
         <button
@@ -306,6 +320,7 @@
       <button data-view="inbox" aria-label="Mail">▤<span>Mail</span></button
       ><button data-view="calendar" aria-label="Calendar">▦<span>Calendar</span></button
       ><button data-view="contacts" aria-label="People">♙<span>People</span></button
+      ><button data-view="documents" aria-label="Documents">▤<span>Documents</span></button
       ><button data-view="settings" aria-label="Settings">⚙<span>Settings</span></button>
     </nav>
     <dialog id="modal" aria-labelledby="modal-title">
@@ -390,6 +405,7 @@
     <script src="/static/email-export.js" defer></script>
     <script src="/static/message-selection.js" defer></script>
     <script src="/static/calendar.js" defer></script>
+    <script src="/static/documents.js" defer></script>
     <script src="/static/calendar-import.js" defer></script>
     <script src="/static/rule-priority.js" defer></script>
     <script src="/static/destination-picker.js" defer></script>

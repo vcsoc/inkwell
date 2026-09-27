@@ -57,13 +57,13 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
         ...(process.env.INKWELL_TEST_EXECUTABLE ? [] : ['.']),
         `--user-data-dir=${path.join(data, 'electron-profile')}`,
       ],
-      env: { ...process.env, INKWELL_DATA_DIR: data },
+      env: { ...process.env, INKWELL_DATA_DIR: data, INKWELL_DOCUMENTS_DIR: path.join(data, 'Documents') },
       timeout: 5000,
     });
     const window = await app.firstWindow({ timeout: 5000 });
     window.setDefaultTimeout(3000);
     window.setDefaultNavigationTimeout(5000);
-    await expect(window.locator('#page-title')).toContainText('Your inbox');
+    await expect(window.locator('#page-title')).toHaveText('your inbox.');
     expect(await window.evaluate(() => window.inkwellUpdates.status())).toEqual({
       supported: Boolean(process.env.INKWELL_TEST_EXECUTABLE?.includes('/.local/opt/inkwell/current/inkwell')),
     });
@@ -80,6 +80,13 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
     await expect(window.locator('.brand-logo')).toHaveCSS('mask-image', /logo\.png/);
     await expect(window.locator('#modal')).not.toBeVisible();
     await window.getByRole('button', { name: 'Explore demo', exact: true }).click();
+    await expect(window.locator('.message-row')).toHaveCount(5);
+    await window.locator('[data-view="documents"]:visible').click();
+    await expect(window.locator('#documents-workspace')).toBeVisible();
+    if (!(await window.locator('#doc-tree').isVisible())) await window.locator('#menu').click();
+    await expect(window.locator('#doc-tree')).toBeVisible();
+    await window.keyboard.press('Escape');
+    await window.locator('[data-view="inbox"]:visible').click();
     await expect(window.locator('.message-row')).toHaveCount(5);
     await expect(
       window.getByRole('searchbox', { name: 'Search email', exact: true }),

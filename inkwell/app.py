@@ -43,6 +43,7 @@ from . import (
     calendar_import,
     calendar_reminders,
     attachments,
+    documents,
 )
 
 STATIC = Path(__file__).parent / "static"
@@ -72,6 +73,7 @@ app = FastAPI(title="inkwell", lifespan=lifespan, docs_url=None, redoc_url=None,
 app.include_router(preferences.router)
 app.include_router(app_info.router)
 app.include_router(mail_notifications.router)
+app.include_router(documents.router)
 app.include_router(microsoft.router)
 app.include_router(collections.router)
 app.include_router(html_mail.router)

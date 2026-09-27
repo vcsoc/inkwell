@@ -8,7 +8,7 @@ A desktop/mobile-first email, calendar, contacts and AI workspace. The desktop a
 
 ## Install on this Linux machine
 
-Build a bundled installer with `npm run build:linux`, then run `sh dist/inkwell-0.1.6-linux-x64.run`. The installed app appears as **inkwell** in your launcher and includes its Python backend—no development tools are required to run it. This is an unsigned Linux x86_64 user installer. See [Installing](docs/INSTALLING.md).
+Build a bundled installer with `npm run build:linux`, then run `sh dist/inkwell-0.1.7-linux-x64.run`. The installed app appears as **inkwell** in your launcher and includes its Python backend—no development tools are required to run it. This is an unsigned Linux x86_64 user installer. See [Installing](docs/INSTALLING.md).
 
 ## Start testing from source
 
@@ -47,6 +47,7 @@ For a phone, see [Mobile setup](docs/MOBILE.md). `localhost` on a phone refers t
 | Email | Multiple IMAP/SMTP accounts, inbox sync, isolated HTML/text previews, opt-in remote images and text links, search, pagination, persistent Today/This Week/This Month/Older date grouping, unread/tag pills, local read/unread, stars, archive/trash, drafts, reply, forward, explicit SMTP sending, draft autosave, local drag-and-drop, Trash restore, and [cached .eml file export](docs/EMAIL-EXPORT.md) |
 | Attachments | Top-reader filenames/sizes/downloads, exact Outlook conversation discovery across folders, selected-message IMAP inspection, inline groups, cached/offline status; [scope and limits](docs/ATTACHMENTS.md) |
 | Calendar | Themed month grid/agenda, all-day and multi-day events, drag/two-endpoint ranges, timezone-aware daily/weekly/monthly/yearly repeats, whole-series editing, ICS/Outlook-invite import, `.ics` export, native 15-minute reminders while open |
+| Documents (0.1.7 local review build) | Local Documents folder tree and recent files, rich/UTF-8 editing, PDF page thumbnails, redaction, visual/PKCS#12 signatures, compression; [supported formats and limitations](docs/DOCUMENTS.md) |
 | Mail rules | Compact Rule Manager with list-left/editor-right layout, [scoped manual execution, drag priority and per-rule Stop](docs/RULE-EXECUTION.md), context-menu creation/application, sender/domain/TLD/subject conditions, multiple local actions, and [Not Junk](docs/NOT-JUNK.md) sender memory with Inbox/rule filing — never server mutations |
 | People | Create/edit/delete contacts, compose from contact, recipient suggestions |
 | AI | OpenAI, OpenRouter, Anthropic, Gemini and compatible APIs; official Codex CLI subscription bridge; Ollama, LM Studio, llama.cpp and served Unsloth models; explicit context sharing and draft suggestions |

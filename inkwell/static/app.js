@@ -382,7 +382,7 @@ function paintNavigation() {
       'active',
       b.dataset.view === state.view ||
         (b.dataset.view === 'inbox' &&
-          !['calendar', 'contacts', 'settings', 'tags', 'rules'].includes(state.view)),
+          !['calendar', 'contacts', 'documents', 'settings', 'tags', 'rules'].includes(state.view)),
     ),
   );
   $('#tag-manager-link').classList.toggle('active', state.view === 'tags');
@@ -402,6 +402,14 @@ $('#navigation').addEventListener('dblclick', (event) => {
   summary.parentElement.open = !summary.parentElement.open;
 });
 function navigation() {
+  if (state.view === 'documents') {
+    navigationKey = '';
+    $('#navigation').innerHTML = '<p class="doc-side-muted">Loading Documents…</p>';
+    $$('.mobile-tabs button, .app-rail button').forEach((button) =>
+      button.classList.toggle('active', button.dataset.view === 'documents'),
+    );
+    return;
+  }
   const key = JSON.stringify([
     state.localFolders,
     state.pinnedFolders,
@@ -506,7 +514,7 @@ function navigation() {
       'active',
       b.dataset.view === state.view ||
         (b.dataset.view === 'inbox' &&
-          !['calendar', 'contacts', 'settings', 'tags', 'rules'].includes(state.view)),
+          !['calendar', 'contacts', 'documents', 'settings', 'tags', 'rules'].includes(state.view)),
     ),
   );
   $('#account-status').textContent = state.accounts.length
@@ -696,13 +704,17 @@ function routeFromLocation() {
   return location.hash.startsWith('#/') ? location.hash.slice(2) : 'inbox';
 }
 async function navigate(route, { historyMode = 'push' } = {}) {
+  if (state.view === 'documents' && !route.startsWith('documents')) {
+    if (!InkwellDocuments.confirmLeave()) return;
+    InkwellDocuments.stop();
+  }
   if ($('#modal').open) {
     state.afterFormClose = () =>
       navigate(route, { historyMode }).catch((error) => toast(error.message));
     requestModalClose();
     return;
   }
-  if (!['settings', 'rules', 'tags', 'calendar', 'contacts'].includes(state.view)) {
+  if (!['settings', 'rules', 'tags', 'calendar', 'contacts', 'documents'].includes(state.view)) {
     const folder = state.remoteFolder
       ? 'remote:' + state.remoteFolder.id
       : /^(inbox|archive|trash|sent|drafts|local-[1-9][0-9]*)$/.test(state.view)
@@ -722,6 +734,7 @@ async function navigate(route, { historyMode = 'push' } = {}) {
     'remote',
     'tags',
     'rules',
+    'documents',
   ];
   let view = allowedViews.includes(requestedView) ? requestedView : 'inbox';
   if (view === 'collection' && !state.collection) view = 'inbox';
@@ -747,10 +760,11 @@ async function navigate(route, { historyMode = 'push' } = {}) {
   InkwellAppearance.apply(preferences.theme);
   applyLayout();
   document.documentElement.dataset.mail = String(
-    !['calendar', 'contacts', 'settings', 'tags', 'rules'].includes(view),
+    !['calendar', 'contacts', 'documents', 'settings', 'tags', 'rules'].includes(view),
   );
   document.documentElement.dataset.calendar = String(view === 'calendar');
-  (document.documentElement.dataset.mail === 'true' || view === 'calendar'
+  document.documentElement.dataset.documents = String(view === 'documents');
+  (document.documentElement.dataset.mail === 'true' || view === 'calendar' || view === 'documents'
     ? $('#topbar-heading')
     : $('#page-heading-text')
   ).append($('#page-title'));
@@ -782,11 +796,13 @@ async function navigate(route, { historyMode = 'push' } = {}) {
       ? state.remoteFolder.name
       : view === 'collection'
         ? 'Grouped mail'
-        : view === 'tags'
-          ? 'Tag Manager'
-          : view === 'rules'
-            ? 'Rule Manager'
-            : 'Settings');
+        : view === 'documents'
+          ? 'Documents'
+          : view === 'tags'
+            ? 'Tag Manager'
+            : view === 'rules'
+              ? 'Rule Manager'
+              : 'Settings');
   $('#breadcrumb').textContent =
     view === 'settings' && settingsPage
       ? 'settings.  ' + settingsPage.name.toLocaleLowerCase() + '.'
@@ -807,6 +823,7 @@ async function navigate(route, { historyMode = 'push' } = {}) {
     inbox: 'Good conversations start here.',
     calendar: 'Less juggling. More being present.',
     contacts: 'Keep your favorite connections close.',
+    documents: 'Your documents and PDF tools, stored in your Documents folder.',
     tags: 'Organize, recolor and manage local message tags.',
     rules: 'Build conditions and actions for your local email copies.',
     settings: settingsPage?.description || 'Choose a category to make inkwell yours.',
@@ -825,7 +842,7 @@ async function navigate(route, { historyMode = 'push' } = {}) {
       ? '<button class="primary" id="add-event">＋ New event</button>'
       : view === 'contacts'
         ? '<button class="primary" id="add-contact">＋ Add person</button>'
-        : !['settings', 'tags', 'rules'].includes(view)
+        : !['settings', 'tags', 'rules', 'documents'].includes(view)
           ? '<button class="secondary" id="heading-compose">＋ Compose</button>'
           : '';
   if ($('#add-event')) on($('#add-event'), 'click', () => eventForm());
@@ -834,7 +851,16 @@ async function navigate(route, { historyMode = 'push' } = {}) {
   $('#workspace').innerHTML = '<div class="skeleton">Getting your workspace ready…</div>';
   if (view === 'calendar') await renderCalendar();
   else if (view === 'contacts') await renderContacts();
-  else if (view === 'settings') await renderSettings();
+  else if (view === 'documents') {
+    const generation = state.generation;
+    InkwellDocuments.mount({
+      root: $('#workspace'),
+      nav: $('#navigation'),
+      api,
+      toast,
+      isCurrent: () => state.generation === generation && state.view === 'documents',
+    });
+  } else if (view === 'settings') await renderSettings();
   else if (view === 'rules') {
     const generation = state.generation;
     const sourceMessage = state.ruleSeed;

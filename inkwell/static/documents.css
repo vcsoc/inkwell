@@ -1,0 +1,598 @@
+/* Three-pane Documents workspace. The left app rail remains available in every layout. */
+html[data-documents='true'] main {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-width: 0;
+  overflow: hidden;
+}
+html[data-documents='true'] .page-heading,
+html[data-documents='true'] .topbar .breadcrumb,
+html[data-documents='true'] .global-search,
+html[data-documents='true'] #sync,
+html[data-documents='true'] #notify-bell-top,
+html[data-documents='true'] .today {
+  display: none;
+}
+html[data-documents='true'] .topbar-heading {
+  flex: 1;
+  min-width: 0;
+}
+html[data-documents='true'] .topbar-heading h1 {
+  margin: 0;
+  font: 600 18px/1.3 var(--sans);
+}
+html[data-documents='true'] main > .topbar {
+  flex: none;
+  min-height: 52px;
+  height: 52px;
+}
+html[data-documents='true'] #workspace {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+html[data-documents='true'] .sidebar #navigation {
+  padding-inline: 2px;
+}
+.doc-sidebar,
+.doc-tree-children,
+#doc-tree,
+#doc-recent {
+  min-width: 0;
+}
+.doc-sidebar {
+  padding: 2px 0 14px;
+  color: var(--ink);
+  font-size: 12px;
+}
+.doc-nav-heading,
+.doc-nav-actions,
+.doc-pages-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+}
+.doc-nav-heading strong {
+  font: 600 15px var(--sans);
+}
+.doc-nav-actions {
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+  padding-bottom: 10px;
+}
+.doc-nav-actions button,
+.doc-nav-actions label,
+.doc-nav-heading button {
+  min-height: 30px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--ink);
+  background: var(--surface);
+  font: inherit;
+  cursor: pointer;
+}
+.doc-nav-actions button:hover,
+.doc-nav-actions label:hover,
+.doc-nav-heading button:hover {
+  background: var(--accent-light);
+}
+#doc-recent-group {
+  padding-bottom: 8px;
+  margin: 8px 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+#doc-recent-group summary {
+  padding: 5px 8px;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 600;
+}
+#doc-recent button,
+.doc-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  min-height: 33px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 5px;
+  text-align: left;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#doc-recent button:hover,
+.doc-tree-row:hover,
+#doc-recent button.active,
+.doc-tree-row.active {
+  background: var(--accent-light);
+}
+.doc-tree-row > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.doc-tree-row > span:first-child {
+  flex: none;
+  width: 13px;
+  color: var(--muted);
+}
+.doc-tree-children {
+  padding-left: 13px;
+  border-left: 1px solid var(--line);
+  margin-left: 10px;
+}
+.doc-tree-children[hidden],
+.doc-toolset[hidden],
+#doc-ribbon-tools[hidden],
+#doc-sign-dialog section[hidden],
+#doc-image-settings[hidden],
+#doc-markdown-preview[hidden] {
+  display: none;
+}
+.doc-side-muted {
+  display: block;
+  padding: 6px 12px;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.3;
+}
+.doc-shell {
+  flex: 1;
+  display: flex;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+.doc-pages {
+  flex: 0 0 190px;
+  width: 190px;
+  min-width: 0;
+  overflow: auto;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  scrollbar-width: thin;
+}
+.doc-pages-heading {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 600;
+}
+#doc-hide-pages {
+  display: none;
+}
+.doc-page-thumb {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  width: calc(100% - 14px);
+  margin: 8px 7px;
+  padding: 8px;
+  min-height: 86px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 11px;
+}
+.doc-page-thumb.active,
+.doc-page-thumb:hover {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  color: var(--ink);
+}
+.doc-page-thumb img {
+  display: block;
+  max-width: 100%;
+  max-height: 150px;
+  object-fit: contain;
+}
+.doc-thumb-text {
+  overflow: hidden;
+  width: 100%;
+  height: 50px;
+  text-align: left;
+  line-height: 1.2;
+  word-break: break-word;
+}
+.doc-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.doc-ribbon {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.doc-ribbon-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  min-height: 48px;
+}
+.doc-ribbon-title strong {
+  min-width: 0;
+  max-width: 40%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.doc-ribbon-title #doc-status {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-ribbon-title :is(button, a) {
+  min-height: 34px;
+  padding: 6px 10px;
+  white-space: nowrap;
+  font-size: 12px;
+  flex: none;
+}
+.doc-ribbon-title #doc-show-pages {
+  display: none;
+}
+.doc-ribbon-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 12px;
+}
+.doc-toolset {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.doc-toolset :is(button, select) {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  min-height: 30px;
+  padding: 3px 7px;
+  color: var(--ink);
+  background: var(--surface);
+  font: 12px var(--sans);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.doc-toolset button:hover,
+.doc-toolset button.active,
+.doc-toolset button[aria-pressed='true'] {
+  background: var(--accent-light);
+  border-color: var(--accent);
+}
+.doc-toolset button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.doc-color-control,
+.doc-line-toggle,
+#doc-image-settings {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+.doc-color-control input {
+  width: 30px;
+  height: 28px;
+  padding: 1px;
+  border: 0;
+}
+#doc-image-settings input {
+  max-width: 85px;
+}
+.doc-line-toggle {
+  margin-left: auto;
+}
+.doc-editor-viewport {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  background: var(--bg);
+  padding: 24px;
+  overscroll-behavior: contain;
+}
+.doc-empty {
+  margin: 15px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.doc-welcome {
+  margin: min(15vh, 110px) auto;
+  max-width: 540px;
+  padding: 22px;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.doc-welcome h2 {
+  font: 24px var(--serif);
+  color: var(--ink);
+}
+.doc-welcome p {
+  line-height: 1.55;
+}
+.doc-paper,
+.doc-pdf-paper,
+.doc-code-shell {
+  width: min(100%, 850px);
+  margin: 0 auto 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 5px 28px #0001;
+}
+.doc-paper {
+  padding: 54px 62px;
+  min-height: 980px;
+}
+.doc-rich-editor {
+  min-height: 880px;
+  outline: 0;
+  font: 15px/1.6 var(--sans);
+  overflow-wrap: anywhere;
+}
+.doc-rich-editor:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 5px;
+}
+.doc-rich-editor :is(h1, h2, h3, h4) {
+  margin-block: 0.75em;
+  line-height: 1.3;
+}
+.doc-rich-editor p {
+  margin: 0 0 0.75em;
+}
+.doc-rich-editor table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+}
+.doc-rich-editor :is(td, th) {
+  padding: 7px;
+  border: 1px solid var(--line);
+  min-width: 42px;
+}
+.doc-rich-editor img {
+  max-width: 100%;
+  height: auto;
+  vertical-align: middle;
+  cursor: pointer;
+}
+.doc-rich-editor img.doc-float-left {
+  float: left;
+  margin: 4px 14px 10px 0;
+}
+.doc-rich-editor img.doc-float-right {
+  float: right;
+  margin: 4px 0 10px 14px;
+}
+.doc-rich-editor.line-numbers {
+  counter-reset: doc-line;
+  padding-left: 46px;
+}
+.doc-rich-editor.line-numbers > :is(p, div, h1, h2, h3, h4, blockquote) {
+  position: relative;
+}
+.doc-rich-editor.line-numbers > :is(p, div, h1, h2, h3, h4, blockquote)::before {
+  counter-increment: doc-line;
+  content: counter(doc-line);
+  position: absolute;
+  right: calc(100% + 10px);
+  color: var(--muted);
+  font: 11px var(--mono, monospace);
+  user-select: none;
+}
+.doc-code-shell {
+  display: flex;
+  min-height: calc(100% - 28px);
+  padding: 12px;
+}
+.doc-code-lines,
+#doc-code-editor {
+  min-height: 600px;
+  border: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font: 13px/20px var(--mono, monospace);
+  tab-size: 4;
+}
+.doc-code-lines {
+  flex: none;
+  margin: 0 8px 0 0;
+  width: 39px;
+  overflow: hidden;
+  text-align: right;
+  color: var(--muted);
+  border-right: 1px solid var(--line);
+  padding-right: 6px;
+  user-select: none;
+}
+#doc-code-editor {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  padding: 0;
+  outline: 0;
+  white-space: pre;
+}
+#doc-markdown-preview {
+  width: min(100%, 850px);
+  padding: 28px;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+.doc-pdf-paper {
+  position: relative;
+  border: 0;
+  line-height: 0;
+}
+.doc-pdf-paper img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.doc-pdf-overlay {
+  position: absolute;
+  inset: 0;
+}
+.doc-pdf-overlay.selecting {
+  cursor: crosshair;
+  touch-action: none;
+}
+.doc-selection {
+  position: absolute;
+  border: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  pointer-events: none;
+}
+#doc-sign-dialog {
+  width: min(650px, calc(100vw - 25px));
+  max-height: 90dvh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px;
+  color: var(--ink);
+  background: var(--surface);
+}
+#doc-sign-dialog::backdrop {
+  background: #0008;
+}
+#doc-sign-dialog h2 {
+  margin: 0;
+}
+#doc-sign-dialog :is(section, p) {
+  line-height: 1.5;
+  font-size: 13px;
+}
+#doc-sign-dialog label {
+  display: block;
+  margin: 14px 0;
+}
+#doc-sign-dialog input[type='password'] {
+  display: block;
+  width: 100%;
+}
+#doc-sign-dialog button {
+  margin: 5px 5px 5px 0;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-height: 36px;
+}
+#doc-sign-dialog button.active {
+  background: var(--accent-light);
+  border-color: var(--accent);
+}
+#doc-sign-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 160px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #fff;
+  touch-action: none;
+}
+@media (max-width: 1100px) {
+  .doc-pages {
+    flex-basis: 142px;
+    width: 142px;
+  }
+  .doc-editor-viewport {
+    padding: 12px;
+  }
+  .doc-paper {
+    padding: 30px;
+  }
+}
+@media (max-width: 760px) {
+  html[data-documents='true'] main {
+    height: calc(100dvh - 64px - env(safe-area-inset-bottom));
+  }
+  html[data-documents='true'] main > .topbar {
+    min-height: 48px;
+    height: auto;
+  }
+  .doc-pages {
+    display: none;
+    position: absolute;
+    z-index: 6;
+    inset: 0 auto 0 0;
+    width: min(220px, 65%);
+    box-shadow: 5px 0 22px #0003;
+  }
+  .pages-open .doc-pages {
+    display: block;
+  }
+  .doc-ribbon-title #doc-show-pages,
+  #doc-hide-pages {
+    display: inline-block;
+  }
+  .doc-ribbon-title {
+    padding: 5px 8px;
+    gap: 4px;
+  }
+  .doc-ribbon-title strong {
+    max-width: 32%;
+    font-size: 12px;
+  }
+  .doc-ribbon-title #doc-status {
+    font-size: 10px;
+  }
+  .doc-ribbon-title :is(button, a) {
+    padding: 5px 6px;
+  }
+  .doc-ribbon-tools {
+    padding: 6px;
+  }
+  .doc-editor-viewport {
+    padding: 8px;
+  }
+  .doc-paper {
+    padding: 18px;
+  }
+  .doc-code-shell {
+    padding: 8px;
+  }
+}

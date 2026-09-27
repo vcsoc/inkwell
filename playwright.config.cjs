@@ -27,6 +27,7 @@ module.exports = defineConfig({
     url: 'http://127.0.0.1:8877',
     env: {
       INKWELL_DATA_DIR: testData,
+      INKWELL_DOCUMENTS_DIR: path.join(testData, 'Documents'),
       INKWELL_ACCESS_KEY: '',
       INKWELL_HOSTS: '',
     },
