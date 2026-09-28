@@ -101,10 +101,10 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 24000 }, async (t) 
     await window.mouse.down();
     await window.mouse.move(pdf.x + 190, pdf.y + 105);
     await window.mouse.up();
+    await expect(window.locator('.doc-inline-text')).toBeVisible();
+    await window.locator('.doc-inline-text').fill('Desktop PDF annotation');
+    await expect(window.locator('#documents-footer-status')).toContainText('Editing text');
     await window.locator('#doc-pdf-apply').click();
-    await expect(window.locator('#doc-pdf-text-dialog')).toBeVisible();
-    await window.locator('#doc-pdf-text-value').fill('Desktop PDF annotation');
-    await window.locator('#doc-pdf-text-submit').click();
     await expect(window.locator('#doc-file-name')).toContainText('.annotated.pdf');
     const picture = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAACAAAAAQCAYAAAB3AH1ZAAAAlElEQVR4nN2USw6AIAxEoRdw49r7n4s1G06gK4yBTj+kJsbZkFhm+qDElP6qbT/O54pEUUGSR/KKAJ4gK5QZYLWZ18cCSCGrNVSfACJP3mrJ2j71EbZa8hhkgeweDYJQAZm5vZpPyrkBtFOhEOvI0C1mFLLa0HprXeRprknzcaMhz7ykuhV6fJzEfXxbIX0ifs+f0AVXmW9Yksy07AAAAABJRU5ErkJggg==',

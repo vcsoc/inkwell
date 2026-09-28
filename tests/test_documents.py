@@ -95,6 +95,15 @@ def test_pdf_image_signature_placement_and_compression(docs):
             assert images
             first = saved[0].get_image_rects(images[0][0])[0]
             assert first.x0 >= 30 and first.x1 <= 230
+            assert abs(first.width / first.height - 180 / 70) < 0.02
+    square = io.BytesIO()
+    Image.new("RGBA", (40, 40), (50, 100, 150, 255)).save(square, format="PNG")
+    square_image = "data:image/png;base64," + base64.b64encode(square.getvalue()).decode()
+    stamp = client.post("/api/documents/pdf", json={"path": "original.pdf", "action": "signature", "page": 0, "rect": [30, 30, 230, 130], "image": square_image})
+    assert stamp.status_code == 200, stamp.text
+    with pymupdf.open(folder / stamp.json()["path"]) as saved:
+        placed = saved[0].get_image_rects(saved[0].get_images()[0][0])[0]
+        assert abs(placed.width - placed.height) < 0.1
     moved = client.post("/api/documents/pdf", json={"path": "original.pdf", "action": "signature", "page": 0, "rect": [210, 240, 330, 295], "image": payload})
     assert moved.status_code == 200, moved.text
     with pymupdf.open(folder / moved.json()["path"]) as saved:
@@ -117,6 +126,9 @@ def test_pdf_text_add_and_replace_preserve_original(docs):
     (folder / "edit.pdf").write_bytes(original)
     pdf.close()
     request = {"path": "edit.pdf", "page": 0, "rect": [50, 55, 280, 120], "font_size": 16}
+    selection = client.post("/api/documents/pdf-text", json={key: request[key] for key in ("path", "page", "rect")})
+    assert selection.status_code == 200 and "OLD VALUE" in selection.json()["text"]
+    assert client.post("/api/documents/pdf-text", json={"path": "../edit.pdf", "rect": request["rect"]}).status_code == 403
     added = client.post("/api/documents/pdf", json={**request, "action": "text", "text": "NEW NOTE"})
     assert added.status_code == 200, added.text
     with pymupdf.open(folder / added.json()["path"]) as result:

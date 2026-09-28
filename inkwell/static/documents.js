@@ -51,6 +51,7 @@ window.InkwellDocuments = (() => {
       table:
         '<rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/>',
       pages: '<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+      trash: '<path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v6m4-6v6"/>',
       link: '<path d="M9 15l6-6M8 9l-3 3a4 4 0 0 0 6 6l3-3M10 9l3-3a4 4 0 0 1 6 6l-3 3"/>',
     };
     return `<svg class="doc-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${shapes[name] || shapes.zoom}</svg>`;
@@ -66,16 +67,23 @@ window.InkwellDocuments = (() => {
   const money = (size) => `${Math.round(size / 1024)} KB`;
 
   function confirmLeave() {
+    if (session?.pdfDraft)
+      return confirm('This PDF has a staged edit. Discard it without saving a new copy?');
     return !session?.dirty || confirm('This document has unsaved edits. Discard them?');
   }
   window.addEventListener('beforeunload', (event) => {
-    if (!session?.dirty) return;
+    if (!session?.dirty && !session?.pdfDraft) return;
     event.preventDefault();
     event.returnValue = '';
   });
   function stop() {
     for (const dialog of session?.dialogs || []) if (dialog.open) dialog.close();
     session?.dispose?.();
+    const footer = document.querySelector('#documents-footer-status');
+    if (footer) {
+      footer.hidden = true;
+      footer.textContent = '';
+    }
     session = null;
   }
   function mount({ root, nav, api, toast, isCurrent }) {
@@ -92,6 +100,9 @@ window.InkwellDocuments = (() => {
       pdfTool: '',
       selection: null,
       image: null,
+      pdfText: '',
+      pdfFontSize: 12,
+      pdfDraft: false,
       directory: '',
       sort: 'name-asc',
       zoom: 100,
@@ -103,6 +114,11 @@ window.InkwellDocuments = (() => {
       showLineNumbers: false,
     };
     session = current;
+    const footer = document.querySelector('#documents-footer-status');
+    if (footer) {
+      footer.hidden = false;
+      footer.textContent = 'Select a file from Documents or Recent.';
+    }
     const $ = (selector) => root.querySelector(selector);
     const go = (task) =>
       Promise.resolve()
@@ -119,6 +135,7 @@ window.InkwellDocuments = (() => {
     };
     const status = (message) => {
       $('#doc-status').textContent = message;
+      if (footer) footer.textContent = message;
     };
     const markDirty = () => {
       current.dirty = true;
@@ -131,14 +148,10 @@ window.InkwellDocuments = (() => {
       'beforeend',
       '<div id="doc-context-menu" class="doc-context-menu" role="menu" aria-label="Document actions" hidden><button type="button" role="menuitem" data-doc-menu="copy">Copy</button><button type="button" role="menuitem" data-doc-menu="paste">Paste</button></div>',
     );
-    root.innerHTML = `<div class="doc-shell" id="documents-workspace"><aside class="doc-pages" id="doc-pages" aria-label="Document page thumbnails"><div class="doc-pages-heading">Pages <button type="button" id="doc-hide-pages" aria-label="Close page thumbnails" title="Close page thumbnails">×</button></div><div id="doc-thumbnails"><p class="doc-empty">Open a document to see its pages.</p></div></aside><section class="doc-main"><header class="doc-ribbon"><div class="doc-ribbon-title"><button class="secondary" type="button" id="doc-show-pages" title="Show page thumbnails" aria-label="Show page thumbnails">${uiIcon('pages')}</button><strong id="doc-file-name">Document editor</strong><span id="doc-status" role="status">Select a file from Documents or Recent.</span><button class="doc-icon-button primary" type="button" id="doc-save" disabled title="Save document (Ctrl+S)" aria-label="Save document">${uiIcon('save')}</button><button class="doc-icon-button" type="button" id="doc-export-pdf" disabled title="Export the current document to PDF" aria-label="Export to PDF">${uiIcon('export')}</button><button class="doc-icon-button" type="button" id="doc-print" disabled title="Choose printer and print settings" aria-label="Print document">${uiIcon('print')}</button><a class="doc-icon-button secondary hidden" id="doc-download" download title="Download a copy of this document" aria-label="Download document">${uiIcon('download')}</a><div class="doc-zoom-controls" aria-label="Document zoom"><button type="button" id="doc-zoom-out" title="Zoom out (Ctrl+-)" aria-label="Zoom out">${uiIcon('minus')}</button><output id="doc-zoom-label" title="Document zoom level">100%</output><button type="button" id="doc-zoom-in" title="Zoom in (Ctrl++)" aria-label="Zoom in">${uiIcon('plus')}</button></div></div><div class="doc-ribbon-tools" id="doc-ribbon-tools" hidden><div id="doc-rich-tools" class="doc-toolset" hidden><select id="doc-style" aria-label="Paragraph style" title="Paragraph style"><option value="p">Normal text</option><option value="h1">Heading 1</option><option value="h2">Heading 2</option><option value="h3">Heading 3</option><option value="blockquote">Quote</option></select><select id="doc-font" aria-label="Font"><option value="Arial">Arial</option><option value="Georgia">Georgia</option><option value="Times New Roman">Times New Roman</option><option value="Courier New">Courier New</option></select><select id="doc-font-size" aria-label="Font size"><option value="2">Small</option><option value="3" selected>Normal</option><option value="4">Large</option><option value="5">Extra large</option></select><button data-doc-command="bold" title="Bold (Ctrl+B)" aria-label="Bold"><b>B</b></button><button data-doc-command="italic" title="Italic (Ctrl+I)" aria-label="Italic"><i>I</i></button><button data-doc-command="underline" title="Underline (Ctrl+U)" aria-label="Underline"><u>U</u></button><button data-doc-command="strikeThrough" title="Strikethrough" aria-label="Strikethrough"><s>S</s></button><label class="doc-color-control" title="Text color">Text <input id="doc-color" type="color" aria-label="Text color" value="#26372b"></label><button class="doc-icon-button" data-doc-command="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list">${uiIcon('bullets')}</button><button class="doc-icon-button" data-doc-command="insertOrderedList" title="Numbered list" aria-label="Numbered list">${uiIcon('numbered')}</button><button data-doc-command="justifyLeft" title="Align left" aria-label="Align left">≡</button><button data-doc-command="justifyCenter" title="Center" aria-label="Center text">≡</button><button data-doc-command="justifyRight" title="Align right" aria-label="Align right">≡</button><button class="doc-icon-button" data-doc-command="indent" title="Indent paragraph (Tab)" aria-label="Indent paragraph">${uiIcon('indent')}</button><button class="doc-icon-button" data-doc-command="outdent" title="Outdent paragraph (Shift+Tab)" aria-label="Outdent paragraph">${uiIcon('outdent')}</button><button class="doc-icon-button" id="doc-table" title="Insert a table" aria-label="Insert a table">${uiIcon('table')}</button><button class="doc-icon-button" id="doc-link" title="Insert a link" aria-label="Insert a link">${uiIcon('link')}</button><button class="doc-icon-button" id="doc-insert-image" title="Insert an image" aria-label="Insert an image">${uiIcon('image')}</button><label id="doc-image-settings" hidden>Image width <input id="doc-image-width" type="range" min="80" max="900" value="480"><select id="doc-image-wrap" aria-label="Image placement"><option value="">Inline</option><option value="doc-float-left">Left · wrap text</option><option value="doc-float-right">Right · wrap text</option></select></label></div><div id="doc-text-tools" class="doc-toolset" hidden><button class="doc-icon-button" id="doc-indent" type="button" title="Indent selected lines" aria-label="Indent selected lines">${uiIcon('indent')}</button><button class="doc-icon-button" id="doc-outdent" type="button" title="Outdent selected lines" aria-label="Outdent selected lines">${uiIcon('outdent')}</button><button class="doc-icon-button" id="doc-wrap" type="button" aria-pressed="true" title="Toggle word wrap" aria-label="Toggle word wrap">${uiIcon('wrap')}</button><button class="doc-icon-button" id="doc-preview" type="button" hidden title="Preview Markdown" aria-label="Preview Markdown">${uiIcon('preview')}</button></div><div id="doc-pdf-tools" class="doc-toolset" hidden><button class="doc-icon-button" type="button" data-pdf-tool="redact" title="Redact area permanently in a new PDF copy" aria-label="Redact area">${uiIcon('redact')}</button><button class="doc-icon-button" type="button" id="doc-pdf-place-image" title="Choose an image, draw its area, move or resize the preview, then Apply" aria-label="Place image">${uiIcon('image')}</button><button class="doc-icon-button" type="button" data-pdf-tool="text" title="Place text in a selected PDF area" aria-label="Add text">${uiIcon('text')}</button><button class="doc-icon-button" type="button" data-pdf-tool="replace_text" title="Replace existing text in a selected PDF area in a new copy" aria-label="Replace text">T↻</button><button class="doc-icon-button" type="button" id="doc-signature" title="Draw or import a signature, choose its area, move or resize the preview, then Apply" aria-label="Signature">${uiIcon('sign')}</button><button class="doc-icon-button" type="button" id="doc-pdf-apply" disabled title="Apply selected PDF change to a new copy" aria-label="Apply PDF change">${uiIcon('apply')}</button><button class="doc-icon-button" type="button" id="doc-pdf-compress" title="Try reducing the PDF file size and keep the original" aria-label="Compress PDF">${uiIcon('compress')}</button></div><label class="doc-line-toggle" title="Toggle line numbers"><input id="doc-line-numbers" type="checkbox" aria-label="Line numbers"><span class="doc-switch-track" aria-hidden="true"></span><span class="sr-only">Line numbers</span></label></div></header><div class="doc-editor-viewport" id="doc-editor-viewport"><div class="doc-empty doc-welcome"><h2>Your documents, together.</h2><p>Open or import a PDF, Word document, Markdown, CSV or another text file from the folder tree.</p><p>Files stay in your Documents directory. PDF redactions and signatures create new copies; originals remain available.</p></div></div></section><dialog id="doc-sign-dialog" aria-labelledby="doc-sign-title"><h2 id="doc-sign-title">Sign PDF</h2><p>Choose an area on the PDF page first, or use the bottom-right of the page by default.</p><div class="doc-sign-tabs"><button type="button" data-sign-tab="draw">Draw</button><button type="button" data-sign-tab="image">Image</button><button type="button" data-sign-tab="digital">Digital certificate</button></div><section id="doc-sign-draw"><canvas id="doc-sign-canvas" width="520" height="160" aria-label="Draw your signature using a mouse, pen or touch"></canvas><button type="button" id="doc-sign-clear">Clear drawing</button><button type="button" id="doc-sign-use-drawing" class="primary">Place drawn signature</button></section><section id="doc-sign-image" hidden><label>Signature image (PNG, JPEG, WebP or GIF) <input id="doc-sign-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif"></label><button type="button" id="doc-sign-use-image" class="primary">Place image signature</button></section><section id="doc-sign-digital" hidden><p>Cryptographically sign a new PDF copy with your PKCS#12 certificate (.p12 or .pfx). Your certificate and password are sent only to your Inkwell backend for this request and are never stored.</p><label>PKCS#12 certificate <input id="doc-cert-file" type="file" accept=".p12,.pfx"></label><label>Certificate password <input id="doc-cert-pass" type="password" autocomplete="off"></label><button type="button" id="doc-cert-apply" class="primary">Digitally sign a new PDF copy</button></section><button type="button" id="doc-sign-close" class="secondary">Cancel</button></dialog><dialog id="doc-password-dialog" aria-labelledby="doc-password-title"><form id="doc-password-form"><h2 id="doc-password-title">Unlock document</h2><p id="doc-password-description">Enter the password to open this protected document.</p><label for="doc-password-input">Document password</label><input id="doc-password-input" type="password" autocomplete="off" required><p id="doc-password-error" role="alert" hidden></p><div class="doc-dialog-actions"><button type="button" id="doc-password-cancel" class="secondary">Cancel</button><button type="submit" id="doc-password-submit" class="primary">Unlock</button></div></form></dialog><dialog id="doc-print-dialog" aria-labelledby="doc-print-title"><form id="doc-print-form"><h2 id="doc-print-title">Print document</h2><div class="doc-print-layout"><div class="doc-print-fields"><label>Printer<select id="doc-print-printer" required></select></label><label>Pages<input id="doc-print-pages" type="text" inputmode="text" placeholder="All pages, or 1-3,5" title="Leave blank for all pages"></label><label>Copies<input id="doc-print-copies" type="number" min="1" max="99" value="1" required></label><label>Paper size<select id="doc-print-paper"><option>A4</option><option>Letter</option><option>Legal</option></select></label><label>Orientation<select id="doc-print-orientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label><label>Color<select id="doc-print-color"><option value="color">Color</option><option value="monochrome">Black and white</option></select></label><label>Double-sided<select id="doc-print-duplex"><option value="none">Single-sided</option><option value="long">Flip on long edge</option><option value="short">Flip on short edge</option></select></label><label>Scaling<select id="doc-print-scaling"><option value="fit">Fit to page</option><option value="actual">Actual size</option></select></label><label>Margins<select id="doc-print-margins"><option value="default">Printer default</option><option value="narrow">Narrow</option><option value="none">None (if supported)</option></select></label></div><div class="doc-print-preview"><strong>First page preview</strong><img id="doc-print-preview-image" alt="First printable page preview"><p id="doc-print-message" role="status"></p></div></div><div class="doc-dialog-actions"><button type="button" id="doc-print-cancel" class="secondary">Cancel</button><button type="submit" id="doc-print-submit" class="primary">Print</button></div></form></dialog><input id="doc-image-file" type="file" hidden accept="image/png,image/jpeg,image/webp,image/gif">`;
+    root.innerHTML = `<div class="doc-shell" id="documents-workspace"><aside class="doc-pages" id="doc-pages" aria-label="Document page thumbnails"><div class="doc-pages-heading">Pages <button type="button" id="doc-hide-pages" aria-label="Close page thumbnails" title="Close page thumbnails">×</button></div><div id="doc-thumbnails"><p class="doc-empty">Open a document to see its pages.</p></div></aside><section class="doc-main"><header class="doc-ribbon"><div class="doc-ribbon-title"><button class="secondary" type="button" id="doc-show-pages" title="Show page thumbnails" aria-label="Show page thumbnails">${uiIcon('pages')}</button><strong id="doc-file-name">Document editor</strong><span id="doc-status" role="status">Select a file from Documents or Recent.</span><button class="doc-icon-button primary" type="button" id="doc-save" disabled title="Save document (Ctrl+S)" aria-label="Save document">${uiIcon('save')}</button><button class="doc-icon-button" type="button" id="doc-export-pdf" disabled title="Export the current document to PDF" aria-label="Export to PDF">${uiIcon('export')}</button><button class="doc-icon-button" type="button" id="doc-print" disabled title="Choose printer and print settings" aria-label="Print document">${uiIcon('print')}</button><a class="doc-icon-button secondary hidden" id="doc-download" download title="Download a copy of this document" aria-label="Download document">${uiIcon('download')}</a><div class="doc-zoom-controls" aria-label="Document zoom"><button type="button" id="doc-zoom-out" title="Zoom out (Ctrl+-)" aria-label="Zoom out">${uiIcon('minus')}</button><output id="doc-zoom-label" title="Document zoom level">100%</output><button type="button" id="doc-zoom-in" title="Zoom in (Ctrl++)" aria-label="Zoom in">${uiIcon('plus')}</button></div></div><div class="doc-ribbon-tools" id="doc-ribbon-tools" hidden><div id="doc-rich-tools" class="doc-toolset" hidden><select id="doc-style" aria-label="Paragraph style" title="Paragraph style"><option value="p">Normal text</option><option value="h1">Heading 1</option><option value="h2">Heading 2</option><option value="h3">Heading 3</option><option value="blockquote">Quote</option></select><select id="doc-font" aria-label="Font"><option value="Arial">Arial</option><option value="Georgia">Georgia</option><option value="Times New Roman">Times New Roman</option><option value="Courier New">Courier New</option></select><select id="doc-font-size" aria-label="Font size"><option value="2">Small</option><option value="3" selected>Normal</option><option value="4">Large</option><option value="5">Extra large</option></select><button data-doc-command="bold" title="Bold (Ctrl+B)" aria-label="Bold"><b>B</b></button><button data-doc-command="italic" title="Italic (Ctrl+I)" aria-label="Italic"><i>I</i></button><button data-doc-command="underline" title="Underline (Ctrl+U)" aria-label="Underline"><u>U</u></button><button data-doc-command="strikeThrough" title="Strikethrough" aria-label="Strikethrough"><s>S</s></button><label class="doc-color-control" title="Text color">Text <input id="doc-color" type="color" aria-label="Text color" value="#26372b"></label><button class="doc-icon-button" data-doc-command="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list">${uiIcon('bullets')}</button><button class="doc-icon-button" data-doc-command="insertOrderedList" title="Numbered list" aria-label="Numbered list">${uiIcon('numbered')}</button><button data-doc-command="justifyLeft" title="Align left" aria-label="Align left">≡</button><button data-doc-command="justifyCenter" title="Center" aria-label="Center text">≡</button><button data-doc-command="justifyRight" title="Align right" aria-label="Align right">≡</button><button class="doc-icon-button" data-doc-command="indent" title="Indent paragraph (Tab)" aria-label="Indent paragraph">${uiIcon('indent')}</button><button class="doc-icon-button" data-doc-command="outdent" title="Outdent paragraph (Shift+Tab)" aria-label="Outdent paragraph">${uiIcon('outdent')}</button><button class="doc-icon-button" id="doc-table" title="Insert a table" aria-label="Insert a table">${uiIcon('table')}</button><button class="doc-icon-button" id="doc-link" title="Insert a link" aria-label="Insert a link">${uiIcon('link')}</button><button class="doc-icon-button" id="doc-insert-image" title="Insert an image" aria-label="Insert an image">${uiIcon('image')}</button><label id="doc-image-settings" hidden>Image width <input id="doc-image-width" type="range" min="80" max="900" value="480"><select id="doc-image-wrap" aria-label="Image placement"><option value="">Inline</option><option value="doc-float-left">Left · wrap text</option><option value="doc-float-right">Right · wrap text</option></select></label></div><div id="doc-text-tools" class="doc-toolset" hidden><button class="doc-icon-button" id="doc-indent" type="button" title="Indent selected lines" aria-label="Indent selected lines">${uiIcon('indent')}</button><button class="doc-icon-button" id="doc-outdent" type="button" title="Outdent selected lines" aria-label="Outdent selected lines">${uiIcon('outdent')}</button><button class="doc-icon-button" id="doc-wrap" type="button" aria-pressed="true" title="Toggle word wrap" aria-label="Toggle word wrap">${uiIcon('wrap')}</button><button class="doc-icon-button" id="doc-preview" type="button" hidden title="Preview Markdown" aria-label="Preview Markdown">${uiIcon('preview')}</button></div><div id="doc-pdf-tools" class="doc-toolset" hidden><button class="doc-icon-button" type="button" data-pdf-tool="redact" title="Redact area permanently in a new PDF copy" aria-label="Redact area">${uiIcon('redact')}</button><button class="doc-icon-button" type="button" id="doc-pdf-place-image" title="Choose an image, draw its area, move or resize the preview, then Apply" aria-label="Place image">${uiIcon('image')}</button><button class="doc-icon-button" type="button" data-pdf-tool="text" title="Place text in a selected PDF area" aria-label="Add text">${uiIcon('text')}</button><button class="doc-icon-button" type="button" data-pdf-tool="replace_text" title="Replace existing text in a selected PDF area in a new copy" aria-label="Replace text">T↻</button><button class="doc-icon-button" type="button" id="doc-signature" title="Draw or import a signature, choose its area, move or resize the preview, then Apply" aria-label="Signature">${uiIcon('sign')}</button><button class="doc-icon-button" type="button" id="doc-pdf-compress" title="Try reducing the PDF file size and keep the original" aria-label="Compress PDF">${uiIcon('compress')}</button></div><label class="doc-line-toggle" title="Toggle line numbers"><input id="doc-line-numbers" type="checkbox" aria-label="Line numbers"><span class="doc-switch-track" aria-hidden="true"></span><span class="sr-only">Line numbers</span></label></div></header><div class="doc-editor-viewport" id="doc-editor-viewport"><div class="doc-empty doc-welcome"><h2>Your documents, together.</h2><p>Open or import a PDF, Word document, Markdown, CSV or another text file from the folder tree.</p><p>Files stay in your Documents directory. PDF redactions and signatures create new copies; originals remain available.</p></div></div></section><dialog id="doc-sign-dialog" aria-labelledby="doc-sign-title"><h2 id="doc-sign-title">Sign PDF</h2><p>Choose an area on the PDF page first, or use the bottom-right of the page by default.</p><div class="doc-sign-tabs"><button type="button" data-sign-tab="draw">Draw</button><button type="button" data-sign-tab="image">Image</button><button type="button" data-sign-tab="digital">Digital certificate</button></div><section id="doc-sign-draw"><canvas id="doc-sign-canvas" width="520" height="160" aria-label="Draw your signature using a mouse, pen or touch"></canvas><button type="button" id="doc-sign-clear">Clear drawing</button><button type="button" id="doc-sign-use-drawing" class="primary">Place drawn signature</button></section><section id="doc-sign-image" hidden><label>Signature image (PNG, JPEG, WebP or GIF) <input id="doc-sign-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif"></label><button type="button" id="doc-sign-use-image" class="primary">Place image signature</button></section><section id="doc-sign-digital" hidden><p>Cryptographically sign a new PDF copy with your PKCS#12 certificate (.p12 or .pfx). Your certificate and password are sent only to your Inkwell backend for this request and are never stored.</p><label>PKCS#12 certificate <input id="doc-cert-file" type="file" accept=".p12,.pfx"></label><label>Certificate password <input id="doc-cert-pass" type="password" autocomplete="off"></label><button type="button" id="doc-cert-apply" class="primary">Digitally sign a new PDF copy</button></section><button type="button" id="doc-sign-close" class="secondary">Cancel</button></dialog><dialog id="doc-password-dialog" aria-labelledby="doc-password-title"><form id="doc-password-form"><h2 id="doc-password-title">Unlock document</h2><p id="doc-password-description">Enter the password to open this protected document.</p><label for="doc-password-input">Document password</label><input id="doc-password-input" type="password" autocomplete="off" required><p id="doc-password-error" role="alert" hidden></p><div class="doc-dialog-actions"><button type="button" id="doc-password-cancel" class="secondary">Cancel</button><button type="submit" id="doc-password-submit" class="primary">Unlock</button></div></form></dialog><dialog id="doc-print-dialog" aria-labelledby="doc-print-title"><form id="doc-print-form"><h2 id="doc-print-title">Print document</h2><div class="doc-print-layout"><div class="doc-print-fields"><label>Printer<select id="doc-print-printer" required></select></label><label>Pages<input id="doc-print-pages" type="text" inputmode="text" placeholder="All pages, or 1-3,5" title="Leave blank for all pages"></label><label>Copies<input id="doc-print-copies" type="number" min="1" max="99" value="1" required></label><label>Paper size<select id="doc-print-paper"><option>A4</option><option>Letter</option><option>Legal</option></select></label><label>Orientation<select id="doc-print-orientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label><label>Color<select id="doc-print-color"><option value="color">Color</option><option value="monochrome">Black and white</option></select></label><label>Double-sided<select id="doc-print-duplex"><option value="none">Single-sided</option><option value="long">Flip on long edge</option><option value="short">Flip on short edge</option></select></label><label>Scaling<select id="doc-print-scaling"><option value="fit">Fit to page</option><option value="actual">Actual size</option></select></label><label>Margins<select id="doc-print-margins"><option value="default">Printer default</option><option value="narrow">Narrow</option><option value="none">None (if supported)</option></select></label></div><div class="doc-print-preview"><strong>First page preview</strong><img id="doc-print-preview-image" alt="First printable page preview"><p id="doc-print-message" role="status"></p></div></div><div class="doc-dialog-actions"><button type="button" id="doc-print-cancel" class="secondary">Cancel</button><button type="submit" id="doc-print-submit" class="primary">Print</button></div></form></dialog><input id="doc-image-file" type="file" hidden accept="image/png,image/jpeg,image/webp,image/gif">`;
     root.insertAdjacentHTML(
       'beforeend',
       '<dialog id="doc-create-dialog" aria-labelledby="doc-create-title"><form id="doc-create-form"><h2 id="doc-create-title">New document</h2><label for="doc-create-name" id="doc-create-label">File name (include .docx, .pdf, .md, .csv, etc.)</label><input id="doc-create-name" name="name" type="text" autocomplete="off" required maxlength="160"><p id="doc-create-error" role="alert" hidden></p><div class="doc-dialog-actions"><button type="button" id="doc-create-cancel" class="secondary">Cancel</button><button type="submit" id="doc-create-submit" class="primary">Create document</button></div></form></dialog>',
-    );
-    root.insertAdjacentHTML(
-      'beforeend',
-      '<dialog id="doc-pdf-text-dialog" aria-labelledby="doc-pdf-text-title"><form id="doc-pdf-text-form"><h2 id="doc-pdf-text-title">Add PDF text</h2><p id="doc-pdf-text-hint">Text is placed in the selected area in a new PDF copy. The original is unchanged.</p><label for="doc-pdf-text-value">Text</label><textarea id="doc-pdf-text-value" required maxlength="5000" rows="5"></textarea><label for="doc-pdf-font-size">Font size (6–32 pt)</label><input id="doc-pdf-font-size" type="number" min="6" max="32" value="12" required><p id="doc-pdf-text-error" role="alert" hidden></p><div class="doc-dialog-actions"><button type="button" id="doc-pdf-text-cancel" class="secondary">Cancel</button><button type="submit" id="doc-pdf-text-submit" class="primary">Add text to new copy</button></div></form></dialog>',
     );
     current.dialog = $('#doc-sign-dialog');
     current.dialogs = [
@@ -146,7 +159,6 @@ window.InkwellDocuments = (() => {
       $('#doc-password-dialog'),
       $('#doc-print-dialog'),
       $('#doc-create-dialog'),
-      $('#doc-pdf-text-dialog'),
     ];
     function showCreate(kind) {
       const dialog = $('#doc-create-dialog');
@@ -196,44 +208,6 @@ window.InkwellDocuments = (() => {
       input.focus();
       input.select();
     }
-    function showPdfText() {
-      if (!current.selection) throw Error('Draw a rectangle on the PDF page first');
-      const replacing = current.pdfTool === 'replace_text';
-      $('#doc-pdf-text-title').textContent = replacing ? 'Replace PDF text' : 'Add PDF text';
-      $('#doc-pdf-text-hint').textContent = replacing
-        ? 'Existing text in this area will be permanently removed in a NEW copy. The original stays unchanged. Background images in the selected area may be covered.'
-        : 'Text is placed in the selected area in a new PDF copy. The original stays unchanged.';
-      $('#doc-pdf-text-submit').textContent = replacing
-        ? 'Replace text in new copy'
-        : 'Add text to new copy';
-      $('#doc-pdf-text-value').value = '';
-      $('#doc-pdf-font-size').value = '12';
-      $('#doc-pdf-text-error').hidden = true;
-      $('#doc-pdf-text-dialog').showModal();
-      $('#doc-pdf-text-value').focus();
-    }
-    $('#doc-pdf-text-cancel').onclick = () => $('#doc-pdf-text-dialog').close();
-    $('#doc-pdf-text-form').addEventListener('submit', (event) => {
-      event.preventDefault();
-      go(async () => {
-        const submit = $('#doc-pdf-text-submit');
-        if (submit.disabled) return;
-        submit.disabled = true;
-        try {
-          await operation(current.pdfTool, {
-            text: $('#doc-pdf-text-value').value,
-            font_size: Number($('#doc-pdf-font-size').value),
-          });
-          $('#doc-pdf-text-dialog').close();
-        } catch (error) {
-          $('#doc-pdf-text-error').textContent = error.message;
-          $('#doc-pdf-text-error').hidden = false;
-          $('#doc-pdf-text-value').focus();
-        } finally {
-          submit.disabled = false;
-        }
-      });
-    });
     function requestPassword(path) {
       current.passwordPath = path;
       $('#doc-password-description').textContent =
@@ -419,6 +393,8 @@ window.InkwellDocuments = (() => {
     function pagePreview(page) {
       const doc = current.document;
       if (!doc) return;
+      if (current.page !== page && current.pdfDraft && !confirmLeave()) return;
+      if (current.page !== page) current.pdfDraft = false;
       current.page = page;
       current.selection = null;
       $('#doc-thumbnails')
@@ -427,10 +403,9 @@ window.InkwellDocuments = (() => {
           button.classList.toggle('active', Number(button.dataset.docPage) === page),
         );
       const editor = $('#doc-editor-viewport');
-      editor.innerHTML = `<p class="doc-pdf-help">Choose Add text, Replace text, Place image, or Signature above. Draw an area on the page; drag or resize image previews, then Apply. Changes save as new copies.</p><div class="doc-pdf-paper" id="doc-pdf-paper"><img id="doc-pdf-image" src="${url(doc.path, page, 1100)}" alt="PDF page ${page + 1}"><div class="doc-pdf-overlay" id="doc-pdf-overlay" aria-label="Select an area on the PDF page"></div></div>`;
+      editor.innerHTML = `<div class="doc-pdf-paper" id="doc-pdf-paper"><img id="doc-pdf-image" src="${url(doc.path, page, 1100)}" alt="PDF page ${page + 1}"><div class="doc-pdf-overlay" id="doc-pdf-overlay" aria-label="Select an area on the PDF page"></div></div>`;
       editor.scrollTop = 0;
       $('#doc-pdf-overlay').classList.toggle('selecting', !!current.pdfTool);
-      $('#doc-pdf-apply').disabled = true;
       status(
         `${doc.pages.length} page${doc.pages.length === 1 ? '' : 's'} · PDF edits save as new copies`,
       );
@@ -679,25 +654,112 @@ window.InkwellDocuments = (() => {
         resize.title = 'Drag to resize image';
         selected.append(image, resize);
       }
+      const textMode = ['text', 'replace_text'].includes(current.pdfTool);
+      if (textMode) {
+        selected.classList.add('doc-selection-text');
+        if (current.pdfTool === 'replace_text') selected.classList.add('doc-selection-replace');
+        const editor = document.createElement('textarea');
+        editor.className = 'doc-inline-text';
+        editor.setAttribute('aria-label', 'Type text directly on the PDF');
+        editor.setAttribute('placeholder', 'Type here…');
+        editor.maxLength = 5000;
+        editor.value = current.pdfText;
+        editor.style.fontSize = `${Math.max(8, (current.pdfFontSize * bounds.width) / page.width)}px`;
+        selected.append(editor);
+        const resize = document.createElement('span');
+        resize.className = 'doc-selection-resize';
+        resize.title = 'Drag to resize text area';
+        selected.append(resize);
+      }
+      const actions = document.createElement('div');
+      actions.className = 'doc-stage-actions';
+      if (textMode) {
+        const handle = document.createElement('span');
+        handle.className = 'doc-stage-move';
+        handle.title = 'Drag to move this text area';
+        handle.textContent = '⠿';
+        actions.append(handle);
+        const label = document.createElement('label');
+        label.textContent = 'Size ';
+        const size = document.createElement('input');
+        size.type = 'number';
+        size.min = '6';
+        size.max = '32';
+        size.value = String(current.pdfFontSize);
+        size.className = 'doc-inline-font';
+        size.setAttribute('aria-label', 'PDF text size in points');
+        label.append(size);
+        actions.append(label);
+      }
+      const apply = document.createElement('button');
+      apply.type = 'button';
+      apply.id = 'doc-pdf-apply';
+      apply.innerHTML = uiIcon('apply');
+      apply.setAttribute('aria-label', 'Apply PDF change');
+      apply.title = 'Apply this change to a new PDF copy';
+      apply.disabled =
+        (textMode && !current.pdfText.trim()) ||
+        (['image', 'signature'].includes(current.pdfTool) && !current.image);
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'doc-stage-cancel';
+      cancel.innerHTML = uiIcon('trash');
+      cancel.setAttribute('aria-label', 'Discard staged PDF change');
+      cancel.title = 'Discard this staged change without altering the PDF';
+      actions.append(apply, cancel);
+      selected.append(actions);
       overlay.querySelector('.doc-selection')?.remove();
       overlay.append(selected);
+      if (textMode) selected.querySelector('.doc-inline-text').focus({ preventScroll: true });
+    }
+    async function loadSelectedPdfText(selection) {
+      try {
+        const result = await api('/documents/pdf-text', {
+          method: 'POST',
+          body: { path: current.document.path, page: current.page, rect: selection },
+        });
+        const editor = $('#doc-pdf-overlay .doc-inline-text');
+        if (
+          !live() ||
+          current.pdfTool !== 'replace_text' ||
+          current.selection !== selection ||
+          !editor ||
+          editor.value
+        )
+          return;
+        current.pdfText = result.text;
+        current.pdfDraft = !!result.text.trim();
+        editor.value = result.text;
+        $('#doc-pdf-apply').disabled = !current.pdfDraft;
+        if (result.text) {
+          editor.focus({ preventScroll: true });
+          editor.select();
+          status('Edit selected PDF text directly on the page · green check saves a new copy.');
+        } else status('No selectable PDF text found in this area. Type replacement text directly.');
+      } catch (error) {
+        status(error.message);
+      }
     }
     function pdfMode(mode) {
+      const previous = current.pdfTool;
+      if (current.pdfDraft && previous !== mode && !confirmLeave()) return;
+      if (previous !== mode || !mode) current.pdfDraft = false;
       current.pdfTool = mode;
       if (!['image', 'signature'].includes(mode)) current.selection = null;
+      if (mode !== previous || !mode) current.pdfText = '';
       root
         .querySelectorAll('[data-pdf-tool]')
         .forEach((button) => button.classList.toggle('active', button.dataset.pdfTool === mode));
-      $('#doc-pdf-apply').disabled =
-        !current.selection || !mode || (['image', 'signature'].includes(mode) && !current.image);
       status(
         mode === 'image' || mode === 'signature'
           ? current.selection
             ? 'Drag the image to move it; drag its corner to resize. Apply saves a new PDF copy.'
             : 'Draw an area on the PDF page, then drag or resize the image before applying.'
-          : mode
-            ? `Draw an area on the PDF page${mode === 'redact' ? ' to permanently remove its contents from a new copy' : ''}`
-            : 'Select a PDF tool',
+          : mode === 'text' || mode === 'replace_text'
+            ? 'Draw an area or click the PDF, then type directly on the page. Apply saves a new copy.'
+            : mode
+              ? `Draw an area on the PDF page${mode === 'redact' ? ' to permanently remove its contents from a new copy' : ''}`
+              : 'Select a PDF tool',
       );
       $('#doc-pdf-overlay')?.classList.toggle('selecting', !!mode);
       $('#doc-pdf-overlay')?.querySelector('.doc-selection')?.remove();
@@ -736,6 +798,7 @@ window.InkwellDocuments = (() => {
       if (result.path === doc.path)
         return status(result.message || 'No smaller PDF could be created');
       await refreshTree();
+      current.pdfDraft = false;
       await open(result.path);
       status(
         action === 'compress'
@@ -748,6 +811,7 @@ window.InkwellDocuments = (() => {
       current.image = data;
       current.dialog.close();
       pdfMode('signature');
+      current.pdfDraft = true;
       current.selection = selection;
       if (selection)
         status(
@@ -1138,6 +1202,10 @@ window.InkwellDocuments = (() => {
           event.target.closest('#doc-insert-image') ||
           event.target.closest('#doc-pdf-place-image')
         ) {
+          if (event.target.closest('#doc-pdf-place-image') && current.pdfDraft) {
+            if (!confirmLeave()) return;
+            current.pdfDraft = false;
+          }
           $('#doc-image-file').dataset.mode = event.target.closest('#doc-pdf-place-image')
             ? 'pdf'
             : 'rich';
@@ -1145,6 +1213,10 @@ window.InkwellDocuments = (() => {
           return;
         }
         if (event.target.closest('#doc-signature')) {
+          if (current.pdfDraft) {
+            if (!confirmLeave()) return;
+            current.pdfDraft = false;
+          }
           current.dialog.showModal();
           setSignTab('draw');
           return;
@@ -1199,16 +1271,33 @@ window.InkwellDocuments = (() => {
           return pdfMode(
             current.pdfTool === pdfTool.dataset.pdfTool ? '' : pdfTool.dataset.pdfTool,
           );
+        if (event.target.closest('.doc-stage-cancel')) {
+          current.pdfDraft = false;
+          pdfMode('');
+          current.image = null;
+          status('Staged PDF change discarded · original unchanged');
+          return;
+        }
         if (event.target.closest('#doc-pdf-apply')) {
-          if (!current.selection) throw Error('Draw a rectangle on the PDF page first');
-          if (current.pdfTool === 'text' || current.pdfTool === 'replace_text')
-            return showPdfText();
-          return operation(
-            current.pdfTool === 'signature' ? 'signature' : current.pdfTool,
-            current.pdfTool === 'signature' || current.pdfTool === 'image'
-              ? { image: current.image }
-              : {},
-          );
+          if (!current.selection) throw Error('Select an area on the PDF first');
+          const textMode = ['text', 'replace_text'].includes(current.pdfTool);
+          if (textMode && !current.pdfText.trim()) {
+            $('#doc-pdf-overlay .doc-inline-text')?.focus();
+            return;
+          }
+          try {
+            return await operation(
+              current.pdfTool,
+              textMode
+                ? { text: current.pdfText, font_size: current.pdfFontSize }
+                : ['signature', 'image'].includes(current.pdfTool)
+                  ? { image: current.image }
+                  : {},
+            );
+          } catch (error) {
+            status(error.message);
+            throw error;
+          }
         }
         if (event.target.closest('#doc-pdf-compress')) return operation('compress');
         const command = event.target.closest('[data-doc-command]');
@@ -1223,10 +1312,12 @@ window.InkwellDocuments = (() => {
       if (event.target.closest('[data-doc-command]')) event.preventDefault();
       const overlay = event.target.closest('#doc-pdf-overlay');
       if (!overlay || !current.pdfTool) return;
+      if (event.target.closest('.doc-inline-text, .doc-inline-font, .doc-stage-actions button'))
+        return;
       event.preventDefault();
       overlay.setPointerCapture(event.pointerId);
       const bounds = overlay.getBoundingClientRect();
-      const existing = event.target.closest('.doc-selection-preview');
+      const existing = event.target.closest('.doc-selection-preview, .doc-selection-text');
       const size = current.document.pages[current.page];
       if (existing && overlay.contains(existing)) {
         const initial = {
@@ -1281,7 +1372,7 @@ window.InkwellDocuments = (() => {
       const selected = document.createElement('div');
       selected.className = 'doc-selection';
       current.selection = null;
-      $('#doc-pdf-apply').disabled = true;
+      current.pdfText = '';
       overlay.querySelector('.doc-selection')?.remove();
       overlay.append(selected);
       const move = (pointer) => {
@@ -1302,8 +1393,13 @@ window.InkwellDocuments = (() => {
         'pointerup',
         (pointer) => {
           overlay.removeEventListener('pointermove', move);
-          const [x0, y0, x1, y1] = move(pointer);
-          if (x1 - x0 < 4 || y1 - y0 < 4) return selected.remove();
+          let [x0, y0, x1, y1] = move(pointer);
+          const textMode = current.pdfTool === 'text' || current.pdfTool === 'replace_text';
+          if (x1 - x0 < 4 || y1 - y0 < 4) {
+            if (!textMode) return selected.remove();
+            x1 = Math.min(bounds.width, x0 + 220);
+            y1 = Math.min(bounds.height, y0 + 80);
+          }
           current.selection = [
             (x0 * size.width) / bounds.width,
             (y0 * size.height) / bounds.height,
@@ -1311,12 +1407,13 @@ window.InkwellDocuments = (() => {
             (y1 * size.height) / bounds.height,
           ];
           renderSelection();
-          $('#doc-pdf-apply').disabled =
-            ['image', 'signature'].includes(current.pdfTool) && !current.image;
+          if (current.pdfTool === 'replace_text') void loadSelectedPdfText(current.selection);
           status(
-            ['image', 'signature'].includes(current.pdfTool)
-              ? 'Drag the image to move it; drag its corner to resize. Apply saves a new copy.'
-              : 'Area selected. Apply the PDF change to a new copy.',
+            textMode
+              ? 'Type directly on the PDF. Use the green check by the text to save a new copy.'
+              : ['image', 'signature'].includes(current.pdfTool)
+                ? 'Drag the image to move it; drag its corner to resize. Apply saves a new copy.'
+                : 'Area selected. Apply the PDF change to a new copy.',
           );
         },
         { once: true },
@@ -1368,6 +1465,7 @@ window.InkwellDocuments = (() => {
         if (event.target.dataset.mode === 'pdf') {
           current.image = data;
           pdfMode('image');
+          current.pdfDraft = true;
           return;
         }
         $('#doc-rich-editor').focus();
@@ -1429,6 +1527,24 @@ window.InkwellDocuments = (() => {
       });
     }
     root.addEventListener('input', (event) => {
+      if (event.target.matches('.doc-inline-text')) {
+        current.pdfText = event.target.value;
+        current.pdfDraft = !!current.pdfText.trim();
+        $('#doc-pdf-apply').disabled = !current.pdfDraft;
+        status('Editing text on the PDF · use the green check beside it to save a new copy.');
+        return;
+      }
+      if (event.target.matches('.doc-inline-font')) {
+        const size = Number(event.target.value);
+        if (size >= 6 && size <= 32) {
+          current.pdfFontSize = size;
+          const page = current.document.pages[current.page];
+          const width = $('#doc-pdf-overlay').getBoundingClientRect().width;
+          $('#doc-pdf-overlay .doc-inline-text').style.fontSize =
+            `${Math.max(8, (size * width) / page.width)}px`;
+        }
+        return;
+      }
       if (
         event.target.matches('#doc-code-editor, #doc-rich-editor') ||
         event.target.closest('#doc-rich-editor')
@@ -1445,6 +1561,19 @@ window.InkwellDocuments = (() => {
       },
       true,
     );
+    root.addEventListener('keydown', (event) => {
+      if (!event.target.matches('.doc-inline-text')) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        current.pdfDraft = false;
+        pdfMode('');
+        status('Staged PDF text discarded · original unchanged');
+      } else if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+        $('#doc-pdf-apply')?.click();
+      }
+    });
     root.addEventListener('click', (event) => {
       const image = event.target.closest('#doc-rich-editor img');
       if (!image) return;

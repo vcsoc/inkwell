@@ -514,24 +514,23 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
   order: 7;
 }
 .doc-ribbon:has(#doc-pdf-tools:not([hidden])) {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
-.doc-ribbon:has(#doc-pdf-tools:not([hidden])) :is(#doc-save, .doc-line-toggle) {
+.doc-ribbon:has(#doc-pdf-tools:not([hidden]))
+  :is(#doc-save, .doc-line-toggle, #doc-status, #doc-pdf-apply) {
   display: none;
 }
-.doc-ribbon:has(#doc-pdf-tools:not([hidden])) #doc-status {
-  display: block;
-  order: 21;
-  flex: 1 0 100%;
-  max-width: none;
-}
 .doc-ribbon:has(#doc-pdf-tools:not([hidden])) .doc-ribbon-title strong {
-  flex: 1 1 80px;
+  flex: 0 0 155px;
 }
 .doc-ribbon:has(#doc-pdf-tools:not([hidden])) #doc-pdf-tools {
-  order: 20;
-  flex: 1 0 100%;
-  scrollbar-width: thin;
+  order: 2;
+  flex: 0 0 auto;
+  min-width: max-content;
+  overflow: visible;
 }
 .doc-zoom-controls {
   order: 8;
@@ -824,12 +823,6 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
   background: var(--surface);
   overflow-wrap: anywhere;
 }
-.doc-pdf-help {
-  max-width: 850px;
-  margin: 0 auto 12px;
-  color: var(--muted);
-  line-height: 1.4;
-}
 .doc-pdf-paper {
   position: relative;
   border: 0;
@@ -859,6 +852,95 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
   pointer-events: auto;
   cursor: move;
 }
+.doc-selection-text {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  pointer-events: auto;
+}
+.doc-selection-replace {
+  background: #fff;
+}
+.doc-inline-text {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: #17212b;
+  font:
+    12px/1.2 Arial,
+    sans-serif;
+  pointer-events: auto;
+}
+.doc-inline-text::placeholder {
+  color: #75818a;
+}
+.doc-stage-actions {
+  position: absolute;
+  z-index: 5;
+  top: -42px;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 5px 16px #0004;
+  pointer-events: auto;
+}
+.doc-stage-actions button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 30px;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.doc-stage-actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.doc-stage-actions button svg {
+  width: 19px;
+  height: 19px;
+}
+.doc-stage-actions #doc-pdf-apply {
+  color: #167648;
+  background: #d9f2df;
+}
+.doc-stage-actions .doc-stage-cancel {
+  color: #ad3040;
+  background: #fce5e7;
+}
+.doc-stage-actions label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--ink);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.doc-inline-font {
+  width: 43px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.doc-stage-move {
+  padding: 3px 5px;
+  color: var(--muted);
+  cursor: move;
+}
 .doc-pdf-paper .doc-selection-preview img {
   width: 100%;
   height: 100%;
@@ -875,6 +957,7 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
   border-radius: 5px;
   background: var(--accent);
   box-shadow: 0 0 0 1px var(--ink);
+  z-index: 6;
   cursor: nwse-resize;
   touch-action: none;
 }

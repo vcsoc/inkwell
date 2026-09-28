@@ -245,28 +245,47 @@ test('PDF text editing and staged image/signature placement work without browser
   await revealTree(page);
   await createItem(page, 'file', name);
   const original = await (await page.request.get('/api/documents/download?path=' + name)).body();
+  const toolbar = await page.locator('#doc-pdf-tools').boundingBox();
+  const exportButton = await page.locator('#doc-export-pdf').boundingBox();
+  expect(Math.abs(toolbar.y - exportButton.y)).toBeLessThan(18);
+  await expect(page.locator('#documents-footer-status')).toBeVisible();
+  await expect(page.locator('#doc-status')).toBeHidden();
+  await page.getByRole('button', { name: 'Add text', exact: true }).click();
+  await page.locator('#doc-pdf-overlay').click({ position: { x: 45, y: 45 } });
+  await expect(page.locator('.doc-inline-text')).toBeVisible();
+  await page.locator('.doc-inline-text').fill('Discard me');
+  await expect(page.locator('#documents-footer-status')).toContainText('Editing text');
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.locator('[data-view="inbox"]:visible').click();
+  await expect(page.locator('.doc-inline-text')).toHaveValue('Discard me');
+  await page.getByRole('button', { name: 'Discard staged PDF change' }).click();
+  await expect(page.locator('.doc-inline-text')).toHaveCount(0);
+  await expect(page.locator('#doc-file-name')).toHaveText(name);
   await page.getByRole('button', { name: 'Add text', exact: true }).click();
   await drawArea();
+  await page.locator('.doc-inline-text').fill('Editable example');
+  await expect(page.locator('.doc-inline-text')).toHaveValue('Editable example');
+  await page.screenshot({ path: `test-results/annotations-pdf-inline-${info.project.name}.png` });
+  await expect(page.locator('#doc-pdf-apply')).toBeEnabled();
   await page.locator('#doc-pdf-apply').click();
-  await expect(page.locator('#doc-pdf-text-dialog')).toBeVisible();
-  await page.locator('#doc-pdf-text-value').fill('Editable example');
-  await page.locator('#doc-pdf-text-submit').click();
   await expect(page.locator('#doc-file-name')).toContainText('.annotated.pdf');
-  await expect(page.locator('#doc-pdf-text-dialog')).not.toBeVisible();
   await page.getByRole('button', { name: 'Replace text' }).click();
   await drawArea();
+  await expect(page.locator('.doc-selection-replace .doc-inline-text')).toBeVisible();
+  await expect(page.locator('.doc-inline-text')).toHaveValue(/Editable example/);
+  await page.locator('.doc-inline-text').fill('Updated example');
   await page.locator('#doc-pdf-apply').click();
-  await expect(page.locator('#doc-pdf-text-hint')).toContainText('permanently removed');
-  await page.locator('#doc-pdf-text-value').fill('Updated example');
-  await page.locator('#doc-pdf-text-submit').click();
   await expect(page.locator('#doc-file-name')).toContainText('.replaced-text.pdf');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Place image' }).click();
   await (await chooser).setFiles({ name: 'stamp.png', mimeType: 'image/png', buffer: png });
-  await expect(page.locator('#doc-status')).toContainText('Draw an area');
+  await expect(page.locator('#documents-footer-status')).toContainText('Draw an area');
   await drawArea();
   const preview = page.locator('.doc-selection-preview');
   await expect(preview.locator('img')).toBeVisible();
+  await page.screenshot({
+    path: `test-results/annotations-image-preview-${info.project.name}.png`,
+  });
   const before = await preview.boundingBox();
   await page.mouse.move(before.x + 25, before.y + 20);
   await page.mouse.down();
@@ -298,6 +317,8 @@ test('PDF text editing and staged image/signature placement work without browser
   await expect(page.locator('#doc-file-name')).toContainText('.signed-image.pdf');
   const unchanged = await (await page.request.get('/api/documents/download?path=' + name)).body();
   expect(unchanged).toEqual(original);
+  await page.locator('[data-view="inbox"]:visible').click();
+  await expect(page.locator('#documents-footer-status')).toBeHidden();
 });
 
 test('Folder search, sorting, visible path and drag-drop move preserve open document', async ({
@@ -370,7 +391,7 @@ test('PDF export, scoped zoom, print options and password retry dialog', async (
   await expect(page.locator('#doc-ribbon-tools')).toBeAttached();
   const toolbar = await page.locator('#doc-pdf-tools').boundingBox();
   const exportButton = await page.locator('#doc-export-pdf').boundingBox();
-  expect(toolbar.y).toBeGreaterThan(exportButton.y + exportButton.height - 3);
+  expect(Math.abs(toolbar.y - exportButton.y)).toBeLessThan(18);
 
   await page.route('**/api/documents/printers', (route) =>
     route.fulfill({ json: { printers: ['TestQueue'], default: 'TestQueue' } }),

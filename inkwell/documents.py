@@ -754,6 +754,28 @@ def pdf_rect(page, rect):
     return value
 
 
+class PdfTextArea(BaseModel):
+    path: str
+    page: int = 0
+    rect: list[float]
+
+
+@router.post("/pdf-text")
+def pdf_text_in_area(data: PdfTextArea):
+    file = check_file(data.path)
+    if file.suffix.lower() != ".pdf":
+        raise HTTPException(415, "PDF text selection requires a PDF document")
+    try:
+        with pymupdf.open(file) as document:
+            unlock_pdf(document, file)
+            if data.page < 0 or data.page >= len(document):
+                raise HTTPException(422, "Page does not exist")
+            page = document[data.page]
+            return {"text": page.get_textbox(pdf_rect(page, data.rect))[:5000]}
+    except (pymupdf.FileDataError, pymupdf.EmptyFileError):
+        raise HTTPException(422, "Invalid PDF") from None
+
+
 @router.post("/pdf")
 def edit_pdf(data: PdfOperation):
     file = check_file(data.path)
@@ -778,7 +800,19 @@ def edit_pdf(data: PdfOperation):
                     page.apply_redactions(images=2, graphics=1, text=0)
                 elif data.action in ("image", "signature"):
                     image = image_bytes(data.image)
-                    page.insert_image(rect, stream=image, keep_proportion=True)
+                    with Image.open(io.BytesIO(image)) as source:
+                        image_width, image_height = source.size
+                    # PyMuPDF's keep_proportion can still paint a stretched image into
+                    # a non-square rect. Fit the actual rectangle before insertion.
+                    scale = min(rect.width / image_width, rect.height / image_height)
+                    width, height = image_width * scale, image_height * scale
+                    fitted = pymupdf.Rect(
+                        rect.x0 + (rect.width - width) / 2,
+                        rect.y0 + (rect.height - height) / 2,
+                        rect.x0 + (rect.width + width) / 2,
+                        rect.y0 + (rect.height + height) / 2,
+                    )
+                    page.insert_image(fitted, stream=image, keep_proportion=False)
                 elif data.action in ("text", "replace_text"):
                     if not data.text or not data.text.strip():
                         raise HTTPException(422, "Enter text to place")
