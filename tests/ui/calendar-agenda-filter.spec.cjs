@@ -58,6 +58,96 @@ test('calendar maximizes the viewport and opens its agenda only when requested',
   await page.screenshot({ path: `test-results/calendar-panel-${info.project.name}.png` });
 });
 
+test('today’s agenda is highlighted and scrolled into view, with a visible shared footer', async ({
+  page,
+}, info) => {
+  await page.setViewportSize(
+    info.project.name === 'mobile' ? { width: 390, height: 844 } : { width: 1703, height: 1059 },
+  );
+  await page.goto('/#/calendar');
+  const created = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const add = async (day, title) => {
+    const start = new Date(day.getTime() + 10 * 3600000);
+    const response = await page.evaluate(
+      async (body) => {
+        const result = await fetch('/api/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Inkwell': '1' },
+          body: JSON.stringify(body),
+        });
+        return result.json();
+      },
+      {
+        title,
+        start: start.toISOString(),
+        end: new Date(start.getTime() + 3600000).toISOString(),
+        timezone: 'UTC',
+      },
+    );
+    created.push(response.id);
+  };
+  try {
+    for (let day = 1; day < today.getDate(); day++)
+      await add(new Date(today.getFullYear(), today.getMonth(), day), `Earlier agenda ${day}`);
+    await add(today, 'Today appointment alpha');
+    await add(today, 'Today appointment beta');
+    await page.reload();
+    await page.getByRole('button', { name: 'Expand monthly agenda' }).click();
+    const marked = page
+      .locator('#calendar-agenda .agenda-row.is-today')
+      .filter({ hasText: 'Today appointment' });
+    await expect(marked).toHaveCount(2);
+    await expect(marked.first()).toContainText('Today appointment');
+    const firstToday = page.locator('#calendar-agenda .agenda-row.is-today').first();
+    await expect
+      .poll(() =>
+        firstToday.evaluate((row) => {
+          const bounds = row.getBoundingClientRect(),
+            panel = document.querySelector('#calendar-agenda').getBoundingClientRect();
+          return bounds.top >= panel.top && bounds.bottom <= panel.bottom;
+        }),
+      )
+      .toBe(true);
+    expect(
+      await page.locator('#calendar-agenda').evaluate((panel) => panel.scrollTop),
+    ).toBeGreaterThan(0);
+    expect(await marked.first().evaluate((row) => getComputedStyle(row).backgroundColor)).not.toBe(
+      await page
+        .locator('#calendar-agenda .agenda-row:not(.is-today)')
+        .first()
+        .evaluate((row) => getComputedStyle(row).backgroundColor),
+    );
+    await expect(page.locator('.calendar-important-note strong')).toHaveText('Important');
+    await expect(page.locator('#calendar-footer-status')).toContainText(/\d+ items planned today/);
+    await expect(page.locator('#app-footer')).toBeVisible();
+    const footer = await page.locator('#app-footer').boundingBox();
+    expect(footer.y + footer.height).toBeLessThanOrEqual(
+      info.project.name === 'mobile' ? 844 - 64 + 1 : 1060,
+    );
+    await expect(page.locator('#agenda-toggle svg')).toBeVisible();
+    expect(
+      await page
+        .locator('#agenda-toggle')
+        .evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize)),
+    ).toBeGreaterThanOrEqual(17);
+    if (info.project.name === 'desktop') {
+      const search = await page.locator('#global-search').boundingBox();
+      const date = await page.locator('#search-date-from').boundingBox();
+      expect(date.width).toBeLessThanOrEqual(120);
+      expect(search.width).toBeGreaterThan(date.width);
+    }
+  } finally {
+    for (const id of created)
+      await page.evaluate(
+        async (id) =>
+          fetch('/api/events/' + id, { method: 'DELETE', headers: { 'X-Inkwell': '1' } }),
+        id,
+      );
+  }
+});
+
 test('Quick filter icons occupy the first row at the far right and open compact controls', async ({
   page,
 }) => {

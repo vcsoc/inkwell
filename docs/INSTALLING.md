@@ -5,7 +5,7 @@ The Linux x86_64 build includes Electron, a frozen Python runtime, the Inkwell b
 ## Install
 
 ```sh
-sh dist/inkwell-0.1.11-linux-x64.run
+sh dist/inkwell-0.1.12-linux-x64.run
 ```
 
 Run as your ordinary desktop user, **not root**. The installer works offline, verifies its embedded payload checksum, and installs:
@@ -21,7 +21,7 @@ The launcher registers `text/calendar` / ICS file support, so **Open with → In
 
 Launch **Inkwell** from your app menu or run `~/.local/bin/inkwell`. It starts the bundled backend automatically and stops it when the app quits. No service, autostart entry, root package or global system configuration is installed.
 
-The installer does **not** modify or delete the existing `~/.inkwell` workspace. On first app startup an additive database migration preserves existing password accounts while adding Microsoft OAuth metadata. Back up data with all Inkwell processes closed before upgrades.
+The installer does **not** modify or delete the existing `~/.inkwell` workspace. On first app startup an additive schema-19 migration adds a durable provider-change queue and calendar link fields, preserving existing accounts, messages, drafts and local events. Provider writes require separate Microsoft reauthorization; see [Provider writes](PROVIDER-SYNC.md). Back up data with all Inkwell processes closed before upgrades.
 
 Existing managed releases are retained for rollback; the active symlink is replaced atomically after extraction and backend validation. The installer refuses to overwrite an unrelated existing launcher or installation directory. Quit an already-running old Inkwell window before launching a newly installed version. Do not downgrade an active database to an older schema version.
 

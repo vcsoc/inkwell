@@ -215,11 +215,46 @@ window.InkwellSettings = (() => {
     }
     content.innerHTML = '<div class="skeleton">Loading settings…</div>';
     if (page === 'mail') {
-      const accounts = await api('/accounts');
+      const [accounts, sync] = await Promise.all([api('/accounts'), api('/provider-sync')]);
       if (!isCurrent() || !content.isConnected) return;
       accountsChanged(accounts);
-      content.innerHTML = `<section class="card" id="settings-mail"><h2>Your mail, at home.</h2><h3>Connect to inkwell</h3><p>Connect Outlook.com or Microsoft 365 with Microsoft sign-in, or add an IMAP / SMTP account using an app password. Credentials are encrypted on disk.</p>${accounts.map((a) => `<div class="account-card"><div><strong>${esc(a.name)}</strong><small>${esc(a.email)}${a.provider === 'microsoft' ? ' · Microsoft OAuth' : ''}</small></div><button class="secondary" data-sending-addresses="${a.id}">Sending addresses</button><button class="icon-button danger" data-remove-account="${a.id}" aria-label="Remove ${esc(a.email)}">×</button></div>`).join('')}<button class="primary" id="add-account">＋ Connect email</button><div class="notice">Sync imports the newest 200 inbox messages (up to 10 MB each for IMAP). Read status, stars, folders and local sent copies stay local. Removing an account disconnects immediately but keeps downloaded mail and drafts. Attachments are not available in this build.</div><p>Gmail requires an app password if your account supports it. Outlook.com and Microsoft 365 use inkwell's configured Microsoft OAuth registration and Graph; you are not asked for an application ID or mailbox password. Some organizations may require administrator consent.</p><h3>Optional webmail</h3><p>Open Microsoft's official website in your default browser instead of connecting it to inkwell.</p><div class="form-actions"><a class="secondary" href="https://outlook.live.com/mail/" target="_blank" rel="noopener noreferrer">Open Outlook.com webmail ↗</a><a class="secondary" href="https://outlook.office.com/mail/" target="_blank" rel="noopener noreferrer">Open Microsoft 365 webmail ↗</a></div></section>`;
+      content.innerHTML = `<section class="card" id="settings-mail"><h2>Your mail, at home.</h2><h3>Connect to inkwell</h3><p>Connect Outlook.com or Microsoft 365 with Microsoft sign-in, or add an IMAP / SMTP account using an app password. Credentials are encrypted on disk.</p>${accounts.map((a) => `<div class="account-card"><div><strong>${esc(a.name)}</strong><small>${esc(a.email)}${a.provider === 'microsoft' ? ' · Microsoft OAuth' : ''}</small></div>${a.provider === 'microsoft' ? `<button class="secondary" type="button" data-reauthorize="${a.id}">${sync.accounts.find((entry) => entry.id === a.id)?.ready ? 'Reauthorize' : 'Grant mail/calendar access'}</button>` : ''}<button class="secondary" data-sending-addresses="${a.id}">Sending addresses</button><button class="icon-button danger" data-remove-account="${a.id}" aria-label="Remove ${esc(a.email)}">×</button></div>`).join('')}<button class="primary" id="add-account">＋ Connect email</button><section class="card" id="provider-sync-settings"><h3>Provider changes</h3><label class="check-label" title="When checked, changes remain in Inkwell only and are never sent to your provider. Unchecking requires Microsoft mail and calendar write consent; pending changes already queued before you enable local-only still finish."><input type="checkbox" id="local-changes-only" ${sync.local_changes_only ? 'checked' : ''}> Local changes only ⓘ</label><p class="fine-print">${sync.local_changes_only ? 'Provider changes are off. Reauthorize Microsoft to enable Outlook mail and calendar writes; local-only changes made before authorization are not uploaded retroactively.' : 'Outlook mail changes and new or connected calendar events are queued to Microsoft Graph. Existing unlinked calendar events and local folders stay local.'} IMAP accounts have no provider calendar connection; their mail and calendar changes remain local. Remote operations may take time when offline and are retried with exponential backoff.</p><p id="provider-sync-progress" role="status">${sync.pending} queued · ${sync.failed} failed · ${sync.cancelled} cancelled${sync.last_error ? ' · ' + esc(sync.last_error) : ''}</p><button class="secondary" type="button" id="retry-provider-sync" ${sync.failed ? '' : 'disabled'}>Retry failed changes</button></section><div class="notice">Sync imports the newest 200 inbox messages (up to 10 MB each for IMAP). Local folders, local sent copies, unlinked calendar entries and IMAP changes stay local. Removing an account disconnects immediately but keeps downloaded mail and drafts.</div><p>Gmail requires an app password if your account supports it. Outlook.com and Microsoft 365 use inkwell's configured Microsoft OAuth registration and Graph; you are not asked for an application ID or mailbox password. Some organizations may require administrator consent.</p><h3>Optional webmail</h3><p>Open Microsoft's official website in your default browser instead of connecting it to inkwell.</p><div class="form-actions"><a class="secondary" href="https://outlook.live.com/mail/" target="_blank" rel="noopener noreferrer">Open Outlook.com webmail ↗</a><a class="secondary" href="https://outlook.office.com/mail/" target="_blank" rel="noopener noreferrer">Open Microsoft 365 webmail ↗</a></div></section>`;
       on(content.querySelector('#add-account'), 'click', accountForm);
+      content
+        .querySelectorAll('[data-reauthorize]')
+        .forEach((button) =>
+          on(button, 'click', () =>
+            accountForm(accounts.find((a) => a.id === Number(button.dataset.reauthorize))),
+          ),
+        );
+      on(content.querySelector('#local-changes-only'), 'change', async (event) => {
+        const input = event.currentTarget;
+        input.disabled = true;
+        try {
+          await api('/provider-sync', {
+            method: 'PUT',
+            body: { local_changes_only: input.checked },
+          });
+          toast(
+            input.checked
+              ? 'Future changes will stay local.'
+              : 'Microsoft provider sync enabled. Existing local-only data is not uploaded.',
+          );
+          if (isCurrent()) await reload();
+        } catch (error) {
+          input.checked = !input.checked;
+          toast(error.message);
+        } finally {
+          input.disabled = false;
+        }
+      });
+      on(content.querySelector('#retry-provider-sync'), 'click', async () => {
+        const result = await api('/provider-sync/retry', { method: 'POST' });
+        if (isCurrent())
+          content.querySelector('#provider-sync-progress').textContent =
+            `${result.pending} queued · ${result.failed} failed · ${result.cancelled} cancelled`;
+        toast('Retrying provider changes.');
+      });
       content.querySelectorAll('[data-sending-addresses]').forEach((button) =>
         on(button, 'click', () => {
           content.querySelector('#sending-address-settings')?.remove();

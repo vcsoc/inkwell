@@ -31,6 +31,7 @@ def connect(client, monkeypatch, requests):
                     "access_token": "access-secret",
                     "refresh_token": "refresh-secret",
                     "expires_in": 3600,
+                    "scope": microsoft.WRITE_SCOPES,
                 },
             )
         return httpx.Response(200, json={"displayName": "Microsoft User", "mail": "ms@example.com"})
@@ -58,6 +59,7 @@ def test_device_authorization_encrypted_and_idempotent(client, monkeypatch):
     assert result.json()["account_id"] == account_id
     accounts = client.get("/api/accounts").json()
     assert len(accounts) == 1 and accounts[0]["provider"] == "microsoft"
+    assert client.get('/api/provider-sync').json()['local_changes_only'] is False
     assert "secret" not in accounts[0]
     with store.db() as db:
         secret = db.execute("SELECT secret FROM accounts").fetchone()[0]
@@ -65,6 +67,42 @@ def test_device_authorization_encrypted_and_idempotent(client, monkeypatch):
     assert json.loads(store.unseal(secret))["refresh_token"] == "refresh-secret"
     assert client.delete(f"/api/microsoft/{flow_id}").status_code == 200
     assert client.post(f"/api/microsoft/{flow_id}/poll").status_code == 410
+
+
+def test_reauthorization_preserves_mail_and_rejects_different_identity(client, monkeypatch):
+    account_id, _ = connect(client, monkeypatch, [])
+    draft = client.post('/api/drafts', json={'account_id': account_id, 'subject': 'Keep this draft'}).json()['id']
+    with store.db() as db:
+        initial = db.execute('SELECT secret FROM accounts WHERE id=?', (account_id,)).fetchone()[0]
+
+    identity = ['other@example.com']
+    def handle(request):
+        if request.url.path.endswith('/devicecode'):
+            assert b'Mail.ReadWrite' in request.content and b'Calendars.ReadWrite' in request.content
+            return httpx.Response(200, json={'device_code':'private','user_code':'ABCD-EFGH',
+                'verification_uri':'https://www.microsoft.com/link','expires_in':900,'interval':5})
+        if request.url.path.endswith('/token'):
+            return httpx.Response(200, json={'access_token':'updated','refresh_token':'updated-refresh',
+                'expires_in':3600,'scope':microsoft.WRITE_SCOPES})
+        return httpx.Response(200, json={'displayName':'Microsoft User','mail':identity[0]})
+    monkeypatch.setattr(microsoft, 'client', lambda: httpx.Client(transport=httpx.MockTransport(handle)))
+    flow = client.post('/api/microsoft/begin', json={'account_id':account_id}).json()['id']
+    microsoft.FLOWS[flow]['next_poll'] = 0
+    mismatch = client.post(f'/api/microsoft/{flow}/poll')
+    assert mismatch.status_code == 409
+    with store.db() as db:
+        assert db.execute('SELECT secret FROM accounts WHERE id=?', (account_id,)).fetchone()[0] == initial
+        assert db.execute('SELECT id FROM messages WHERE id=?', (draft,)).fetchone()[0] == draft
+    identity[0] = 'ms@example.com'
+    microsoft.FLOWS[flow]['next_poll'] = 0
+    result = client.post(f'/api/microsoft/{flow}/poll')
+    assert result.status_code == 200
+    assert result.json()['reauthorized'] is True
+    assert result.json()['account_id'] == account_id
+    with store.db() as db:
+        assert db.execute('SELECT count(*) FROM accounts').fetchone()[0] == 1
+        assert db.execute('SELECT id FROM messages WHERE id=?', (draft,)).fetchone()[0] == draft
+        assert json.loads(store.unseal(db.execute('SELECT secret FROM accounts WHERE id=?', (account_id,)).fetchone()[0]))['access_token'] == 'updated'
 
 
 def test_device_flow_validation_pending_slowdown_and_expiry(client, monkeypatch):
@@ -222,5 +260,5 @@ def test_legacy_schema_migration_preserves_accounts(tmp_path, monkeypatch):
     store.init()
     with store.db() as db:
         account = dict(db.execute("SELECT * FROM accounts").fetchone())
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 18
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 19
     assert account["provider"] == "imap" and account["secret"] == "legacy-secret"

@@ -146,7 +146,7 @@ html .page-heading-context p {
 .global-search {
   max-width: 1060px;
   display: grid;
-  grid-template-columns: minmax(80px, 1fr) auto auto 36px;
+  grid-template-columns: minmax(180px, 1fr) auto auto 36px;
 }
 .search-dates {
   display: flex;
@@ -169,7 +169,7 @@ html .page-heading-context p {
   flex: 1;
 }
 .global-search .search-date input {
-  width: 160px;
+  width: 116px;
   min-width: 0;
   padding: 7px 32px 7px 5px;
   min-height: 36px;
@@ -258,6 +258,11 @@ html[data-layout='classic'][data-mail='true'] .topbar {
   .topbar #page-actions button {
     padding: 7px;
     white-space: nowrap;
+  }
+}
+@media (min-width: 1701px) {
+  html[data-calendar='true'] .topbar-heading {
+    flex-basis: 175px;
   }
 }
 @media (max-width: 1700px) {

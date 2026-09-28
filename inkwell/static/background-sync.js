@@ -17,6 +17,30 @@ window.InkwellBackgroundSync = ({
   badge.setAttribute('role', 'status');
   badge.hidden = true;
   document.querySelector('#app-footer').prepend(badge);
+  const providerBadge = document.createElement('div');
+  providerBadge.id = 'provider-write-progress';
+  providerBadge.className = 'provider-footer';
+  providerBadge.setAttribute('role', 'status');
+  providerBadge.hidden = true;
+  badge.after(providerBadge);
+  const pollProvider = async () => {
+    try {
+      const status = await api('/provider-sync');
+      providerBadge.hidden = !status.pending && !status.failed && !status.cancelled;
+      providerBadge.textContent = status.failed
+        ? `${status.failed} provider change${status.failed === 1 ? '' : 's'} failed · review Settings → Mail accounts`
+        : status.cancelled
+          ? `${status.cancelled} provider change${status.cancelled === 1 ? '' : 's'} cancelled after disconnect`
+          : `${status.pending} provider change${status.pending === 1 ? '' : 's'} queued`;
+      providerBadge.title =
+        status.last_error ||
+        'Microsoft Graph changes retry automatically while Inkwell is running.';
+    } catch {
+      providerBadge.hidden = true;
+    }
+  };
+  void pollProvider();
+  setInterval(pollProvider, 5000);
   const apply = async (status) => {
     active = status.active;
     document.documentElement.dataset.syncing = String(active);

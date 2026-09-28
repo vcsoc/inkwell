@@ -3,7 +3,7 @@
 from typing import Annotated
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from . import store
+from . import store, provider_sync
 
 router = APIRouter(prefix="/api/messages")
 
@@ -55,7 +55,7 @@ def selected(db, ids):
     rows = []
     for id in dict.fromkeys(ids):
         row = db.execute(
-            "SELECT id,folder,restore_folder,restore_destination_id,local_destination_id,remote_folder_id FROM messages WHERE id=?",
+            "SELECT id,account_id,remote_key,folder,restore_folder,restore_destination_id,local_destination_id,remote_folder_id FROM messages WHERE id=?",
             (id,),
         ).fetchone()
         if not row:
@@ -72,8 +72,11 @@ def move(data: Move):
         rows = selected(db, data.ids)
         if folder != "trash" and any(m["folder"] == "drafts" for m in rows):
             raise HTTPException(422, "Drafts can only be moved to Trash")
-        for row in rows:
+        moves = [provider_sync.ensure_move(db, row, data.folder) for row in rows]
+        for row, target in zip(rows, moves):
             file_message(db, row, folder, remote)
+            if target:
+                provider_sync.enqueue_mail(db, row, "move", target)
     return {"moved": len(rows)}
 
 
@@ -92,10 +95,14 @@ def trash_selection(data: Trash):
                 )
             for row in rows:
                 db.execute("DELETE FROM messages WHERE id=?", (row["id"],))
+                provider_sync.enqueue_mail(db, row, "delete", {})
         else:
-            for row in rows:
+            targets = [provider_sync.ensure_move(db, row, "trash") if row["folder"] != "trash" else None for row in rows]
+            for row, target in zip(rows, targets):
                 if row["folder"] != "trash":
                     file_message(db, row, "trash")
+                    if target:
+                        provider_sync.enqueue_mail(db, row, "move", target)
     return {"deleted" if data.permanent else "trashed": len(rows)}
 
 
@@ -129,5 +136,8 @@ def restore(data: Selection):
                     ).fetchone()
                 ):
                     folder, remote = "inbox", None
+            target = provider_sync.ensure_move(db, row, f"remote:{remote}" if remote else folder)
             file_message(db, row, folder, remote)
+            if target:
+                provider_sync.enqueue_mail(db, row, "move", target)
     return {"restored": len(rows)}

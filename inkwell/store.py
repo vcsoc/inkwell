@@ -49,7 +49,7 @@ def init():
         # Version 1: preserve password accounts while adding Microsoft OAuth metadata.
         conn.execute("BEGIN IMMEDIATE")
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        if version > 18:
+        if version > 19:
             raise RuntimeError("This database was created by a newer inkwell version")
         if version < 1:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)")}
@@ -221,6 +221,61 @@ def init():
                 uid TEXT PRIMARY KEY, status TEXT NOT NULL CHECK(status IN ('accepted','rejected','ignored')),
                 event_id INTEGER)""")
             conn.execute("PRAGMA user_version=18")
+        if version < 19:
+            event_columns = {row["name"] for row in conn.execute("PRAGMA table_info(events)")}
+            if "provider_account_id" not in event_columns:
+                conn.execute("ALTER TABLE events ADD COLUMN provider_account_id INTEGER")
+            if "provider_event_id" not in event_columns:
+                conn.execute("ALTER TABLE events ADD COLUMN provider_event_id TEXT")
+            conn.execute("""CREATE TABLE IF NOT EXISTS provider_jobs(
+                id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL, resource_type TEXT NOT NULL,
+                resource_id INTEGER NOT NULL, kind TEXT NOT NULL, payload TEXT NOT NULL,
+                state TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0,
+                next_run REAL NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '',
+                remote_id TEXT NOT NULL DEFAULT '')""")
+            conn.execute("CREATE INDEX IF NOT EXISTS provider_jobs_ready ON provider_jobs(state,next_run,id)")
+            conn.execute("""CREATE TRIGGER IF NOT EXISTS provider_event_insert AFTER INSERT ON events
+                WHEN (SELECT value FROM settings WHERE key='provider_sync_local_only')='false'
+                 AND (SELECT value FROM settings WHERE key='provider_sync_account') IS NOT NULL
+                BEGIN
+                  UPDATE events SET provider_account_id=CAST((SELECT value FROM settings WHERE key='provider_sync_account') AS INTEGER) WHERE id=NEW.id;
+                  INSERT INTO provider_jobs(account_id,resource_type,resource_id,kind,payload)
+                  VALUES (CAST((SELECT value FROM settings WHERE key='provider_sync_account') AS INTEGER),
+                    'event', NEW.id, 'create', json_object('title',NEW.title,'start',NEW.start,
+                    'end',NEW.end,'location',NEW.location,'notes',NEW.notes,'all_day',NEW.all_day,
+                    'timezone',NEW.timezone,'recurrence',NEW.recurrence));
+                END""")
+            conn.execute("""CREATE TRIGGER IF NOT EXISTS provider_event_update AFTER UPDATE OF title,start,end,location,notes,all_day,timezone,recurrence ON events
+                WHEN NEW.provider_account_id IS NOT NULL
+                 AND (SELECT value FROM settings WHERE key='provider_sync_local_only')='false'
+                BEGIN
+                  INSERT INTO provider_jobs(account_id,resource_type,resource_id,kind,payload)
+                  VALUES (NEW.provider_account_id,'event',NEW.id,'update',
+                    json_object('title',NEW.title,'start',NEW.start,'end',NEW.end,
+                    'location',NEW.location,'notes',NEW.notes,'all_day',NEW.all_day,
+                    'timezone',NEW.timezone,'recurrence',NEW.recurrence));
+                END""")
+            conn.execute("""CREATE TRIGGER IF NOT EXISTS provider_event_adopt AFTER UPDATE OF title,start,end,location,notes,all_day,timezone,recurrence ON events
+                WHEN NEW.provider_account_id IS NULL
+                 AND (SELECT value FROM settings WHERE key='provider_sync_local_only')='false'
+                 AND (SELECT value FROM settings WHERE key='provider_sync_account') IS NOT NULL
+                BEGIN
+                  UPDATE events SET provider_account_id=CAST((SELECT value FROM settings WHERE key='provider_sync_account') AS INTEGER) WHERE id=NEW.id;
+                  INSERT INTO provider_jobs(account_id,resource_type,resource_id,kind,payload)
+                  VALUES (CAST((SELECT value FROM settings WHERE key='provider_sync_account') AS INTEGER),
+                    'event', NEW.id, 'create', json_object('title',NEW.title,'start',NEW.start,
+                    'end',NEW.end,'location',NEW.location,'notes',NEW.notes,'all_day',NEW.all_day,
+                    'timezone',NEW.timezone,'recurrence',NEW.recurrence));
+                END""")
+            conn.execute("""CREATE TRIGGER IF NOT EXISTS provider_event_delete AFTER DELETE ON events
+                WHEN OLD.provider_account_id IS NOT NULL
+                 AND (SELECT value FROM settings WHERE key='provider_sync_local_only')='false'
+                BEGIN
+                  INSERT INTO provider_jobs(account_id,resource_type,resource_id,kind,payload)
+                  VALUES (OLD.provider_account_id,'event',OLD.id,'delete',
+                    json_object('remote_id',OLD.provider_event_id));
+                END""")
+            conn.execute("PRAGMA user_version=19")
         # Repair derived keys from old unquoted Graph display names, without changing
         # message contents, filing, or sender decisions. Idempotent; no schema change.
         conn.execute("""UPDATE messages SET sender_key=inkwell_sender_key(sender),

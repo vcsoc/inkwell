@@ -57,6 +57,16 @@ for (const [id, name, selector] of pages) {
   });
 }
 
+test('provider writes cannot be enabled without Microsoft consent', async ({ page }) => {
+  await page.goto('/#/settings/mail');
+  const local = page.getByRole('checkbox', { name: /Local changes only/ });
+  await expect(local).toBeChecked();
+  await expect(local.locator('..')).toHaveAttribute('title', /When checked/);
+  await local.uncheck();
+  await expect(local).toBeChecked();
+  await expect(page.locator('#provider-sync-progress')).toContainText('0 queued');
+});
+
 test('settings back and forward restore the right page, not a scroll position', async ({
   page,
 }) => {

@@ -45,6 +45,7 @@ from . import (
     calendar_reminders,
     attachments,
     documents,
+    provider_sync,
 )
 
 STATIC = Path(__file__).parent / "static"
@@ -57,6 +58,7 @@ if EXTRA_HOSTS and not ACCESS_KEY:
 TOKEN = secrets.token_urlsafe(32)
 SYNC_LOCK = threading.Lock()
 BACKGROUND_SYNC = BackgroundSync(SYNC_LOCK)
+PROVIDER_SYNC = provider_sync.ProviderWorker()
 LOGIN_LOCK = threading.Lock()
 LOGIN_ATTEMPTS = []
 
@@ -64,14 +66,17 @@ LOGIN_ATTEMPTS = []
 @asynccontextmanager
 async def lifespan(app):
     store.init()
+    PROVIDER_SYNC.start()
     try:
         yield
     finally:
+        PROVIDER_SYNC.stop()
         BACKGROUND_SYNC.stop()
 
 
 app = FastAPI(title="inkwell", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.include_router(preferences.router)
+app.include_router(provider_sync.router)
 app.include_router(app_info.router)
 app.include_router(mail_notifications.router)
 app.include_router(documents.router)
@@ -256,6 +261,14 @@ def delete_account(account_id: int):
     with store.db() as conn:
         conn.execute("BEGIN IMMEDIATE")
         require_change(conn.execute("DELETE FROM accounts WHERE id=?", (account_id,)))
+        conn.execute("""UPDATE provider_jobs SET state='cancelled',
+            error='Account disconnected before provider confirmation'
+            WHERE account_id=? AND state!='done'""", (account_id,))
+        conn.execute("UPDATE events SET provider_account_id=NULL,provider_event_id=NULL WHERE provider_account_id=?", (account_id,))
+        selected = conn.execute("SELECT value FROM settings WHERE key='provider_sync_account'").fetchone()
+        if selected and selected[0] == str(account_id):
+            conn.execute("DELETE FROM settings WHERE key='provider_sync_account'")
+            conn.execute("INSERT OR REPLACE INTO settings(key,value) VALUES ('provider_sync_local_only','true')")
         conn.execute(
             "UPDATE messages SET folder=CASE WHEN folder='remote' THEN 'inbox' ELSE folder END,local_destination_id=NULL WHERE local_destination_id IN (SELECT id FROM remote_folders WHERE account_id=?)",
             (account_id,),
@@ -562,14 +575,13 @@ def patch_message(message_id: int, data: MessagePatch):
                 ).fetchone()
             ):
                 raise HTTPException(422, "Local folder not found")
+            row = conn.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
+            if not row:
+                raise HTTPException(404, "Message not found")
+            target = provider_sync.ensure_move(conn, row, fields["folder"]) if "folder" in fields else None
             if "tags" in fields:
                 fields["tags"] = json.dumps(tag_store.canonical(conn, fields["tags"]))
             if "folder" in fields:
-                row = conn.execute(
-                    "SELECT folder,local_destination_id FROM messages WHERE id=?", (message_id,)
-                ).fetchone()
-                if not row:
-                    raise HTTPException(404, "Message not found")
                 if fields["folder"] == "trash" and row["folder"] != "trash":
                     fields["restore_folder"] = row["folder"]
                     fields["restore_destination_id"] = row["local_destination_id"]
@@ -580,17 +592,28 @@ def patch_message(message_id: int, data: MessagePatch):
                     (*fields.values(), message_id),
                 )
             )
+            if target:
+                provider_sync.enqueue_mail(conn, row, "move", target)
+            mail_fields = {}
+            if "unread" in fields:
+                mail_fields["isRead"] = not fields["unread"]
+            if "starred" in fields or "flagged" in fields:
+                updated = conn.execute("SELECT starred,flagged FROM messages WHERE id=?", (message_id,)).fetchone()
+                mail_fields["flag"] = {"flagStatus": "flagged" if updated["starred"] or updated["flagged"] else "notFlagged"}
+            if mail_fields:
+                provider_sync.enqueue_mail(conn, row, "patch", {"fields": mail_fields})
     return {"ok": True}
 
 
 @app.delete("/api/messages/{message_id}")
 def delete_message(message_id: int):
     with store.db() as conn:
-        require_change(
-            conn.execute(
-                "DELETE FROM messages WHERE id=? AND folder IN ('trash','drafts')", (message_id,)
-            )
-        )
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT * FROM messages WHERE id=? AND folder IN ('trash','drafts')", (message_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Message not found in Trash or Drafts")
+        require_change(conn.execute("DELETE FROM messages WHERE id=?", (message_id,)))
+        provider_sync.enqueue_mail(conn, row, "delete", {})
     return {"ok": True}
 
 

@@ -12,7 +12,7 @@ Only the fixed URLs `https://outlook.live.com/mail/` and `https://outlook.office
 
 ## Native Inkwell inbox integration
 
-Native Microsoft connections use **Sign in with Microsoft**, not a password entered into Inkwell. The app now supports Microsoft's public-client device authorization flow and Microsoft Graph mail APIs. It reads your inbox and sends mail using delegated permissions; local calendar/contact features are not Microsoft-synced.
+Native Microsoft connections use **Sign in with Microsoft**, not a password entered into Inkwell. The app now supports Microsoft's public-client device authorization flow and Microsoft Graph mail APIs. It imports mail and sends using delegated permissions. After explicit mail/calendar write consent, eligible changes use a durable Microsoft Graph queue; other local data and contacts are not provider-synced. See [provider writes](PROVIDER-SYNC.md).
 
 ## Publisher-managed sign-in
 
@@ -42,7 +42,7 @@ In Microsoft Entra → App registrations:
 
 1. Register an app with supported account types **Accounts in any organizational directory and personal Microsoft accounts** if you need both Microsoft 365 and Outlook.com/Hotmail. Your tenant may restrict who can register apps.
 2. Under **Authentication → Advanced settings**, enable **Allow public client flows**. Device authorization does not require a redirect URI or client secret.
-3. Under API permissions, add **Microsoft Graph → Delegated permissions**: `User.Read`, `Mail.Read`, `Mail.Send`. The sign-in request also asks for `offline_access` so a saved connection can refresh tokens.
+3. Under API permissions, add **Microsoft Graph → Delegated permissions**: `User.Read`, `Mail.Read`, `Mail.Send`, `Mail.ReadWrite`, `Calendars.ReadWrite`. The sign-in request also asks for `offline_access` so a saved connection can refresh tokens.
 4. Grant/obtain administrator consent if your organization requires it. Conditional Access policies may block device-code flows; Inkwell cannot bypass organizational policy.
 5. Copy the **Application (client) ID** from Overview.
 
@@ -64,14 +64,14 @@ The account identity comes from Microsoft's `/me` profile, not from a typed emai
 
 Access and refresh tokens are stored in the local encrypted credential field. Tokens refresh before expiration. OAuth tokens/device secrets are never returned to the browser. Device codes stay in process memory only; polling respects Microsoft's interval and slow-down responses.
 
-The Microsoft connection uses Graph rather than IMAP; this is intentionally invisible in the normal Inkwell workflow. Quick sync imports up to 200 inbox/current-folder messages. Resumable background delta synchronization downloads the discovered folder hierarchy and checks for changes about every 15 seconds while open; this is not push delivery. See [Background sync](BACKGROUND-SYNC.md) and [Mail workspace](MAIL-WORKSPACE.md). Import uses immutable IDs, retains HTML alongside a text alternative, sanitizes previews and deduplicates retained local copies. Nullable and malformed sender headers are tolerated. Attachments are not downloaded. Read flags, stars and folders are still local-only after import. Next-page URLs must remain on the Graph origin; tokens are not forwarded to arbitrary URLs.
+The Microsoft connection uses Graph rather than IMAP; this is intentionally invisible in the normal Inkwell workflow. Quick sync imports up to 200 inbox/current-folder messages. Resumable background delta synchronization downloads the discovered folder hierarchy and checks for changes about every 15 seconds while open; this is not push delivery. See [Background sync](BACKGROUND-SYNC.md) and [Mail workspace](MAIL-WORKSPACE.md). Import uses immutable IDs, retains HTML alongside a text alternative, sanitizes previews and deduplicates retained local copies. Nullable and malformed sender headers are tolerated. Attachments are not downloaded. With a new write grant, read flags and supported folder moves are sent to Graph asynchronously; existing read-only connections need **Grant mail/calendar access** in Settings. Local folders and custom labels remain local. Next-page URLs must remain on the Graph origin; tokens are not forwarded to arbitrary URLs.
 
-Send uses `/me/sendMail`; accepted messages are saved in Microsoft's Sent Items and also in Inkwell's local Sent folder. A network failure can still leave submission uncertain, so check the provider before retrying. Shared mailboxes, server folder management, calendar/contacts sync and attachment management are not implemented.
+Send uses `/me/sendMail`; accepted messages are saved in Microsoft's Sent Items and also in Inkwell's local Sent folder. A network failure can still leave submission uncertain, so check the provider before retrying. Shared mailboxes, server folder management, IMAP/CalDAV calendar sync, provider contacts and attachment management are not implemented. Microsoft calendar event writes are queued only after write authorization; accepting a tentative meeting is not a provider RSVP.
 
-Disconnecting removes local credentials and that account's local messages. Revoke the application grant through Microsoft's account/privacy or organization application settings if you also want to revoke consent. If tokens are revoked or policy changes, reconnect the account.
+Disconnecting removes local credentials but preserves downloaded mail and drafts as local copies; it cancels unconfirmed queued provider writes and unlinks local events from that account. Revoke the application grant through Microsoft's account/privacy or organization application settings if you also want to revoke consent. If tokens are revoked or policy changes, reconnect the account.
 
 Existing IMAP/SMTP accounts are preserved by the additive schema-version-1 migration. Back up the entire `~/.inkwell` directory with Inkwell closed before major upgrades.
 
 ## Verification
 
-Device authorization, pending/slow-down/expiry/cancel behavior, encrypted storage, refresh rotation, Graph inbox import, sending and pagination token isolation are tested with mocked Microsoft responses. The user's connected account successfully imported 200 Inbox messages. Live read-only folder discovery also verified 33 folders, including 23 nested folders, without changing the original workspace. Live sending has not been exercised.
+Device authorization, reauthorization identity preservation, pending/slow-down/expiry/cancel behavior, encrypted storage, refresh rotation, durable Graph write retries, inbox import, sending and pagination token isolation are tested with mocked Microsoft responses. Live provider write operations require user consent and remain unverified here. The user's connected account successfully imported 200 Inbox messages. Live read-only folder discovery also verified 33 folders, including 23 nested folders, without changing the original workspace. Live sending has not been exercised.

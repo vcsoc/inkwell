@@ -71,7 +71,9 @@ html .calendar-day.range-selected {
   user-select: none;
 }
 html[data-calendar='true'] main {
+  box-sizing: border-box;
   height: 100dvh;
+  padding-bottom: 38px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -137,8 +139,15 @@ html .calendar-layout .calendar-day {
   align-items: center;
   gap: 9px;
   padding: 10px 4px;
-  color: var(--muted);
-  font-size: 15px;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 650;
+}
+.calendar-agenda-toggle svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  stroke: currentColor;
 }
 .calendar-agenda-toggle:hover,
 .calendar-agenda-toggle:focus-visible {
@@ -147,8 +156,8 @@ html .calendar-layout .calendar-day {
 }
 .calendar-agenda-toggle strong {
   writing-mode: vertical-rl;
-  font-size: 12px;
-  letter-spacing: 1px;
+  font-size: 14px;
+  letter-spacing: 0.03em;
 }
 .calendar-agenda-toggle small {
   font-size: 11px;
@@ -176,14 +185,44 @@ html .calendar-layout .calendar-day {
   overscroll-behavior: contain;
 }
 .calendar-agenda-panel .agenda .calendar-header {
+  position: sticky;
+  top: -12px;
+  z-index: 1;
   gap: 10px;
   margin-bottom: 8px;
+  padding: 12px 0 8px;
+  background: var(--surface);
 }
 .calendar-agenda-panel .agenda .calendar-header h2 {
   font-size: 19px;
 }
 .calendar-agenda-panel .agenda .agenda-row {
   padding: 10px;
+}
+html .calendar-agenda-panel .agenda-row.is-today {
+  border-color: var(--accent);
+  border-left: 4px solid var(--accent);
+  background: var(--accent-light);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+.calendar-important-note {
+  margin: 12px 0 6px;
+  padding: 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-light);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.calendar-important-note strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.calendar-important-note p {
+  margin: 0;
 }
 @media (max-width: 1150px) {
   .calendar-agenda-panel.open {

@@ -1,0 +1,10 @@
+# Inkwell 0.1.12
+
+Linux x86_64 mail and calendar update over 0.1.11.
+
+- Today's agenda items are highlighted and scrolled into view when the monthly panel opens. Agenda has a clearer icon/title and an **Important** note. The shared footer stays visible on Calendar, above mobile navigation; search date fields are narrower to leave more room for the query.
+- New Outlook/Microsoft 365 sign-ins ask Microsoft for delegated `Mail.ReadWrite` and `Calendars.ReadWrite`. **Existing connections are not silently upgraded:** open **Settings → Mail accounts → Grant mail/calendar access**, sign in to the *same* account and review the consent screen. Reauthorization preserves downloaded mail and drafts. Organizations may require administrator consent.
+- Once authorized, eligible Microsoft message read/unread, flag/star, folder move, Trash/permanent deletion, and calendar create/update/delete actions enter a durable queue. Four workers send them independently, in order per item, with exponential retry and visible pending/failure status. A queued change is **not yet confirmed at Microsoft**. Graph write operations were tested with mocks, not a live mailbox.
+- **Local changes only** in Mail accounts stops queuing future eligible writes (already queued changes still finish). Local folders, tags, old unedited local events, sent copies and unsent drafts remain on this device. IMAP accounts still need a provider-write implementation and a separate calendar/CalDAV connection; their changes are local. Accepting a suggested meeting does not send an Outlook RSVP. See [provider writes and limitations](PROVIDER-SYNC.md).
+
+Schema 19 adds an additive provider job queue and calendar link metadata without removing user data. Back up `~/.inkwell` after saving work and closing all Inkwell processes before major upgrades. Older app versions cannot open a schema-19 workspace. The unsigned Linux x86_64 installer preserves previous managed releases; it does not force-close a running window. `SHA256SUMS` checks integrity but not publisher authenticity, and compatibility with older glibc builds is not guaranteed.

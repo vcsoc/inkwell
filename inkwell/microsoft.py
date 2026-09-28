@@ -1,4 +1,4 @@
-"""Microsoft public-client device authorization and delegated Graph mail access.
+"""Microsoft public-client device authorization and delegated Graph access.
 
 No client secret or Microsoft password is collected. Public app registration is required.
 """
@@ -18,6 +18,7 @@ from typing import Literal
 from urllib.parse import quote, urlparse
 
 import httpx
+from cryptography.fernet import InvalidToken
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -27,7 +28,10 @@ router = APIRouter(prefix="/api/microsoft")
 AUTH_ROOT = "https://login.microsoftonline.com"
 AUTH = AUTH_ROOT + "/common/oauth2/v2.0"
 GRAPH = "https://graph.microsoft.com/v1.0"
-SCOPES = "offline_access https://graph.microsoft.com/User.Read https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send"
+READ_SCOPES = "offline_access https://graph.microsoft.com/User.Read https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send"
+WRITE_SCOPES = READ_SCOPES + " https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Calendars.ReadWrite"
+SCOPES = READ_SCOPES  # Legacy refresh grants must never silently request broader permissions.
+REQUIRED_WRITE_SCOPES = {"Mail.ReadWrite", "Calendars.ReadWrite"}
 FLOWS = {}
 FLOW_LOCK = threading.Lock()
 TOKEN_LOCK = threading.Lock()
@@ -65,6 +69,7 @@ def client():
 class Begin(BaseModel):
     client_id: str | None = Field(default=None, pattern=CLIENT_ID_PATTERN)
     account_type: Literal["any", "consumer", "organization"] = "any"
+    account_id: int | None = Field(default=None, gt=0)
 
 
 def authority(account_type: str):
@@ -74,7 +79,16 @@ def authority(account_type: str):
 
 @router.post("/begin")
 def begin(data: Begin):
-    client_id = publisher_client_id() or data.client_id
+    existing = None
+    if data.account_id is not None:
+        with store.db() as db:
+            existing = db.execute(
+                "SELECT id,email,client_id FROM accounts WHERE id=? AND provider='microsoft'",
+                (data.account_id,),
+            ).fetchone()
+        if not existing:
+            raise HTTPException(404, "Microsoft account is no longer connected")
+    client_id = (existing["client_id"] if existing else None) or publisher_client_id() or data.client_id
     if not client_id:
         raise HTTPException(
             503,
@@ -86,7 +100,7 @@ def begin(data: Begin):
         try:
             with client() as http:
                 response = http.post(
-                    auth + "/devicecode", data={"client_id": client_id, "scope": SCOPES}
+                    auth + "/devicecode", data={"client_id": client_id, "scope": WRITE_SCOPES}
                 )
                 response.raise_for_status()
                 flow = response.json()
@@ -95,6 +109,8 @@ def begin(data: Begin):
             interval = max(5, int(flow.get("interval", 5)))
             FLOWS[flow_id] = {
                 "client_id": client_id,
+                "account_id": existing["id"] if existing else None,
+                "expected_email": existing["email"] if existing else None,
                 "auth": auth,
                 "device_code": flow["device_code"],
                 "expires": expires,
@@ -128,7 +144,18 @@ def credentials(token):
         "access_token": token["access_token"],
         "refresh_token": token.get("refresh_token", ""),
         "expires_at": time.time() + int(token.get("expires_in", 3600)),
+        "scope": token.get("scope", ""),
     }
+
+
+def has_write_permissions(account):
+    if account["provider"] != "microsoft":
+        return False
+    try:
+        scopes = json.loads(store.unseal(account["secret"])).get("scope", "")
+    except (ValueError, KeyError, TypeError, InvalidToken):
+        return False
+    return REQUIRED_WRITE_SCOPES.issubset({part.rsplit("/", 1)[-1] for part in scopes.split()})
 
 
 @router.post("/{flow_id}/poll")
@@ -177,22 +204,42 @@ def poll(flow_id: str):
             email = profile.get("mail") or profile.get("userPrincipalName")
             if not email or "@" not in email or "\n" in email or "\r" in email:
                 raise ValueError("No usable email address")
+            scoped = {part.rsplit("/", 1)[-1] for part in token.get("scope", "").split()}
+            if not REQUIRED_WRITE_SCOPES.issubset(scoped):
+                raise ValueError("Microsoft did not grant the requested write permissions")
+            if flow["expected_email"] and flow["expected_email"].casefold() != email.casefold():
+                raise HTTPException(409, "You signed in to a different account. Nothing was changed.")
             with store.db() as db:
-                cursor = db.execute(
-                    """INSERT INTO accounts(name,email,imap_host,imap_port,smtp_host,smtp_port,username,secret,smtp_security,provider,client_id)
-                    VALUES (?,?, '',993,'',587,?,?,'starttls','microsoft',?)""",
-                    (
-                        profile.get("displayName") or email,
-                        email,
-                        email,
-                        store.seal(json.dumps(credentials(token))),
-                        flow["client_id"],
-                    ),
-                )
+                db.execute("BEGIN IMMEDIATE")
+                existing = db.execute(
+                    "SELECT id,client_id FROM accounts WHERE id=? AND provider='microsoft'",
+                    (flow["account_id"],),
+                ).fetchone() if flow["account_id"] else None
+                if flow["account_id"] and not existing:
+                    raise HTTPException(409, "Account disconnected during sign-in. Nothing was changed.")
+                if existing and existing["client_id"] != flow["client_id"]:
+                    raise HTTPException(409, "Application registration changed. Nothing was changed.")
+                if existing:
+                    db.execute("UPDATE accounts SET secret=? WHERE id=?", (store.seal(json.dumps(credentials(token))), existing["id"]))
+                    account_id = existing["id"]
+                else:
+                    duplicate = db.execute("SELECT id FROM accounts WHERE provider='microsoft' AND email=? COLLATE NOCASE", (email,)).fetchone()
+                    if duplicate:
+                        raise HTTPException(409, "Account already connected. Choose Reauthorize on the existing account.")
+                    cursor = db.execute(
+                        """INSERT INTO accounts(name,email,imap_host,imap_port,smtp_host,smtp_port,username,secret,smtp_security,provider,client_id)
+                        VALUES (?,?, '',993,'',587,?,?,'starttls','microsoft',?)""",
+                        (profile.get("displayName") or email, email, email,
+                         store.seal(json.dumps(credentials(token))), flow["client_id"]),
+                    )
+                    account_id = cursor.lastrowid
                 from . import addresses
 
                 addresses.remember(db, email, display_name=profile.get("displayName") or email)
-                result = {"account_id": cursor.lastrowid, "email": email}
+                from . import provider_sync
+
+                provider_sync.connected(db, account_id)
+                result = {"account_id": account_id, "email": email, "reauthorized": bool(existing)}
             flow["completed"] = result
             flow.pop("device_code", None)
             return {"status": "complete", **result}
@@ -232,12 +279,13 @@ def access_token(account):
                     "grant_type": "refresh_token",
                     "client_id": account["client_id"],
                     "refresh_token": token["refresh_token"],
-                    "scope": SCOPES,
+                    "scope": token.get("scope") or READ_SCOPES,
                 },
             )
             response.raise_for_status()
             fresh = response.json()
         updated = credentials(fresh)
+        updated["scope"] = fresh.get("scope") or token.get("scope", "")
         updated["refresh_token"] = fresh.get("refresh_token") or token["refresh_token"]
         with store.db() as db:
             if not db.execute(

@@ -1862,10 +1862,11 @@ async function renderSettings() {
     },
   });
 }
-function accountForm() {
+function accountForm(reconnectAccount = null) {
+  if (!Number.isInteger(reconnectAccount?.id)) reconnectAccount = null;
   modal(
     'Bring your email along',
-    `<form id="account-form"><label class="field">Quick setup<select id="provider"><option value="custom">Custom IMAP / SMTP</option><optgroup label="Microsoft — connects to inkwell"><option value="outlook">Outlook.com / Hotmail — Sign in with Microsoft</option><option value="microsoft365">Microsoft 365 — Sign in with Microsoft</option></optgroup><optgroup label="Microsoft webmail — opens your browser"><option value="outlookweb">Outlook.com / Hotmail — webmail only</option><option value="microsoft365web">Microsoft 365 — webmail only</option></optgroup><option value="gmail">Gmail (app password required)</option><option value="icloud">iCloud (app-specific password)</option><option value="fastmail">Fastmail (app password)</option></select></label><fieldset id="webmail-account-fields" hidden disabled><h3>Use Microsoft's official webmail</h3><p>Read and send your mail in Outlook, using your browser's Microsoft sign-in. No inkwell application ID is needed.</p><a id="open-webmail" class="secondary" href="https://outlook.live.com/mail/" target="_blank" rel="noopener noreferrer">Open Outlook.com webmail ↗</a><div class="notice">Opens your default browser (a new tab on mobile). This does not connect or sync an account to inkwell's native inbox. Your mail and browser sign-in stay with Microsoft; inkwell cannot read them or send mail on your behalf.</div></fieldset><fieldset id="password-account-fields"><div class="field-row">${field('Your name', 'name', '', 'text', 'required maxlength="100"')}${field('Email address', 'email', '', 'email', 'required maxlength="254"')}</div>${field('Username', 'username', '', 'text', 'required autocomplete="username"')}${field('App password', 'password', '', 'password', 'required autocomplete="new-password"')}<div class="field-row">${field('IMAP server', 'imap_host', '', 'text', 'required')}${field('IMAP TLS port', 'imap_port', '993', 'number', 'required min="1" max="65535"')}</div><div class="field-row">${field('SMTP server', 'smtp_host', '', 'text', 'required')}${field('SMTP port', 'smtp_port', '465', 'number', 'required min="1" max="65535"')}</div><label class="field">SMTP security<select name="smtp_security"><option value="tls">Implicit TLS (usually 465)</option><option value="starttls">Required STARTTLS (usually 587)</option></select></label></fieldset><fieldset id="microsoft-account-fields" hidden disabled><div id="microsoft-registration-status" class="notice" role="status">Checking Microsoft sign-in configuration…</div><div class="notice">Sign in securely on Microsoft's website. inkwell never asks for your Microsoft password. Mail is accessed through Microsoft Graph, not password-based IMAP.</div>${field('Microsoft application client ID', 'client_id', '', 'text', 'required placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"')}<details><summary>How to get an application client ID</summary><ol><li>Register an application in Microsoft Entra with work/school and personal Microsoft accounts supported.</li><li>Under Authentication, enable public client flows. No client secret is needed.</li><li>Add delegated Microsoft Graph permissions: User.Read, Mail.Read and Mail.Send. Administrator consent may be required at work.</li><li>Copy the Application (client) ID here. This is an app ID, not your email address or password.</li></ol></details><div id="microsoft-progress" role="status"></div></fieldset><div class="notice" id="provider-notice" aria-live="polite">Use an app-specific password for IMAP accounts. Save, then Sync to test the connection.</div><div class="form-actions"><button class="primary" type="submit">Save account</button></div></form>`,
+    `<form id="account-form"><label class="field">Quick setup<select id="provider"><option value="custom">Custom IMAP / SMTP</option><optgroup label="Microsoft — connects to inkwell"><option value="outlook">Outlook.com / Hotmail — Sign in with Microsoft</option><option value="microsoft365">Microsoft 365 — Sign in with Microsoft</option></optgroup><optgroup label="Microsoft webmail — opens your browser"><option value="outlookweb">Outlook.com / Hotmail — webmail only</option><option value="microsoft365web">Microsoft 365 — webmail only</option></optgroup><option value="gmail">Gmail (app password required)</option><option value="icloud">iCloud (app-specific password)</option><option value="fastmail">Fastmail (app password)</option></select></label><fieldset id="webmail-account-fields" hidden disabled><h3>Use Microsoft's official webmail</h3><p>Read and send your mail in Outlook, using your browser's Microsoft sign-in. No inkwell application ID is needed.</p><a id="open-webmail" class="secondary" href="https://outlook.live.com/mail/" target="_blank" rel="noopener noreferrer">Open Outlook.com webmail ↗</a><div class="notice">Opens your default browser (a new tab on mobile). This does not connect or sync an account to inkwell's native inbox. Your mail and browser sign-in stay with Microsoft; inkwell cannot read them or send mail on your behalf.</div></fieldset><fieldset id="password-account-fields"><div class="field-row">${field('Your name', 'name', '', 'text', 'required maxlength="100"')}${field('Email address', 'email', '', 'email', 'required maxlength="254"')}</div>${field('Username', 'username', '', 'text', 'required autocomplete="username"')}${field('App password', 'password', '', 'password', 'required autocomplete="new-password"')}<div class="field-row">${field('IMAP server', 'imap_host', '', 'text', 'required')}${field('IMAP TLS port', 'imap_port', '993', 'number', 'required min="1" max="65535"')}</div><div class="field-row">${field('SMTP server', 'smtp_host', '', 'text', 'required')}${field('SMTP port', 'smtp_port', '465', 'number', 'required min="1" max="65535"')}</div><label class="field">SMTP security<select name="smtp_security"><option value="tls">Implicit TLS (usually 465)</option><option value="starttls">Required STARTTLS (usually 587)</option></select></label></fieldset><fieldset id="microsoft-account-fields" hidden disabled><div id="microsoft-registration-status" class="notice" role="status">Checking Microsoft sign-in configuration…</div><div class="notice">Sign in securely on Microsoft's website. inkwell never asks for your Microsoft password. Mail is accessed through Microsoft Graph, not password-based IMAP.</div>${field('Microsoft application client ID', 'client_id', '', 'text', 'required placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"')}<details><summary>How to get an application client ID</summary><ol><li>Register an application in Microsoft Entra with work/school and personal Microsoft accounts supported.</li><li>Under Authentication, enable public client flows. No client secret is needed.</li><li>Add delegated Microsoft Graph permissions: User.Read, Mail.Read, Mail.Send, Mail.ReadWrite and Calendars.ReadWrite. Administrator consent may be required at work.</li><li>Copy the Application (client) ID here. This is an app ID, not your email address or password.</li></ol></details><div id="microsoft-progress" role="status"></div></fieldset><div class="notice" id="provider-notice" aria-live="polite">Use an app-specific password for IMAP accounts. Save, then Sync to test the connection.</div><div class="form-actions"><button class="primary" type="submit">Save account</button></div></form>`,
   );
   const form = $('#account-form'),
     provider = $('#provider', form),
@@ -1890,14 +1891,16 @@ function accountForm() {
   let publisherConfigured = null;
   const updateRegistration = () => {
     const input = form.elements.client_id;
-    input.disabled = publisherConfigured === true;
-    input.required = publisherConfigured !== true;
-    input.closest('label').classList.toggle('hidden', publisherConfigured === true);
+    input.disabled = publisherConfigured === true || !!reconnectAccount;
+    input.required = publisherConfigured !== true && !reconnectAccount;
+    input
+      .closest('label')
+      .classList.toggle('hidden', publisherConfigured === true || !!reconnectAccount);
     $('#microsoft-account-fields details', form).classList.toggle(
       'hidden',
-      publisherConfigured === true,
+      publisherConfigured === true || !!reconnectAccount,
     );
-    if (isMicrosoft()) submit.disabled = publisherConfigured === null;
+    if (isMicrosoft()) submit.disabled = publisherConfigured === null && !reconnectAccount;
   };
   api('/microsoft/config')
     .then((config) => {
@@ -1954,6 +1957,16 @@ function accountForm() {
       form.elements.smtp_security.value = p[3];
     }
   });
+  if (reconnectAccount) {
+    provider.value = /@(outlook|hotmail|live)\./i.test(reconnectAccount.email)
+      ? 'outlook'
+      : 'microsoft365';
+    provider.dispatchEvent(new Event('change'));
+    provider.disabled = true;
+    submit.textContent = 'Reauthorize Microsoft';
+    $('#provider-notice').textContent =
+      `Sign in to ${reconnectAccount.email} and grant mail/calendar write access. A different account will be rejected; existing mail and drafts stay untouched.`;
+  }
   form.elements.email.addEventListener('change', () => {
     if (!form.elements.username.value) form.elements.username.value = form.elements.email.value;
   });
@@ -1968,7 +1981,11 @@ function accountForm() {
         await refreshCounts();
         await navigate('inbox');
         const generation = state.generation;
-        toast('Connected ' + result.email + '. Importing your inbox…');
+        toast(
+          result.reauthorized
+            ? 'Reauthorized ' + result.email + '.'
+            : 'Connected ' + result.email + '. Importing your inbox…',
+        );
         try {
           const results = await api('/sync', { method: 'POST' });
           const synced = results.find((item) => item.email === result.email);
@@ -2003,7 +2020,10 @@ function accountForm() {
           method: 'POST',
           body: {
             account_type: provider.value === 'outlook' ? 'consumer' : 'organization',
-            ...(publisherConfigured ? {} : { client_id: form.elements.client_id.value.trim() }),
+            ...(reconnectAccount ? { account_id: reconnectAccount.id } : {}),
+            ...(publisherConfigured || reconnectAccount
+              ? {}
+              : { client_id: form.elements.client_id.value.trim() }),
           },
         });
         if (!alive || !isMicrosoft()) {
