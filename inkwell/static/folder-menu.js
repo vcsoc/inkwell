@@ -1,5 +1,14 @@
 'use strict';
-window.InkwellFolderMenu = (navigation, create, onError, move, togglePin, isPinned) => {
+window.InkwellFolderMenu = (
+  navigation,
+  create,
+  onError,
+  move,
+  togglePin,
+  isPinned,
+  setColor,
+  getColor,
+) => {
   const menu = document.createElement('div');
   menu.id = 'folder-menu';
   menu.className = 'folder-context-menu hidden';
@@ -16,7 +25,11 @@ window.InkwellFolderMenu = (navigation, create, onError, move, togglePin, isPinn
   const pinItem = document.createElement('button');
   pinItem.type = 'button';
   pinItem.setAttribute('role', 'menuitem');
-  menu.append(item, moveItem, pinItem);
+  const colorItem = document.createElement('button');
+  colorItem.type = 'button';
+  colorItem.textContent = 'Folder color…';
+  colorItem.setAttribute('role', 'menuitem');
+  menu.append(item, moveItem, pinItem, colorItem);
   document.body.append(menu);
   let trigger = null,
     parent = null,
@@ -48,6 +61,8 @@ window.InkwellFolderMenu = (navigation, create, onError, move, togglePin, isPinn
     moveItem.hidden = !move || !t.key.startsWith('local-');
     pinItem.hidden = !togglePin;
     pinItem.textContent = isPinned?.(t.key) ? 'Unpin folder' : 'Pin folder';
+    colorItem.hidden = !setColor;
+    colorItem.textContent = getColor?.(t.key) ? 'Change folder color…' : 'Folder color…';
     menu.classList.remove('hidden');
     const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
     menu.style.maxWidth = Math.max(1, (innerWidth - 16) / zoom) + 'px';
@@ -121,6 +136,11 @@ window.InkwellFolderMenu = (navigation, create, onError, move, togglePin, isPinn
     close(true);
     Promise.resolve(togglePin(selected.key)).catch((e) => onError(e.message));
   };
+  colorItem.onclick = () => {
+    const selected = parent;
+    close(true);
+    Promise.resolve(setColor(selected)).catch((e) => onError(e.message));
+  };
   menu.onkeydown = (e) => {
     e.stopPropagation();
     if (['Escape', 'Tab'].includes(e.key)) {
@@ -128,7 +148,7 @@ window.InkwellFolderMenu = (navigation, create, onError, move, togglePin, isPinn
       close(true);
     } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
       e.preventDefault();
-      const items = [item, moveItem, pinItem].filter((b) => !b.hidden),
+      const items = [item, moveItem, pinItem, colorItem].filter((b) => !b.hidden),
         index = items.indexOf(document.activeElement);
       items[
         e.key === 'Home'
@@ -139,6 +159,15 @@ window.InkwellFolderMenu = (navigation, create, onError, move, togglePin, isPinn
       ].focus();
     }
   };
+  // Close before folder navigation handlers, including keyboard/synthetic clicks that
+  // do not produce a document pointerdown event.
+  navigation.addEventListener(
+    'click',
+    (e) => {
+      if (!menu.classList.contains('hidden') && !suppressClick && target(e)) close();
+    },
+    true,
+  );
   document.addEventListener('pointerdown', (e) => {
     if (!menu.contains(e.target)) close();
   });

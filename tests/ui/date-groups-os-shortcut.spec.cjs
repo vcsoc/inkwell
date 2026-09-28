@@ -68,7 +68,7 @@ test('date grouping persists across folders/reload, supports tables and keeps th
   const saved = page.waitForResponse(
     (r) => r.url().endsWith('/api/preferences/workspace') && r.request().method() === 'PATCH',
   );
-  await page.getByRole('switch', { name: 'Group by date', exact: true }).check();
+  await page.getByRole('button', { name: 'Group messages by date', exact: true }).click();
   await saved;
   await expect(page.locator('.mail-date-heading')).toHaveText([
     'Today',
@@ -94,7 +94,9 @@ test('date grouping persists across folders/reload, supports tables and keeps th
   await page.clock.setFixedTime(new Date(`${year}-09-17T16:00:00Z`));
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.reload();
-  await expect(page.getByRole('switch', { name: 'Group by date', exact: true })).toBeChecked();
+  await expect(
+    page.getByRole('button', { name: 'Group messages by date', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await sidebarClick(page, '#navigation [data-view=archive]');
   await expect(page.locator('.mail-date-heading')).toHaveText([
     'Today',
@@ -102,6 +104,7 @@ test('date grouping persists across folders/reload, supports tables and keeps th
     'This Month',
     'Older',
   ]);
+  await page.locator('#quick-view-button').click();
   await page.locator('#quick-view').selectOption('table');
   await expect(page.locator('.message-table-header')).toBeVisible();
   await expect(page.locator('.mail-date-heading')).toHaveText([
@@ -110,6 +113,7 @@ test('date grouping persists across folders/reload, supports tables and keeps th
     'This Month',
     'Older',
   ]);
+  await page.locator('#quick-sort-button').click();
   await page.locator('#quick-order').selectOption('asc');
   await expect(page.locator('.mail-date-heading')).toHaveText([
     'Older',
@@ -120,12 +124,43 @@ test('date grouping persists across folders/reload, supports tables and keeps th
   const off = page.waitForResponse(
     (r) => r.url().endsWith('/api/preferences/workspace') && r.request().method() === 'PATCH',
   );
-  await page.getByRole('switch', { name: 'Group by date', exact: true }).uncheck();
+  await page.getByRole('button', { name: 'Group messages by date', exact: true }).click();
   await off;
   await expect(page.locator('.mail-date-heading')).toHaveCount(0);
   await expect(page.locator('#quick-sort')).toHaveValue('subject');
   await expect(page.locator('#quick-sort')).toBeEnabled();
 });
+test('Every message date includes year, short month, two-digit day and weekday', async ({
+  page,
+}) => {
+  if (!process.env.INKWELL_UI_DATA?.startsWith(path.join(os.tmpdir(), 'inkwell-ui-')))
+    throw Error('Unsafe fixture path');
+  const db = new DatabaseSync(path.join(process.env.INKWELL_UI_DATA, 'inkwell.db'));
+  try {
+    for (const [stamp, label] of [
+      ['2025-01-03T16:00:00Z', '2025, Jan 03, Fri'],
+      ['2026-09-28T16:00:00Z', '2026, Sep 28, Mon'],
+    ]) {
+      const m = await api(page, '/drafts', 'POST', {
+        subject: 'Date ' + label,
+        body: 'Date format',
+      });
+      ids.push(m.id);
+      await api(page, '/messages/' + m.id, 'PATCH', { folder: 'inbox' });
+      db.prepare('UPDATE messages SET date=? WHERE id=?').run(stamp, m.id);
+    }
+  } finally {
+    db.close();
+  }
+  await page.reload();
+  await expect(page.locator(`[data-message="${ids[0]}"] .message-date`)).toHaveText(
+    '2025, Jan 03, Fri',
+  );
+  await expect(page.locator(`[data-message="${ids[1]}"] .message-date`)).toHaveText(
+    '2026, Sep 28, Mon',
+  );
+});
+
 test('Omarchy shortcut is explicit, reversible and independent of in-app shortcut saves', async ({
   page,
 }) => {

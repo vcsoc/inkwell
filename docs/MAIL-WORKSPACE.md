@@ -102,7 +102,7 @@ HTML preview is now the default, with a privacy banner and explicit per-view ima
 
 **Rule Manager** in the sidebar (also under Settings → Mail rules) lists existing inkwell rules and provides an AND/OR condition builder with multiple local move/read/star/tag actions. Compose/Reply support optional Cc/Bcc and shared local address autocomplete. See [Rule Manager and recipients](RULE-MANAGER-COMPOSE.md).
 
-These are working actions, **not full Outlook menu parity**. Reply all, provider categories, reminders, provider junk/block controls, original-source viewing, printing, attachment handling, and server folder creation/rename/move/delete remain unimplemented.
+These are working actions, **not full Outlook menu parity**. Reply all, provider categories, reminders, provider junk/block controls, original-source viewing, mail printing, and server folder creation/rename/move/delete remain unimplemented. Read-only attachment listing, downloads and script-free opening are available separately in the reader; see [Attachments](ATTACHMENTS.md).
 
 ## Not Junk
 
@@ -114,7 +114,7 @@ The reader uses consistent SVG icon-only buttons with tooltips and accessible na
 
 ## Tags and quick filters
 
-Tag Manager sits above Settings and supports reusable colored tags, usage counts, rename, bulk merge/delete, and exact tagged-mail browsing. The message toolbar adds combined quick filters, sorting, cards/table views and pinned filters. Filtering runs before pagination. See [Tags and filters](TAGS-FILTERS.md).
+Tag Manager sits above Settings and supports reusable colored tags, usage counts, rename, bulk merge/delete, and exact tagged-mail browsing. Compact, tooltip-labelled quick-filter icons share the All mail / Unread row at its far right; tags, sort and view settings open in a popover rather than using a second row. Filtering runs before pagination. List dates include the year and weekday (`YYYY, MMM DD, DDD`). Right-click a folder to assign or reset its local display color; choosing another folder closes the context menu immediately. See [Tags and filters](TAGS-FILTERS.md).
 
 ## Server preservation
 

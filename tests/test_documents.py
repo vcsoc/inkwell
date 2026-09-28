@@ -1,6 +1,9 @@
 import base64
 import io
+import os
+import subprocess
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pymupdf
 import pytest
@@ -9,9 +12,12 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization.pkcs12 import serialize_key_and_certificates
 from cryptography.x509.oid import NameOID
+from docx import Document
 from PIL import Image
 from pyhanko.pdf_utils.reader import PdfFileReader
 from pyhanko.sign.validation import validate_pdf_signature
+
+from inkwell import documents
 
 
 @pytest.fixture
@@ -126,6 +132,113 @@ def test_rich_image_font_and_unsafe_html_attributes(docs):
     insecure = client.post("/api/documents/preview", json={"content": "<img src=\"https://evil.test/i.png\"><a href='javascript:alert(1)'>Bad</a><script>alert(1)</script>"})
     assert insecure.status_code == 200
     assert '<img src="https://' not in insecure.json()["html"] and 'href="javascript:' not in insecure.json()["html"]
+
+
+def test_move_search_and_recent_paths_stay_inside_documents(docs):
+    client, folder = docs
+    for name in ("Letters", "Archive"):
+        assert client.post("/api/documents/folder", json={"name": name}).status_code == 200
+    assert client.post("/api/documents/file", json={"path": "Letters", "name": "Contract.md"}).status_code == 200
+    assert client.post("/api/documents/folder", json={"path": "Letters", "name": "Nested"}).status_code == 200
+    assert client.get("/api/documents/open", params={"path": "Letters/Contract.md"}).status_code == 200
+    matches = client.get("/api/documents/search", params={"q": "contract"}).json()
+    assert [entry["path"] for entry in matches] == ["Letters/Contract.md"]
+    assert matches[0]["modified"] > 0
+    moved = client.post("/api/documents/move", json={"path": "Letters/Contract.md", "destination": "Archive"})
+    assert moved.status_code == 200, moved.text
+    assert (folder / "Archive/Contract.md").is_file() and not (folder / "Letters/Contract.md").exists()
+    assert client.get("/api/documents/recent").json()[0]["path"] == "Archive/Contract.md"
+    assert client.post("/api/documents/move", json={"path": "Letters", "destination": "Letters/Nested"}).status_code == 422
+    assert client.post("/api/documents/move", json={"path": "Archive/Contract.md", "destination": "../"}).status_code == 403
+    (folder / "outside.txt").symlink_to(folder.parent / "outside.txt")
+    assert client.post("/api/documents/move", json={"path": "outside.txt", "destination": "Archive"}).status_code in (403, 404)
+    assert client.post("/api/documents/file", json={"path": "Letters", "name": "Contract.md"}).status_code == 200
+    assert client.post("/api/documents/move", json={"path": "Archive/Contract.md", "destination": "Letters"}).status_code == 409
+    moved_folder = client.post("/api/documents/move", json={"path": "Letters", "destination": "Archive"})
+    assert moved_folder.status_code == 200 and (folder / "Archive/Letters/Nested").is_dir()
+    assert client.get("/api/documents/tree", params={"path": "Archive"}).json()["children"][0]["directory"]
+
+
+def test_encrypted_pdf_password_retry_and_preview(docs):
+    client, folder = docs
+    pdf = pymupdf.open()
+    page = pdf.new_page()
+    page.insert_text((60, 90), "PRIVATE-CONTENT")
+    encrypted = pdf.tobytes(encryption=pymupdf.PDF_ENCRYPT_AES_256, owner_pw="owner-secret", user_pw="user-secret")
+    pdf.close()
+    (folder / "locked.pdf").write_bytes(encrypted)
+    assert client.get("/api/documents/open", params={"path": "locked.pdf"}).status_code == 423
+    assert client.post("/api/documents/unlock", json={"path": "locked.pdf", "password": "incorrect"}).status_code == 401
+    assert client.post("/api/documents/unlock", json={"path": "locked.pdf", "password": "user-secret"}).status_code == 200
+    assert client.get("/api/documents/open", params={"path": "locked.pdf"}).status_code == 200
+    assert client.get("/api/documents/page", params={"path": "locked.pdf", "page": 0}).content.startswith(b"\x89PNG")
+    changed = client.post("/api/documents/pdf", json={"path": "locked.pdf", "action": "redact", "page": 0, "rect": [55, 75, 230, 100]})
+    assert changed.status_code == 200, changed.text
+    with pymupdf.open(folder / changed.json()["path"]) as redacted:
+        assert "PRIVATE-CONTENT" not in redacted[0].get_text()
+    assert (folder / "locked.pdf").read_bytes() == encrypted
+    (folder / "locked.pdf").write_bytes(encrypted + b"\n")
+    assert client.get("/api/documents/open", params={"path": "locked.pdf"}).status_code == 423
+
+
+def test_pdf_export_preview_and_safe_printer_options(docs, monkeypatch):
+    client, folder = docs
+    created = client.post("/api/documents/file", json={"name": "review.md"})
+    assert created.status_code == 200
+    opened = client.get("/api/documents/open", params={"path": "review.md"}).json()
+    saved = client.put("/api/documents/content", json={"path": "review.md", "revision": opened["revision"], "content": "# Review document\\nPrint safely"})
+    assert saved.status_code == 200
+    exported = client.post("/api/documents/export-pdf", json={"path": "review.md"})
+    assert exported.status_code == 200, exported.text
+    with pymupdf.open(folder / exported.json()["path"]) as pdf:
+        assert "Print safely" in pdf[0].get_text()
+    first_output = (folder / exported.json()["path"]).read_bytes()
+    another = client.post("/api/documents/export-pdf", json={"path": "review.md"})
+    assert another.status_code == 200 and another.json()["path"] != exported.json()["path"]
+    assert (folder / exported.json()["path"]).read_bytes() == first_output
+    preview = client.get("/api/documents/print-preview", params={"path": "review.md"})
+    assert preview.status_code == 200 and preview.content.startswith(b"\x89PNG")
+    assert client.post("/api/documents/export-pdf", json={"path": exported.json()["path"]}).json()["path"] == exported.json()["path"]
+    (folder / "review.export-3.pdf").symlink_to(folder.parent / "keep-existing-link")
+    safe_export = client.post("/api/documents/export-pdf", json={"path": "review.md"})
+    assert safe_export.status_code == 200 and safe_export.json()["path"] == "review.export-4.pdf"
+    assert (folder / "review.export-3.pdf").is_symlink()
+
+    calls = []
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        if args[0] == "lpstat":
+            return subprocess.CompletedProcess(args, 0, stdout="printer TestQueue is idle. enabled\nsystem default destination: TestQueue\n", stderr="")
+        assert args[0] == "lp" and "TestQueue" in args
+        assert args[-1].startswith(str(folder) + os.sep) and Path(args[-1]).is_file()
+        return subprocess.CompletedProcess(args, 0, stdout="request id is TestQueue-1", stderr="")
+    monkeypatch.setattr(documents.shutil, "which", lambda name: "/usr/bin/" + name if name in ("lp", "lpstat") else None)
+    monkeypatch.setattr(documents.subprocess, "run", fake_run)
+    assert client.get("/api/documents/printers").json()["default"] == "TestQueue"
+    assert client.post("/api/documents/print", json={"path": "review.md", "printer": "Unauthorized"}).status_code == 422
+    assert client.post("/api/documents/print", json={"path": "review.md", "printer": "TestQueue", "pages": "1;touch /tmp/unsafe"}).status_code == 422
+    assert client.post("/api/documents/print", json={"path": "review.md", "printer": "TestQueue", "paper": "-o raw"}).status_code == 422
+    result = client.post("/api/documents/print", json={"path": "review.md", "printer": "TestQueue", "pages": "1-2", "copies": 2, "orientation": "landscape", "duplex": "long"})
+    assert result.status_code == 200, result.text
+    assert any(arg == "page-ranges=1-2" for arg in calls[-1])
+    assert not list(folder.glob(".inkwell-print-*"))
+
+
+@pytest.mark.skipif(not documents.shutil.which("libreoffice") and not documents.shutil.which("soffice"), reason="LibreOffice is not installed")
+def test_docx_pdf_export_keeps_original_and_print_preview(docs):
+    client, folder = docs
+    original = Document()
+    original.add_paragraph("DOCX ORIGINAL LAYOUT")
+    source = folder / "office.docx"
+    original.save(source)
+    previous = source.read_bytes()
+    result = client.post("/api/documents/export-pdf", json={"path": source.name})
+    assert result.status_code == 200, result.text
+    with pymupdf.open(folder / result.json()["path"]) as pdf:
+        assert "DOCX ORIGINAL LAYOUT" in pdf[0].get_text()
+    assert source.read_bytes() == previous
+    preview = client.get("/api/documents/print-preview", params={"path": source.name})
+    assert preview.status_code == 200 and preview.content.startswith(b"\x89PNG")
 
 
 def test_pkcs12_signature_is_embedded_in_new_pdf(docs):

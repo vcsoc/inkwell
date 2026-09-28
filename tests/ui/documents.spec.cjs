@@ -64,7 +64,9 @@ test('Nested folders expand and newly created files open from their selected fol
     `${folder}/work.txt`,
   );
   await revealTree(page);
-  await expect(page.locator('[data-doc-file="' + folder + '/work.txt"]:visible')).toBeVisible();
+  await expect(
+    page.locator('#doc-tree [data-doc-file="' + folder + '/work.txt"]:visible'),
+  ).toBeVisible();
 });
 
 test('PDF page previews, permanent redaction and image signatures save separate copies', async ({
@@ -117,6 +119,137 @@ test('PDF page previews, permanent redaction and image signatures save separate 
   await expect(page.locator('#doc-file-name')).toContainText('.signed-image.pdf');
   await page.locator('#doc-pdf-compress').click();
   await expect(page.locator('#doc-status')).toContainText(/already as small|Saved|new PDF copy/i);
+});
+
+test('Folder search, sorting, visible path and drag-drop move preserve open document', async ({
+  page,
+}, info) => {
+  const suffix = `${info.project.name}-${Date.now()}`;
+  const from = `alpha-${suffix}`;
+  const into = `beta-${suffix}`;
+  await page.goto('/#/documents');
+  await revealTree(page);
+  for (const folder of [from, into]) {
+    page.once('dialog', (dialog) => dialog.accept(folder));
+    await page.locator('#doc-new-folder').click();
+    await expect(page.locator(`#doc-tree [data-doc-folder="${folder}"]`)).toBeVisible();
+  }
+  await page.locator(`#doc-tree [data-doc-folder="${from}"]`).click();
+  await expect(page.locator('#doc-nav-path')).toContainText(from);
+  page.once('dialog', (dialog) => dialog.accept('move-me.txt'));
+  await page.locator('#doc-new-file').click();
+  await page.locator('#doc-code-editor').fill('Preserved during move');
+  await page.locator('#doc-save').click();
+  await page.locator('#doc-code-editor').fill('Unsaved work survives a move');
+  await expect(page.locator('#doc-save')).toBeEnabled();
+  await revealTree(page);
+  await page.locator('#doc-sort').click();
+  await page.locator('[data-doc-order="name-desc"]').click();
+  const names = await page
+    .locator('#doc-root-children > .doc-tree-entry > .doc-folder-row .doc-item-label')
+    .allTextContents();
+  expect(names.indexOf(into)).toBeLessThan(names.indexOf(from));
+  await page.locator('#doc-search').fill('move-me');
+  await expect(
+    page.locator(`#doc-search-results [data-doc-file="${from}/move-me.txt"]`),
+  ).toBeVisible();
+  await page.locator('#doc-search').fill('');
+  await expect(page.locator(`#doc-tree [data-doc-file="${from}/move-me.txt"]`)).toBeVisible();
+  if (info.project.name === 'desktop') {
+    await page
+      .locator(`#doc-tree [data-doc-file="${from}/move-me.txt"]`)
+      .dragTo(page.locator(`#doc-tree [data-doc-folder="${into}"]`));
+    await expect(page.locator(`#doc-tree [data-doc-file="${into}/move-me.txt"]`)).toBeVisible();
+    await expect(page.locator('#doc-code-editor')).toHaveValue('Unsaved work survives a move');
+    await expect(page.locator('#doc-save')).toBeEnabled();
+    await page.locator('#doc-save').click();
+    const movedFile = await page.request.get(
+      `/api/documents/open?path=${encodeURIComponent(`${into}/move-me.txt`)}`,
+    );
+    expect((await movedFile.json()).content).toBe('Unsaved work survives a move');
+    await expect(page.locator('#doc-recent [data-doc-file]').first()).toHaveAttribute(
+      'data-doc-file',
+      `${into}/move-me.txt`,
+    );
+  }
+});
+
+test('PDF export, scoped zoom, print options and password retry dialog', async ({ page }, info) => {
+  const file = `print-${info.project.name}-${Date.now()}.txt`;
+  await page.goto('/#/documents');
+  await revealTree(page);
+  page.once('dialog', (dialog) => dialog.accept(file));
+  await page.locator('#doc-new-file').click();
+  await page.locator('#doc-code-editor').fill('A print test');
+  await page.locator('#doc-export-pdf').click();
+  await expect(page.locator('#doc-file-name')).toHaveText(file.replace('.txt', '.export.pdf'));
+  await expect(page.locator('#doc-pdf-image')).toBeVisible();
+  await page.locator('#doc-zoom-in').click();
+  await expect(page.locator('#doc-zoom-label')).toHaveText('110%');
+  await page.keyboard.press('ControlOrMeta+-');
+  await expect(page.locator('#doc-zoom-label')).toHaveText('100%');
+  await expect(page.locator('#doc-editor-viewport')).toHaveCSS('zoom', '1');
+  await expect(page.locator('#doc-ribbon-tools')).toBeAttached();
+  const toolbar = await page.locator('#doc-pdf-tools').boundingBox();
+  const exportButton = await page.locator('#doc-export-pdf').boundingBox();
+  expect(Math.abs(toolbar.y - exportButton.y)).toBeLessThan(18);
+
+  await page.route('**/api/documents/printers', (route) =>
+    route.fulfill({ json: { printers: ['TestQueue'], default: 'TestQueue' } }),
+  );
+  let printed;
+  await page.route('**/api/documents/print', async (route) => {
+    printed = route.request().postDataJSON();
+    await route.fulfill({ json: { message: 'Queued print job' } });
+  });
+  await page.locator('#doc-print').click();
+  await expect(page.locator('#doc-print-dialog')).toBeVisible();
+  await expect(page.locator('#doc-print-preview-image')).toHaveJSProperty('complete', true);
+  await page.locator('#doc-print-pages').fill('1');
+  await page.locator('#doc-print-paper').selectOption('Letter');
+  await page.locator('#doc-print-copies').fill('2');
+  await page.locator('#doc-print-duplex').selectOption('long');
+  await page.locator('#doc-print-submit').click();
+  await expect(page.locator('#doc-print-dialog')).not.toBeVisible();
+  expect(printed).toMatchObject({
+    printer: 'TestQueue',
+    pages: '1',
+    copies: 2,
+    paper: 'Letter',
+    duplex: 'long',
+  });
+
+  const pdf = file.replace('.txt', '.export.pdf');
+  let locked = true;
+  await page.route('**/api/documents/open?path=' + encodeURIComponent(pdf), (route) =>
+    locked
+      ? route.fulfill({ status: 423, json: { detail: 'Document password required' } })
+      : route.continue(),
+  );
+  await page.route('**/api/documents/unlock', (route) => {
+    const password = route.request().postDataJSON().password;
+    if (password !== 'correct')
+      return route.fulfill({ status: 401, json: { detail: 'Incorrect document password' } });
+    locked = false;
+    return route.fulfill({ json: { unlocked: true } });
+  });
+  await revealTree(page);
+  await page.locator(`#doc-tree [data-doc-file="${pdf}"]`).click();
+  await expect(page.locator('#doc-password-dialog')).toBeVisible();
+  await page.locator('#doc-password-input').fill('wrong');
+  await page.locator('#doc-password-submit').click();
+  await expect(page.locator('#doc-password-error')).toContainText(
+    'previous password was incorrect',
+  );
+  expect(
+    await page
+      .locator('#doc-password-input')
+      .evaluate((input) => input.selectionEnd - input.selectionStart),
+  ).toBe(5);
+  await page.locator('#doc-password-input').fill('correct');
+  await page.locator('#doc-password-submit').click();
+  await expect(page.locator('#doc-password-dialog')).not.toBeVisible();
+  await expect(page.locator('#doc-file-name')).toHaveText(pdf);
 });
 
 test('Rich document formatting, table insertion and round-trip', async ({ page }, info) => {

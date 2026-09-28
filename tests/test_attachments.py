@@ -1,8 +1,12 @@
+import io
 from email.message import EmailMessage
 from urllib.parse import parse_qs
 
 import httpx
+import pymupdf
 import pytest
+from docx import Document
+from fastapi import HTTPException
 
 from inkwell import attachments, microsoft, store, mail
 
@@ -206,6 +210,35 @@ def test_account_identity_changes_and_forged_tokens_are_rejected(client, monkeyp
     assert client.get("/api/messages/1/attachments").json()["groups"] == []
     assert client.get("/api/messages/1/attachments/" + token + "/download").status_code == 409
     assert len(calls) == count
+
+
+def test_safe_preview_rasterizes_pdf_actions_and_rejects_executable_types():
+    source = pymupdf.open()
+    source.new_page().insert_text((50, 60), "Passive page")
+    action = source.get_new_xref()
+    source.update_object(action, "<< /S /JavaScript /JS (app.alert('unsafe')) >>")
+    source.xref_set_key(source.pdf_catalog(), "OpenAction", f"{action} 0 R")
+    original = source.tobytes()
+    source.close()
+    assert b"/JavaScript" in original
+    safe = attachments.safe_attachment_pdf(original, "notice.pdf")
+    assert b"/JavaScript" not in safe and b"OpenAction" not in safe
+    with pymupdf.open(stream=safe, filetype="pdf") as pdf:
+        assert pdf.page_count == 1 and pdf[0].get_images()
+    assert attachments.safe_attachment_pdf(b"<script>alert(1)</script>", "unsafe.html").startswith(b"%PDF")
+    source_word = Document()
+    source_word.add_paragraph("Read-only extract")
+    word_bytes = io.BytesIO()
+    source_word.save(word_bytes)
+    safe_word, extension = attachments.safe_attachment_copy(word_bytes.getvalue(), "report.docx")
+    assert extension == "docx" and Document(io.BytesIO(safe_word)).paragraphs[0].text == "Read-only extract"
+    safe_text, extension = attachments.safe_attachment_copy(b"plain\x00text", "notes.txt")
+    assert extension == "txt" and safe_text == b"plaintext"
+    safe_html, extension = attachments.safe_attachment_copy(b"<script>alert(1)</script>", "unsafe.html")
+    assert extension == "pdf" and safe_html.startswith(b"%PDF")
+    with pytest.raises(HTTPException) as blocked:
+        attachments.safe_attachment_pdf(b"print('unsafe')", "unsafe.py")
+    assert blocked.value.status_code == 415
 
 
 def test_download_size_cap_and_safe_unicode_filename(client, monkeypatch):

@@ -147,6 +147,65 @@ test('top reader shows full-thread files, separate inline parts, safe downloads 
   });
 });
 
+test('download offers passive in-app and system preview; original requires explicit script consent', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    window.attachmentOpenCalls = [];
+    window.inkwellAttachmentOpen = {
+      safe: async (messageId, token) => {
+        window.attachmentOpenCalls.push(['safe', messageId, token]);
+        return { opened: true };
+      },
+      original: async (messageId, token) => {
+        window.attachmentOpenCalls.push(['original', messageId, token]);
+        return { opened: true };
+      },
+    };
+  });
+  await page.route(`**/api/messages/${id}/attachments`, (r) =>
+    r.fulfill({ json: state({ groups: groups(), complete: true, pending: 0 }) }),
+  );
+  await page.route(`**/api/messages/${id}/attachments/refresh`, (r) =>
+    r.fulfill({ json: state({ groups: groups(), complete: true, pending: 0 }) }),
+  );
+  await page.route(`**/api/messages/${id}/attachments/*/download`, (r) =>
+    r.fulfill({ contentType: 'application/octet-stream', body: Buffer.from('%PDF-original') }),
+  );
+  await page.route(`**/api/messages/${id}/attachments/*/safe-preview`, (r) =>
+    r.fulfill({ contentType: 'application/pdf', body: Buffer.from('%PDF-passive') }),
+  );
+  await page.reload();
+  await page.locator(`[data-message="${id}"] .subject`).click();
+  await expect(page.locator('#message-attachments [data-attachment-download]')).toHaveCount(3);
+  const pending = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download Report.pdf' }).click();
+  await pending;
+  await page.getByRole('button', { name: 'Open Report.pdf safely' }).click();
+  const dialog = page.locator('#attachment-open-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('[data-attachment-system-original]')).toBeDisabled();
+  await dialog.locator('[data-attachment-preview]').click();
+  await expect(dialog.locator('iframe')).toHaveAttribute('sandbox', 'allow-same-origin');
+  await expect(dialog.locator('iframe')).toHaveAttribute('src', /^blob:/);
+  await expect(dialog.locator('#attachment-safe-download')).toHaveAttribute(
+    'download',
+    'inkwell-safe-preview.pdf',
+  );
+  await dialog.locator('[data-attachment-system-safe]').click();
+  await expect.poll(() => page.evaluate(() => window.attachmentOpenCalls.length)).toBe(1);
+  await dialog.locator('#attachment-scripts-consent').check();
+  await expect(dialog.locator('[data-attachment-system-original]')).toBeEnabled();
+  await dialog.locator('[data-attachment-system-original]').click();
+  await expect.poll(() => page.evaluate(() => window.attachmentOpenCalls.length)).toBe(2);
+  expect(await page.evaluate(() => window.attachmentOpenCalls.map(([mode]) => mode))).toEqual([
+    'safe',
+    'original',
+  ]);
+  await dialog.locator('[data-attachment-close]').click();
+  await expect(dialog).not.toBeVisible();
+});
+
 test('offline cached attachment metadata never claims there are no files', async ({ page }) => {
   const cached = groups();
   for (const g of cached)

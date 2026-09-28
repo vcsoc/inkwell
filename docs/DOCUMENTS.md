@@ -1,6 +1,6 @@
-# Documents editor (0.1.8 local review build)
+# Documents editor (development)
 
-**This feature is in development and included in the 0.1.8 local review build, not a published stable release.** Start Inkwell from this repository or install the 0.1.8 review build to try it. Open **Documents** from the desktop icon rail or mobile tab. On mobile, use the ☰ menu to open the folder tree; tap **Pages** to open the thumbnail drawer.
+**Documents is included in the 0.1.9 Linux x86_64 release.** Search, moves, export, printing and the compact toolbar are included. Open **Documents** from the desktop icon rail or mobile tab. On mobile, use the ☰ menu to open the folder tree; tap the pages icon to open the thumbnail drawer.
 
 ## Supported files
 
@@ -12,7 +12,11 @@
 | HTML/HTM | Sanitized rich editing with inline images and text wrapping | Scripts, embedded frames, unsafe URLs and remote images are stripped. Only HTTPS and mailto links are supported. |
 | TXT, MD/MDX, CSV/TSV, JSON, YAML, XML, TOML, INI, LOG, PY, JS, CSS | UTF-8 text editing, optional line numbers, line wrap, line indent/outdent | Markdown has a sanitized read-only preview; CSV remains editable text (not a spreadsheet). Binary and non-UTF-8 inputs cannot be edited. |
 
-Use **＋ File**, **＋ Folder**, or **Import** in the Documents folder tree. Recent files appear above it. Select another file or navigate away from unsaved edits to receive a discard confirmation. **Ctrl/Cmd+S** saves text/rich edits; an externally modified file triggers a conflict instead of being overwritten. The file tree exposes only supported files under your system's Documents folder (including an XDG-configured Documents folder). It rejects hidden files, symlinks and `..` paths. Local API requests retain Inkwell's usual authenticated session, origin and host checks.
+Use **＋ File**, **＋ Folder**, or **Import** in the Documents folder tree. Recent files appear above it. Search looks through folders and filenames; **Order by** sorts folders first, then files by name or modification time. The sticky path shows the folder currently in view (hover for the complete path). On desktop, drag a file or folder onto another folder, a file in the destination folder, or the Documents root; the insertion marker shows where it will move. A move cannot overwrite another file or move a folder into itself. The selected file remains open after a move.
+
+Select another file or navigate away from unsaved edits to receive a discard confirmation. **Ctrl/Cmd+S** saves text/rich edits; an externally modified file triggers a conflict instead of being overwritten. **Ctrl/Cmd++**, **Ctrl/Cmd+-**, and **Ctrl/Cmd+0** zoom only the document; toolbar +/− buttons do the same. The file tree exposes only supported files under your system's Documents folder (including an XDG-configured Documents folder). It rejects hidden files, symlinks and `..` paths. Local API requests retain Inkwell's usual authenticated session, origin and host checks.
+
+**Export to PDF** saves a separately named `.export.pdf` alongside the source and leaves the original untouched; exporting an already-PDF file simply reports that it is PDF. **Print** opens a printer selector, first-page preview, page-range, copies, paper size, orientation, color, duplex, scaling and margin options. Printing requires a configured CUPS printer and the system `lp`/`lpstat` tools. DOC/DOCX/ODT/RTF export and printing require LibreOffice; precise layout, print margins and printer-specific options depend on installed fonts, converters, drivers and device capabilities. PDF export for HTML is sanitized before rendering, and text/Markdown export is plain-text PDF (not a typeset Markdown preview). No print job is sent until **Print** is confirmed. A protected PDF prompts for its password; an incorrect password can be selected and retried. Passwords stay in backend memory for up to 30 minutes per unchanged file, not in settings or the Documents folder.
 
 ### PDF tools
 

@@ -1,6 +1,7 @@
 """Validated presentation settings; themes never contain executable CSS or URLs."""
 
 import json
+import re
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
@@ -12,6 +13,18 @@ from . import store
 
 router = APIRouter(prefix="/api/preferences")
 Color = str
+
+
+def validate_folder_colors(value):
+    if value is None:
+        return value
+    if len(value) > 128 or any(
+        not re.fullmatch(r"(?:inbox|archive|sent|drafts|trash|local-[1-9][0-9]*|remote:[1-9][0-9]*)", key)
+        or not re.fullmatch(r"#[0-9a-fA-F]{6}", color)
+        for key, color in value.items()
+    ):
+        raise ValueError("Choose up to 128 folders with valid colors")
+    return value
 
 
 class Theme(BaseModel):
@@ -57,6 +70,8 @@ class Preferences(BaseModel):
     mail_order: Literal["asc", "desc"] = "desc"
     quick_filter_visible: bool = True
     quick_filter_pinned: bool = False
+    folder_colors: dict[str, str] = Field(default_factory=dict)
+    _folder_colors = field_validator("folder_colors")(validate_folder_colors)
 
 
 class WorkspacePatch(BaseModel):
@@ -81,6 +96,8 @@ class WorkspacePatch(BaseModel):
     mail_order: Literal["asc", "desc"] | None = None
     quick_filter_visible: bool | None = None
     quick_filter_pinned: bool | None = None
+    folder_colors: dict[str, str] | None = None
+    _folder_colors = field_validator("folder_colors")(validate_folder_colors)
 
 
 @router.patch("/workspace")

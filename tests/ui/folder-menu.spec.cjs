@@ -78,6 +78,33 @@ test('Keyboard folder menu restores focus, rejects sibling duplicates and suppor
   await expect(page.locator('#subfolder-form')).not.toBeVisible();
   expect((await api(page, '/local-folders')).filter((f) => f.name === prefix)).toHaveLength(1);
 });
+test('Folder menu closes on another folder and color stays after reload', async ({ page }) => {
+  const inbox = '#navigation [data-view="inbox"]:not(.pinned-link)';
+  const archive = '#navigation [data-view="archive"]:not(.pinned-link)';
+  await showSidebar(page, inbox);
+  await page.locator(inbox).click({ button: 'right' });
+  await expect(page.locator('#folder-menu')).toBeVisible();
+  await page.locator(archive).click();
+  await expect(page.locator('#folder-menu')).toBeHidden();
+  await expect(page.locator('#page-title')).toContainText('archive');
+  await showSidebar(page, inbox);
+  await page.locator(inbox).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Folder color…' }).click();
+  await page.locator('#folder-color-form input[name="color"]').fill('#c27439');
+  await page.getByRole('button', { name: 'Apply color' }).click();
+  await expect(page.locator(inbox + ' .folder-icon')).toHaveCSS('color', 'rgb(194, 116, 57)');
+  await expect
+    .poll(async () => (await api(page, '/preferences')).folder_colors.inbox)
+    .toBe('#c27439');
+  await page.reload();
+  await showSidebar(page, inbox);
+  await expect(page.locator(inbox + ' .folder-icon')).toHaveCSS('color', 'rgb(194, 116, 57)');
+  await page.locator(inbox).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Change folder color…' }).click();
+  await page.getByRole('button', { name: 'Use theme color' }).click();
+  await expect(page.locator(inbox + ' .folder-icon')).not.toHaveCSS('color', 'rgb(194, 116, 57)');
+});
+
 test('Server-folder context creates a local child and keeps the server tree outside Inbox summary', async ({
   page,
 }) => {

@@ -1,11 +1,14 @@
 """Read-only provider attachment discovery; opaque, anchor-bound download identifiers."""
 
 import hashlib
+import io
 import json
 import re
 import tempfile
+import textwrap
 import threading
 import time
+import zipfile
 from datetime import datetime, timezone
 from email import policy
 from email.parser import BytesParser
@@ -13,9 +16,12 @@ from email.utils import parsedate_to_datetime
 from urllib.parse import quote, unquote, urlencode, urlsplit
 
 import httpx
+import pymupdf
+from docx import Document
 from fastapi import APIRouter, HTTPException
+from PIL import Image, UnidentifiedImageError
 from starlette.background import BackgroundTask
-from starlette.responses import StreamingResponse
+from starlette.responses import Response, StreamingResponse
 
 from . import mail, microsoft, store
 
@@ -553,8 +559,7 @@ def filename(value):
     return name
 
 
-@router.get("/api/messages/{id}/attachments/{token}/download")
-def download(id: int, token: str):
+def attachment_file(id: int, token: str):
     m, a, state = context(id)
     if not state or not re.fullmatch(r"[a-f0-9]{64}", token):
         raise HTTPException(404, "Attachment not found in this message view")
@@ -602,21 +607,7 @@ def download(id: int, token: str):
         current(id, state)
         size = temp.tell()
         temp.seek(0)
-        name = filename(file["name"])
-        fallback = re.sub(r"[^a-zA-Z0-9._ -]", "_", name) or "attachment"
-        return StreamingResponse(
-            iter(lambda: temp.read(65536), b""),
-            media_type="application/octet-stream",
-            headers={
-                "Content-Length": str(size),
-                "Content-Disposition": f"attachment; filename=\"{fallback}\"; filename*=UTF-8''"
-                + quote(name, safe=""),
-                "X-Content-Type-Options": "nosniff",
-                "Content-Security-Policy": "sandbox; default-src 'none'",
-                "Cache-Control": "no-store",
-            },
-            background=BackgroundTask(temp.close),
-        )
+        return temp, size, filename(file["name"])
     except HTTPException:
         temp.close()
         raise
@@ -626,3 +617,168 @@ def download(id: int, token: str):
             502,
             "Attachment download failed. It may be unavailable on the server; check your connection/account and retry.",
         ) from error
+
+
+@router.get("/api/messages/{id}/attachments/{token}/download")
+def download(id: int, token: str):
+    temp, size, name = attachment_file(id, token)
+    fallback = re.sub(r"[^a-zA-Z0-9._ -]", "_", name) or "attachment"
+    return StreamingResponse(
+        iter(lambda: temp.read(65536), b""),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Length": str(size),
+            "Content-Disposition": f"attachment; filename=\"{fallback}\"; filename*=UTF-8''"
+            + quote(name, safe=""),
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "sandbox; default-src 'none'",
+            "Cache-Control": "no-store",
+        },
+        background=BackgroundTask(temp.close),
+    )
+
+
+def safe_attachment_copy(contents: bytes, name: str):
+    """Provide a passive file of the original type where safe; otherwise a rasterized PDF."""
+    kind = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if kind == "docx":
+        try:
+            with zipfile.ZipFile(io.BytesIO(contents)) as archive:
+                if len(archive.infolist()) > 1000 or sum(info.file_size for info in archive.infolist()) > 25_000_000:
+                    raise HTTPException(413, "Word attachment is too large to open safely")
+            source = Document(io.BytesIO(contents))
+            passive = Document()
+            for paragraph in source.paragraphs:
+                passive.add_paragraph(paragraph.text[:10_000])
+            for table in source.tables:
+                for row in table.rows:
+                    passive.add_paragraph(" | ".join(cell.text[:3000] for cell in row.cells))
+            output = io.BytesIO()
+            passive.save(output)
+            return output.getvalue(), "docx"
+        except (zipfile.BadZipFile, ValueError, KeyError, OSError) as error:
+            raise HTTPException(422, "Word attachment could not be sanitized safely") from error
+    if kind in {"png", "jpg", "jpeg", "gif", "webp", "bmp"}:
+        try:
+            with Image.open(io.BytesIO(contents)) as source:
+                if source.width * source.height > 16_000_000:
+                    raise HTTPException(413, "Image is too large to open safely")
+                passive = source.convert("RGB" if kind in {"jpg", "jpeg", "bmp"} else "RGBA")
+                output = io.BytesIO()
+                format_name = {"jpg": "JPEG", "jpeg": "JPEG", "gif": "GIF"}.get(kind, kind.upper())
+                if kind == "gif":
+                    passive = passive.convert("P", palette=Image.Palette.ADAPTIVE)
+                passive.save(output, format=format_name)
+                return output.getvalue(), kind
+        except (ValueError, OSError, UnidentifiedImageError) as error:
+            raise HTTPException(422, "Image attachment could not be sanitized safely") from error
+    if kind == "txt":
+        if len(contents) > 2_000_000:
+            raise HTTPException(413, "Text attachment is too large to open safely")
+        return contents.decode("utf-8-sig", errors="replace").replace("\x00", "").encode("utf-8"), "txt"
+    return safe_attachment_pdf(contents, name), "pdf"
+
+
+def safe_attachment_pdf(contents: bytes, name: str) -> bytes:
+    """Regenerate passive pages; never embed the source document, links, or scripts."""
+    kind = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    output = pymupdf.open()
+    try:
+        if kind == "pdf":
+            with pymupdf.open(stream=contents, filetype="pdf") as source:
+                if source.needs_pass:
+                    raise HTTPException(422, "Password-protected attachments cannot be previewed safely")
+                if source.page_count > 30:
+                    raise HTTPException(413, "Safe preview is limited to 30 pages")
+                for page in source:
+                    if not page.rect.width or not page.rect.height or page.rect.height / page.rect.width > 10:
+                        raise HTTPException(422, "This PDF page is not safe to preview")
+                    width = min(950 / page.rect.width, (3_000_000 / (page.rect.width * page.rect.height)) ** 0.5)
+                    pixmap = page.get_pixmap(matrix=pymupdf.Matrix(width, width), alpha=False)
+                    rendered = output.new_page(width=pixmap.width, height=pixmap.height)
+                    rendered.insert_image(rendered.rect, stream=pixmap.tobytes("png"))
+        elif kind in {"png", "jpg", "jpeg", "gif", "webp", "bmp"}:
+            with Image.open(io.BytesIO(contents)) as source:
+                if source.width * source.height > 16_000_000:
+                    raise HTTPException(413, "Image is too large to preview safely")
+                image = source.convert("RGB")
+                target = io.BytesIO()
+                image.save(target, format="PNG")
+                page = output.new_page(width=image.width, height=image.height)
+                page.insert_image(page.rect, stream=target.getvalue())
+        elif kind == "docx":
+            if len(contents) > 15_000_000:
+                raise HTTPException(413, "Word attachment is too large to preview safely")
+            with zipfile.ZipFile(io.BytesIO(contents)) as archive:
+                if len(archive.infolist()) > 1000 or sum(info.file_size for info in archive.infolist()) > 25_000_000:
+                    raise HTTPException(413, "Word attachment is too large to preview safely")
+            document = Document(io.BytesIO(contents))
+            text = "\n".join([p.text for p in document.paragraphs] + [cell.text for table in document.tables for row in table.rows for cell in row.cells])
+        elif kind in {"txt", "md", "mdx", "csv", "tsv", "json", "yaml", "yml", "xml", "html", "htm", "rtf", "log", "ini"}:
+            if len(contents) > 2_000_000:
+                raise HTTPException(413, "Text attachment is too large to preview safely")
+            text = contents.decode("utf-8-sig", errors="replace")
+        else:
+            raise HTTPException(415, "This file type has no script-free preview. Download it or open the original only after reviewing the risk")
+        if kind not in {"pdf", "png", "jpg", "jpeg", "gif", "webp", "bmp"}:
+            page = output.new_page(width=595, height=842)
+            y = 50
+            for original in text[:150_000].splitlines():
+                for line in textwrap.wrap(original.expandtabs(4), width=95, replace_whitespace=False, drop_whitespace=False) or [""]:
+                    if y > 800:
+                        if output.page_count >= 30:
+                            raise HTTPException(413, "Safe preview is limited to 30 pages")
+                        page = output.new_page(width=595, height=842)
+                        y = 50
+                    page.insert_text((40, y), line, fontsize=9, fontname="helv")
+                    y += 13
+        if not output.page_count:
+            output.new_page(width=595, height=842)
+        safe = output.tobytes(garbage=4, deflate=True, no_new_id=True)
+        if len(safe) > 25_000_000:
+            raise HTTPException(413, "Safe preview exceeds 25 MB")
+        return safe
+    except HTTPException:
+        raise
+    except (ValueError, OSError, TypeError, zipfile.BadZipFile, pymupdf.FileDataError, UnidentifiedImageError) as error:
+        raise HTTPException(422, "Attachment could not be rendered safely") from error
+    finally:
+        output.close()
+
+
+@router.get("/api/messages/{id}/attachments/{token}/safe-open")
+def safe_open(id: int, token: str):
+    temp, _, name = attachment_file(id, token)
+    try:
+        contents = temp.read()
+    finally:
+        temp.close()
+    content, extension = safe_attachment_copy(contents, name)
+    if len(content) > 25_000_000:
+        raise HTTPException(413, "Safe copy exceeds 25 MB")
+    return Response(content, media_type="application/octet-stream", headers={
+        "Content-Disposition": f'attachment; filename="inkwell-safe-copy.{extension}"',
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "sandbox; default-src 'none'; script-src 'none'",
+        "Cache-Control": "no-store",
+    })
+
+
+@router.get("/api/messages/{id}/attachments/{token}/safe-preview")
+def safe_preview(id: int, token: str):
+    temp, _, name = attachment_file(id, token)
+    try:
+        contents = temp.read()
+    finally:
+        temp.close()
+    safe = safe_attachment_pdf(contents, name)
+    return Response(
+        safe,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": 'inline; filename="inkwell-safe-preview.pdf"',
+            "Content-Security-Policy": "sandbox; default-src 'none'; script-src 'none'",
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store",
+        },
+    )

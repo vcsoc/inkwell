@@ -489,8 +489,10 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
     await expect(window.locator('.message-row .tag-pill')).toHaveText('Desktop tag manager');
     await window.locator('#global-search').fill('');
     await expect(window.locator('.message-row')).toHaveCount(5);
+    await window.locator('#quick-view-button').click();
     await window.locator('#quick-view').selectOption('table');
     await expect(window.locator('.message-table-header')).toBeVisible();
+    await window.locator('#quick-view-button').click();
     await window.locator('#quick-view').selectOption('cards');
     await window.locator('#heading-compose').click();
     await window.locator('[name=subject]').fill('Desktop close autosave');

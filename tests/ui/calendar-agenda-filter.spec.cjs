@@ -58,22 +58,27 @@ test('calendar maximizes the viewport and opens its agenda only when requested',
   await page.screenshot({ path: `test-results/calendar-panel-${info.project.name}.png` });
 });
 
-test('Quick filter icon follows Unread and uses the same tab treatment', async ({ page }) => {
+test('Quick filter icons occupy the first row at the far right and open compact controls', async ({
+  page,
+}) => {
   await page.goto('/#/inbox');
-  const tabs = page.locator('.filter-tabs');
-  const button = tabs.getByRole('button', { name: 'Quick filter' });
-  await expect(button).toHaveClass(/filter-tab/);
+  const unread = page.locator('[data-filter="unread"]');
+  const button = page.getByRole('button', { name: 'Filter and display options' });
+  const filters = page.locator('#quick-filter');
   await expect(button.locator('svg')).toHaveCount(1);
-  await expect(button).toHaveAttribute('title', 'Show or hide quick filters');
-  expect(await button.evaluate((el) => el.previousElementSibling?.dataset.filter)).toBe('unread');
-  const filter = page.locator('#quick-filter');
-  await expect(filter).toBeVisible();
+  await expect(button).toHaveAttribute('title', 'Filter and display options');
+  const tabBox = await unread.boundingBox();
+  const buttonBox = await button.boundingBox();
+  expect(Math.abs(tabBox.y - buttonBox.y)).toBeLessThan(12);
+  expect(buttonBox.x).toBeGreaterThan(tabBox.x + tabBox.width + 15);
+  await expect(page.locator('.quick-action-buttons .quick-icon')).toHaveCount(7);
+  await expect(filters).toBeHidden();
   await button.click();
-  await expect(button).toHaveAttribute('aria-expanded', 'false');
-  await expect(button).not.toHaveClass(/active/);
-  await expect(filter).toBeHidden();
+  await expect(filters).toBeVisible();
+  await expect(page.locator('#quick-sort')).toBeVisible();
   await button.click();
-  await expect(button).toHaveAttribute('aria-expanded', 'true');
-  await expect(button).toHaveClass(/active/);
-  await expect(filter).toBeVisible();
+  await expect(filters).toBeHidden();
+  await expect(page.locator('.quick-action-buttons')).toBeVisible();
+  await button.click();
+  await expect(filters).toBeVisible();
 });

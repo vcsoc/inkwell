@@ -29,6 +29,10 @@ window.InkwellAttachments = (() => {
       busy = false,
       running = false;
     const fetching = new Set();
+    const downloaded = new Set();
+    let previewUrl = null;
+    let activeToken = null;
+    let opening = false;
     const current = () => root.isConnected && isCurrent();
     const reason = (f) =>
       f.cached_only
@@ -88,7 +92,7 @@ window.InkwellAttachments = (() => {
           }),
         );
       const card = (f) =>
-        `<div class="attachment-card ${f.cached_only ? 'attachment-cached' : ''}"><div><strong title="${esc(displayName(f.name))}">${esc(displayName(f.name))}</strong><small>${esc(bytes(f.size))}${f.inline ? ' · Inline' : ''}${f.cached_only ? ' · Cached metadata' : ''}</small>${reason(f) ? `<small class="attachment-note">${esc(reason(f))}</small>` : ''}</div><button type="button" class="secondary" data-attachment-download="${f.id}" aria-label="Download ${esc(displayName(f.name))}" ${!f.downloadable || fetching.has(f.id) ? 'disabled' : ''}>${fetching.has(f.id) ? 'Downloading…' : 'Download'}</button></div>`;
+        `<div class="attachment-card ${f.cached_only ? 'attachment-cached' : ''}"><div><strong title="${esc(displayName(f.name))}">${esc(displayName(f.name))}</strong><small>${esc(bytes(f.size))}${f.inline ? ' · Inline' : ''}${f.cached_only ? ' · Cached metadata' : ''}</small>${reason(f) ? `<small class="attachment-note">${esc(reason(f))}</small>` : ''}</div>${downloaded.has(f.id) ? `<button type="button" class="secondary" data-attachment-open="${f.id}" aria-label="Open ${esc(displayName(f.name))} safely" title="Review script-free opening options">Open…</button>` : ''}<button type="button" class="secondary" data-attachment-download="${f.id}" aria-label="Download ${esc(displayName(f.name))}" ${!f.downloadable || fetching.has(f.id) ? 'disabled' : ''}>${fetching.has(f.id) ? 'Downloading…' : 'Download'}</button></div>`;
       root.innerHTML = `<div class="attachment-heading"><button type="button" class="attachment-counter" data-attachment-info title="${esc(info)}" aria-label="Attachments${data ? ' · ' + count : ''}: details">Attachments${data ? ' · ' + count : ''}</button><button type="button" class="secondary" data-attachment-refresh ${busy || !data?.connected ? 'disabled' : ''}>Refresh attachments</button></div>${!data?.complete || data?.error || data?.warning ? `<p class="attachment-status" role="status">${esc(statusText)}</p>` : ''}${data?.retry_at > Date.now() / 1000 ? `<p>Retry after ${esc(new Date(data.retry_at * 1000).toLocaleTimeString())}.</p>` : ''}<div class="attachment-groups">${groups
         .filter((g) => g.files.length)
         .sort((a, b) => Number(b.selected) - Number(a.selected) || b.date.localeCompare(a.date))
@@ -108,7 +112,7 @@ window.InkwellAttachments = (() => {
         )
         .join(
           '',
-        )}</div>${!busy && data?.connected && !data.complete ? '<button type="button" class="secondary" data-attachment-more>Continue attachment check</button>' : ''}`;
+        )}</div>${!busy && data?.connected && !data.complete ? '<button type="button" class="secondary" data-attachment-more>Continue attachment check</button>' : ''}<dialog class="attachment-open-dialog" id="attachment-open-dialog" aria-labelledby="attachment-open-title"><h3 id="attachment-open-title">Open attachment safely</h3><p><strong id="attachment-open-name"></strong> was downloaded, not opened automatically. Previewing in Inkwell or opening a regenerated safe copy with your default app removes active content. For PDF, images, Word and text, the safe copy retains its file type when possible; other supported types open as passive PDF. The original may contain scripts or macros.</p><div class="attachment-open-actions"><button type="button" data-attachment-preview class="primary">Preview script-free in Inkwell</button><button type="button" data-attachment-system-safe class="secondary">Open safe copy with default app</button></div><div class="attachment-safe-view" hidden><div class="attachment-preview-frame"></div><a class="secondary" id="attachment-safe-download" download="inkwell-safe-preview.pdf">Download safe copy</a></div><p id="attachment-open-error" role="alert" hidden></p><label class="attachment-risk-consent"><input id="attachment-scripts-consent" type="checkbox"> I understand an operating-system app may run scripts or macros in the original file.</label><button type="button" class="secondary" data-attachment-system-original disabled>Open original with scripts enabled…</button><button type="button" class="secondary" data-attachment-close>Close</button></dialog>`;
       root.querySelector('.attachment-groups').scrollTop = scroll;
       root.setAttribute('aria-busy', String(busy));
       if (focused)
@@ -173,6 +177,79 @@ window.InkwellAttachments = (() => {
       }
       if (event.target.closest('[data-attachment-refresh]')) return run(true);
       if (event.target.closest('[data-attachment-more]')) return run(false);
+      const dialog = root.querySelector('#attachment-open-dialog');
+      if (event.target.closest('[data-attachment-close]')) return dialog.close();
+      const openingButton = event.target.closest('[data-attachment-open]');
+      if (openingButton) {
+        activeToken = openingButton.dataset.attachmentOpen;
+        const file = data.groups.flatMap((g) => g.files).find((f) => f.id === activeToken);
+        if (!file || !downloaded.has(activeToken)) return;
+        dialog.querySelector('#attachment-open-name').textContent = displayName(file.name);
+        dialog.querySelector('#attachment-open-error').hidden = true;
+        dialog.querySelector('#attachment-scripts-consent').checked = false;
+        dialog.querySelector('[data-attachment-system-original]').disabled = true;
+        dialog.querySelector('[data-attachment-system-safe]').disabled =
+          !window.inkwellAttachmentOpen;
+        dialog.querySelector('.attachment-safe-view').hidden = true;
+        dialog.showModal();
+        return;
+      }
+      if (
+        event.target.closest(
+          '[data-attachment-preview], [data-attachment-system-safe], [data-attachment-system-original]',
+        )
+      ) {
+        if (opening || !activeToken) return;
+        const selected = activeToken;
+        const errorLabel = dialog.querySelector('#attachment-open-error');
+        errorLabel.hidden = true;
+        opening = true;
+        try {
+          if (event.target.closest('[data-attachment-preview]')) {
+            const response = await fetch(
+              `/api/messages/${message.id}/attachments/${selected}/safe-preview`,
+              { headers: { 'X-Inkwell': '1' } },
+            );
+            if (!response.ok) {
+              const error = await response
+                .json()
+                .catch(() => ({ detail: 'Safe preview unavailable' }));
+              throw Error(error.detail || 'Safe preview unavailable');
+            }
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            previewUrl = URL.createObjectURL(await response.blob());
+            if (!dialog.open || selected !== activeToken) return;
+            dialog.querySelector('.attachment-safe-view').hidden = false;
+            const frame = document.createElement('iframe');
+            frame.title = 'Script-free attachment preview';
+            frame.setAttribute('sandbox', 'allow-same-origin');
+            frame.src = previewUrl;
+            dialog.querySelector('.attachment-preview-frame').replaceChildren(frame);
+            dialog.querySelector('#attachment-safe-download').href = previewUrl;
+          } else if (event.target.closest('[data-attachment-system-safe]')) {
+            if (!window.inkwellAttachmentOpen)
+              throw Error(
+                'Open the safe copy with your default app from the desktop app. The browser can download the safe preview instead.',
+              );
+            await window.inkwellAttachmentOpen.safe(message.id, selected);
+          } else {
+            if (
+              !dialog.querySelector('#attachment-scripts-consent').checked ||
+              !window.inkwellAttachmentOpen
+            )
+              return;
+            await window.inkwellAttachmentOpen.original(message.id, selected);
+          }
+        } catch (error) {
+          if (dialog.open) {
+            errorLabel.textContent = error.message;
+            errorLabel.hidden = false;
+          }
+        } finally {
+          opening = false;
+        }
+        return;
+      }
       const button = event.target.closest('[data-attachment-download]');
       if (!button || button.disabled) return;
       const token = button.dataset.attachmentDownload,
@@ -204,6 +281,7 @@ window.InkwellAttachments = (() => {
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
+        downloaded.add(token);
         toast('Download started: ' + safeName(file.name));
       } catch (error) {
         toast(error.message);
@@ -213,6 +291,24 @@ window.InkwellAttachments = (() => {
         paint();
       }
     };
+    root.addEventListener('change', (event) => {
+      if (event.target.id === 'attachment-scripts-consent') {
+        root.querySelector('[data-attachment-system-original]').disabled =
+          !event.target.checked || !window.inkwellAttachmentOpen;
+      }
+    });
+    root.addEventListener(
+      'close',
+      (event) => {
+        if (event.target.id === 'attachment-open-dialog') {
+          if (previewUrl) URL.revokeObjectURL(previewUrl);
+          previewUrl = null;
+          event.target.querySelector('.attachment-preview-frame').replaceChildren();
+          activeToken = null;
+        }
+      },
+      true,
+    );
     paint();
     try {
       const result = await api(`/messages/${message.id}/attachments`);

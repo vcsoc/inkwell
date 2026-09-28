@@ -27,6 +27,10 @@ contextBridge.exposeInMainWorld('inkwellShortcuts', {
   configure: (values) => ipcRenderer.send('inkwell-configure-shortcuts', values),
   capture: (value) => ipcRenderer.send('inkwell-shortcut-capture', value),
 });
+contextBridge.exposeInMainWorld('inkwellAttachmentOpen', {
+  safe: (id, token) => ipcRenderer.invoke('inkwell-attachment-open-safe', id, token),
+  original: (id, token) => ipcRenderer.invoke('inkwell-attachment-open-original', id, token),
+});
 contextBridge.exposeInMainWorld('inkwellFiles', {
   prepare: (ids) => ipcRenderer.invoke('inkwell-prepare-email-files', ids),
   drag: (token) => ipcRenderer.invoke('inkwell-drag-email-files', token),

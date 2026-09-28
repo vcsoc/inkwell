@@ -185,9 +185,10 @@ function displayName(sender) {
 }
 function timeLabel(date) {
   const d = new Date(date);
-  return d.toDateString() === new Date().toDateString()
-    ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-    : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  if (Number.isNaN(d.getTime())) return '—';
+  const month = d.toLocaleDateString('en-US', { month: 'short' });
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
+  return `${d.getFullYear()}, ${month} ${String(d.getDate()).padStart(2, '0')}, ${weekday}`;
 }
 function localInput(date) {
   const d = new Date(date);
@@ -348,6 +349,21 @@ function remoteTree() {
 }
 let navigationKey = '';
 function paintNavigation() {
+  for (const button of $$(
+    '#navigation .nav-item[data-view], #navigation .nav-item[data-remote-folder]',
+  )) {
+    const key = button.dataset.remoteFolder
+      ? 'remote:' + button.dataset.remoteFolder
+      : button.dataset.view;
+    const color = preferences.folder_colors?.[key];
+    if (color) {
+      button.dataset.folderColor = 'true';
+      button.style.setProperty('--folder-custom-color', color);
+    } else {
+      delete button.dataset.folderColor;
+      button.style.removeProperty('--folder-custom-color');
+    }
+  }
   for (const b of $$('#navigation [data-view]'))
     b.classList.toggle('active', b.dataset.view === state.view);
   for (const b of $$('#navigation [data-remote-folder]')) {
@@ -687,6 +703,29 @@ InkwellFolderMenu(
     toast(pinned ? 'Folder unpinned.' : 'Folder pinned for quick access.');
   },
   (key) => state.pinnedFolders.includes(key),
+  async (selected) => {
+    if (!(await requestModalClose())) return;
+    const previous = preferences.folder_colors?.[selected.key];
+    modal(
+      'Folder color',
+      `<form id="folder-color-form"><p>Choose a color for <strong>${esc(selected.name)}</strong>. Only this folder's appearance changes; no mail moves.</p><label class="field">Color<input type="color" name="color" value="${esc(previous || preferences.theme?.accent || '#486b54')}" aria-label="Folder color"></label><div class="form-actions"><button type="button" class="secondary" id="folder-color-reset">Use theme color</button><button class="primary" type="submit">Apply color</button></div></form>`,
+    );
+    const form = $('#folder-color-form');
+    const update = async (value) => {
+      const colors = { ...(preferences.folder_colors || {}) };
+      if (value) colors[selected.key] = value;
+      else delete colors[selected.key];
+      saveWorkspace({ folder_colors: colors });
+      paintNavigation();
+      await requestModalClose();
+    };
+    form.onsubmit = (event) => {
+      event.preventDefault();
+      void update(form.elements.color.value);
+    };
+    $('#folder-color-reset').onclick = () => void update(null);
+  },
+  (key) => preferences.folder_colors?.[key] || '',
 );
 async function refreshCounts() {
   const [counts, accounts, remoteFolders, localFolders, pinnedFolders] = await Promise.all([
@@ -2148,6 +2187,8 @@ window.InkwellFocusQuickFilter = () => {
   if ($('#modal').open) return;
   const quick = $('#quick-filter');
   if (quick) {
+    $('.quick-action-buttons').hidden = false;
+    quick.querySelectorAll('[data-quick-pane]').forEach((pane) => (pane.hidden = false));
     quick.hidden = false;
     $('#quick-filter-toggle').setAttribute('aria-expanded', 'true');
     saveWorkspace({ quick_filter_visible: true });

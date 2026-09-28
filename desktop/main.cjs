@@ -136,6 +136,8 @@ async function launch() {
     iconPath: path.join(root, 'inkwell/static/icon-512.png'),
   });
   app.once('will-quit', cleanupExports);
+  const cleanupAttachmentOpens = require('./attachment-open.cjs')(window, { origin, cookie });
+  app.once('will-quit', cleanupAttachmentOpens);
   require('./calendar-reminders.cjs')(window, origin, { Notification });
   calendarFiles.attach(window, origin, ipcMain);
   const osShortcut = require('./os-shortcut.cjs')({ home: app.getPath('home') });

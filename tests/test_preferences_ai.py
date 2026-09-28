@@ -33,6 +33,17 @@ def test_preferences_roundtrip_and_validation(client):
     assert client.get("/api/preferences").json() == prefs
 
 
+def test_folder_colors_are_persistent_and_css_safe(client):
+    colors = {"inbox": "#aabbcc", "remote:72": "#ff0000", "local-12": "#778899"}
+    result = client.patch("/api/preferences/workspace", json={"folder_colors": colors})
+    assert result.status_code == 200 and result.json()["folder_colors"] == colors
+    assert client.get("/api/preferences").json()["folder_colors"] == colors
+    for bad in ({"inbox": "url(https://evil.test)"}, {"calendar": "#123456"}, {"__proto__": "#112233"}, {"remote:72": "red"}):
+        assert client.patch("/api/preferences/workspace", json={"folder_colors": bad}).status_code == 422
+    assert client.get("/api/preferences").json()["folder_colors"] == colors
+    assert client.patch("/api/preferences/workspace", json={"folder_colors": {}}).status_code == 200
+
+
 def test_saved_theme_library_and_active_theme_are_independent(client):
     initial = client.get('/api/preferences/themes').json()
     assert len(initial) == 1 and initial[0]['name'] == 'Sage'

@@ -126,3 +126,15 @@
   grid-column: auto;
   grid-row: auto;
 }
+@media (max-width: 600px) {
+  .message-list:not([data-mail-view='table']) .message-top {
+    flex-wrap: wrap;
+    gap: 0;
+  }
+  .message-list:not([data-mail-view='table']) .message-top .sender-wrap {
+    flex-basis: 100%;
+  }
+  .message-list:not([data-mail-view='table']) .message-date {
+    margin-left: auto;
+  }
+}

@@ -1,6 +1,12 @@
 .sidebar {
   overflow: hidden;
 }
+#navigation .nav-item[data-folder-color] .folder-icon {
+  color: var(--folder-custom-color);
+}
+#navigation .nav-item[data-folder-color] {
+  border-left: 2px solid var(--folder-custom-color);
+}
 #navigation .folder-icon {
   width: 16px;
   height: 16px;

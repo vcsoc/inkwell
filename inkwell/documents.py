@@ -9,6 +9,9 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
+import time
+import textwrap
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
@@ -42,6 +45,9 @@ MAX_IMAGE = 5_000_000
 HTML_TAGS = {"p", "div", "br", "strong", "b", "em", "i", "u", "s", "strike", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "code", "ul", "ol", "li", "table", "thead", "tbody", "tr", "td", "th", "a", "img", "font", "span", "hr", "sub", "sup"}
 HTML_ATTRS = {"a": {"href", "title"}, "img": {"src", "alt", "width", "height"}, "font": {"color", "size", "face"}, "td": {"colspan", "rowspan"}, "th": {"colspan", "rowspan"}, "p": {"align"}, "div": {"align"}, "h1": {"align"}, "h2": {"align"}, "h3": {"align"}}
 IMAGE_URL = re.compile(r"^data:image/(png|jpeg|webp|gif);base64,([A-Za-z0-9+/=]+)$", re.I)
+PDF_PASSWORDS = {}
+PDF_PASSWORD_LOCK = threading.Lock()
+PDF_PASSWORD_TTL = 30 * 60
 
 
 def root():
@@ -103,6 +109,28 @@ def check_file(path):
 def revision(file):
     stat = file.stat()
     return f"{stat.st_mtime_ns}:{stat.st_size}"
+
+
+def unlock_pdf(document, file, password=None):
+    """Keep a successful password in process memory only, keyed to the current file revision."""
+    if not document.needs_pass:
+        return
+    key = (relative(file), revision(file))
+    if password is None:
+        with PDF_PASSWORD_LOCK:
+            cached = PDF_PASSWORDS.get(key)
+            password = cached[0] if cached and cached[1] > time.monotonic() else None
+            if cached and password is None:
+                PDF_PASSWORDS.pop(key, None)
+    if password is None:
+        raise HTTPException(423, "Document password required")
+    if not document.authenticate(password):
+        raise HTTPException(401, "Incorrect document password")
+    with PDF_PASSWORD_LOCK:
+        PDF_PASSWORDS[key] = (password, time.monotonic() + PDF_PASSWORD_TTL)
+        if len(PDF_PASSWORDS) > 100:
+            for stale in list(PDF_PASSWORDS)[:50]:
+                PDF_PASSWORDS.pop(stale, None)
 
 
 def recent():
@@ -346,7 +374,7 @@ def office_convert(source, suffix):
             raise HTTPException(504, "Document conversion timed out") from None
 
 
-def atomic_write(path, data):
+def atomic_write(path, data, *, exclusive=False):
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".inkwell-", delete=False) as output:
         temp = Path(output.name)
@@ -357,7 +385,15 @@ def atomic_write(path, data):
             temp.unlink(missing_ok=True)
             raise
     try:
-        temp.replace(path)
+        if exclusive:
+            # Linking a complete temp file publishes it without replacing a user file,
+            # including one created between choosing the name and writing the output.
+            try:
+                os.link(temp, path)
+            except FileExistsError:
+                raise HTTPException(409, "An output file already has that name; retry") from None
+        else:
+            temp.replace(path)
     finally:
         temp.unlink(missing_ok=True)
 
@@ -366,7 +402,7 @@ def output_path(source, label):
     base = source.with_name(source.stem + "." + label + source.suffix)
     candidate = base
     number = 2
-    while candidate.exists():
+    while candidate.exists() or candidate.is_symlink():
         candidate = source.with_name(f"{source.stem}.{label}-{number}{source.suffix}")
         number += 1
     return candidate
@@ -381,7 +417,7 @@ def tree(path: str = ""):
             if child.name.startswith(".") or child.is_symlink() or not (child.is_dir() or child.suffix.lower() in FORMATS):
                 continue
             stat = child.stat()
-            children.append({"name": child.name, "path": relative(child), "directory": child.is_dir(), "size": stat.st_size if child.is_file() else None})
+            children.append({"name": child.name, "path": relative(child), "directory": child.is_dir(), "size": stat.st_size if child.is_file() else None, "modified": stat.st_mtime_ns})
             if len(children) >= 2000:
                 break
     except PermissionError:
@@ -390,21 +426,86 @@ def tree(path: str = ""):
     return {"name": folder.name, "path": relative(folder), "children": children}
 
 
+@router.get("/search")
+def search_documents(q: str = Query(min_length=1, max_length=120)):
+    """Search only visible names beneath Documents; never follow hidden folders or symlinks."""
+    matches = []
+    scanned = 0
+    needle = q.casefold()
+    for folder, directories, files in os.walk(root(), followlinks=False):
+        directories[:] = [name for name in directories if not name.startswith(".") and not (Path(folder) / name).is_symlink()]
+        for name in [*directories, *files]:
+            scanned += 1
+            if scanned > 30_000 or len(matches) >= 200:
+                break
+            path = Path(folder) / name
+            if name.startswith(".") or path.is_symlink() or (path.is_file() and path.suffix.lower() not in FORMATS) or needle not in name.casefold():
+                continue
+            matches.append({"name": name, "path": relative(path), "directory": path.is_dir(), "modified": path.stat().st_mtime_ns})
+        if scanned > 30_000 or len(matches) >= 200:
+            break
+    return sorted(matches, key=lambda item: (not item["directory"], item["name"].casefold()))
+
+
+class MoveItem(BaseModel):
+    path: str
+    destination: str = ""
+
+
+@router.post("/move")
+def move_document(data: MoveItem):
+    source = resolve(data.path)
+    folder = resolve(data.destination, expect="dir")
+    if source == root() or not source.exists() or source.is_symlink() or source.name.startswith("."):
+        raise HTTPException(404, "Document or folder not found")
+    if source.is_file() and source.suffix.lower() not in FORMATS:
+        raise HTTPException(415, "This file type cannot be moved here")
+    if source.is_dir() and folder.is_relative_to(source):
+        raise HTTPException(422, "A folder cannot be moved into itself or a descendant")
+    target = folder / source.name
+    if target == source:
+        return {"path": relative(source), "unchanged": True}
+    if target.exists() or target.is_symlink():
+        raise HTTPException(409, "A file or folder already has that name")
+    old_path = relative(source)
+    previous = [item["path"] for item in recent()]
+    try:
+        source.rename(target)
+    except OSError as error:
+        raise HTTPException(422, "Could not move this item between these folders") from error
+    updated = [relative(target) + path[len(old_path):] if path == old_path or path.startswith(old_path + "/") else path for path in previous]
+    store.set_setting("recent_documents", json.dumps(updated[:12]))
+    return {"path": relative(target), "old_path": old_path}
+
+
 @router.get("/recent")
 def list_recent():
     return recent()
 
 
+class UnlockDocument(BaseModel):
+    path: str
+    password: str = Field(max_length=1024)
+
+
+@router.post("/unlock")
+def unlock_document(data: UnlockDocument):
+    return read_document(data.path, data.password)
+
+
 @router.get("/open")
 def open_document(path: str):
+    return read_document(path)
+
+
+def read_document(path, password=None):
     file = check_file(path)
     kind = file.suffix.lower()
     result = {"path": relative(file), "name": file.name, "revision": revision(file), "kind": kind[1:]}
     if kind == ".pdf":
         try:
             with pymupdf.open(file) as document:
-                if document.is_encrypted:
-                    raise HTTPException(422, "Unlock encrypted PDFs before editing")
+                unlock_pdf(document, file, password)
                 result.update(mode="pdf", pages=[{"width": round(p.rect.width, 2), "height": round(p.rect.height, 2)} for p in document])
         except (pymupdf.FileDataError, pymupdf.EmptyFileError):
             raise HTTPException(422, "Invalid PDF") from None
@@ -436,8 +537,9 @@ def pdf_page(path: str, page: int = 0, width: int = Query(900, ge=100, le=1800))
         raise HTTPException(415, "Page previews require a PDF")
     try:
         with pymupdf.open(file) as document:
-            if document.is_encrypted or page < 0 or page >= len(document):
-                raise HTTPException(422, "Invalid or encrypted PDF page")
+            unlock_pdf(document, file)
+            if page < 0 or page >= len(document):
+                raise HTTPException(422, "Invalid PDF page")
             target = document[page]
             if target.rect.width <= 0 or target.rect.height <= 0 or width * width * target.rect.height / target.rect.width > 8_000_000:
                 raise HTTPException(413, "PDF page is too large to preview safely")
@@ -592,8 +694,7 @@ def edit_pdf(data: PdfOperation):
         raise HTTPException(422, "Unknown PDF action")
     try:
         with pymupdf.open(file) as document:
-            if document.is_encrypted:
-                raise HTTPException(422, "Unlock encrypted PDFs before editing")
+            unlock_pdf(document, file)
             if data.action == "compress":
                 # Re-encode oversized images, remove unused objects and compress streams.
                 document.rewrite_images(dpi_threshold=180, dpi_target=144, quality=68)
@@ -620,7 +721,7 @@ def edit_pdf(data: PdfOperation):
     if data.action == "compress" and len(output) >= file.stat().st_size:
         return {"path": relative(file), "saved_bytes": 0, "message": "The PDF is already as small as this compression can make it"}
     result = output_path(file, {"signature": "signed-image", "image": "image", "redact": "redacted", "text": "annotated", "compress": "compressed"}[data.action])
-    atomic_write(result, output)
+    atomic_write(result, output, exclusive=True)
     touch_recent(relative(result))
     return {"path": relative(result), "saved_bytes": file.stat().st_size - len(output) if data.action == "compress" else 0}
 
@@ -650,7 +751,10 @@ def sign_pdf(data: DigitalSignature):
         if signer is None:
             raise ValueError("Cannot read certificate")
         with pymupdf.open(file) as document:
-            if document.is_encrypted or data.page < 0 or data.page >= len(document):
+            unlock_pdf(document, file)
+            if document.needs_pass:
+                raise HTTPException(422, "Digital signing encrypted PDFs is not yet supported")
+            if data.page < 0 or data.page >= len(document):
                 raise ValueError("Invalid PDF page")
             page = document[data.page]
             selected = pdf_rect(page, data.rect) if data.rect else pymupdf.Rect(page.rect.width - 220, page.rect.height - 95, page.rect.width - 20, page.rect.height - 25)
@@ -660,7 +764,7 @@ def sign_pdf(data: DigitalSignature):
         destination = io.BytesIO()
         signers.sign_pdf(writer, signature_meta=signers.PdfSignatureMetadata(field_name=field), signer=signer, new_field_spec=fields.SigFieldSpec(sig_field_name=field, on_page=data.page, box=box), output=destination)
         result = output_path(file, "digitally-signed")
-        atomic_write(result, destination.getvalue())
+        atomic_write(result, destination.getvalue(), exclusive=True)
         touch_recent(relative(result))
         return {"path": relative(result)}
     except HTTPException:
@@ -677,6 +781,149 @@ class MarkdownPreview(BaseModel):
 def preview_markdown(data: MarkdownPreview):
     rendered = MarkdownIt("commonmark", {"html": False}).render(data.content)
     return {"html": sanitize(rendered)}
+
+
+def pdf_content(file):
+    """Produce a printable PDF, retaining office layout when LibreOffice is available."""
+    kind = file.suffix.lower()
+    if kind == ".pdf":
+        with pymupdf.open(file) as document:
+            unlock_pdf(document, file)
+            return document.tobytes(encryption=pymupdf.PDF_ENCRYPT_NONE) if document.needs_pass else file.read_bytes()
+    if kind in RICH_EXT and (shutil.which("libreoffice") or shutil.which("soffice")):
+        converted = office_convert(file, ".pdf")
+        if len(converted) > MAX_FILE:
+            raise HTTPException(413, "PDF export exceeds 40 MB")
+        return converted
+    if kind == ".docx":
+        document = Document(str(file))
+        text = "\n".join([paragraph.text for paragraph in document.paragraphs] + [" | ".join(cell.text for cell in row.cells) for table in document.tables for row in table.rows])
+    elif kind in (".doc", ".odt", ".rtf"):
+        raise HTTPException(503, "Install LibreOffice to export this legacy document as PDF")
+    else:
+        try:
+            text = file.read_text(encoding="utf-8-sig")
+            if kind in (".html", ".htm"):
+                cleaned = sanitize(text)
+                text = lxml_html.fromstring(cleaned).text_content() if cleaned.strip() else ""
+        except (UnicodeError, ValueError):
+            raise HTTPException(422, "Text documents must be UTF-8") from None
+    if kind in (".md", ".mdx"):
+        rendered = MarkdownIt("commonmark", {"html": False}).render(text)
+        text = lxml_html.fromstring(rendered).text_content() if rendered.strip() else ""
+    pdf = pymupdf.open()
+    page = pdf.new_page(width=595, height=842)
+    y = 52
+    for original in text.splitlines():
+        for line in textwrap.wrap(original.expandtabs(4), width=92, replace_whitespace=False, drop_whitespace=False) or [""]:
+            if y > 800:
+                page = pdf.new_page(width=595, height=842)
+                y = 52
+            page.insert_text((42, y), line, fontsize=10, fontname="helv")
+            y += 15
+    result = pdf.tobytes(garbage=3, deflate=True)
+    pdf.close()
+    if len(result) > MAX_FILE:
+        raise HTTPException(413, "PDF export exceeds 40 MB")
+    return result
+
+
+class DocumentPath(BaseModel):
+    path: str
+
+
+@router.post("/export-pdf")
+def export_pdf(data: DocumentPath):
+    source = check_file(data.path)
+    if source.suffix.lower() == ".pdf":
+        return {"path": relative(source), "message": "This document is already a PDF"}
+    output = pdf_content(source)
+    target = source.with_name(source.stem + ".export.pdf")
+    index = 2
+    while target.exists() or target.is_symlink():
+        target = source.with_name(f"{source.stem}.export-{index}.pdf")
+        index += 1
+    atomic_write(target, output, exclusive=True)
+    touch_recent(relative(target))
+    return {"path": relative(target)}
+
+
+@router.get("/print-preview")
+def print_preview(path: str):
+    output = pdf_content(check_file(path))
+    with pymupdf.open(stream=output, filetype="pdf") as document:
+        if not len(document):
+            raise HTTPException(422, "Document has no printable pages")
+        page = document[0]
+        width = 500
+        if page.rect.width <= 0 or width * width * page.rect.height / page.rect.width > 5_000_000:
+            raise HTTPException(413, "Page is too large to preview")
+        pixmap = page.get_pixmap(matrix=pymupdf.Matrix(width / page.rect.width, width / page.rect.width), alpha=False)
+        return Response(pixmap.tobytes("png"), media_type="image/png", headers={"Cache-Control": "no-store"})
+
+
+def available_printers():
+    if not shutil.which("lpstat"):
+        return [], None
+    try:
+        status = subprocess.run(["lpstat", "-p", "-d"], capture_output=True, text=True, timeout=4)
+    except (OSError, subprocess.TimeoutExpired):
+        return [], None
+    names = re.findall(r"^printer ([A-Za-z0-9_.-]{1,128}) ", status.stdout, re.M)
+    default = re.search(r"^system default destination: ([A-Za-z0-9_.-]{1,128})$", status.stdout, re.M)
+    return names, default.group(1) if default else None
+
+
+@router.get("/printers")
+def list_printers():
+    names, default = available_printers()
+    return {"printers": names, "default": default}
+
+
+class PrintOptions(BaseModel):
+    path: str
+    printer: str
+    copies: int = Field(default=1, ge=1, le=99)
+    pages: str = Field(default="", max_length=120)
+    paper: str = "A4"
+    orientation: str = "portrait"
+    color: str = "color"
+    duplex: str = "none"
+    scaling: str = "fit"
+    margins: str = "default"
+
+
+@router.post("/print")
+def print_document(data: PrintOptions):
+    if not shutil.which("lp"):
+        raise HTTPException(503, "CUPS printing is not available on this system")
+    printers, _ = available_printers()
+    if data.printer not in printers:
+        raise HTTPException(422, "Choose an available printer")
+    if data.paper not in {"A4", "Letter", "Legal"} or data.orientation not in {"portrait", "landscape"} or data.color not in {"color", "monochrome"} or data.duplex not in {"none", "long", "short"} or data.scaling not in {"fit", "actual"} or data.margins not in {"default", "narrow", "none"}:
+        raise HTTPException(422, "Choose supported print settings")
+    if data.pages and not re.fullmatch(r"[1-9][0-9]*(?:-[1-9][0-9]*)?(?:,[1-9][0-9]*(?:-[1-9][0-9]*)?)*", data.pages):
+        raise HTTPException(422, "Use page numbers like 1-3,5")
+    output = pdf_content(check_file(data.path))
+    args = ["lp", "-d", data.printer, "-n", str(data.copies), "-o", f"media={data.paper}", "-o", f"orientation-requested={4 if data.orientation == 'landscape' else 3}", "-o", f"print-color-mode={data.color}", "-o", f"sides={'two-sided-long-edge' if data.duplex == 'long' else 'two-sided-short-edge' if data.duplex == 'short' else 'one-sided'}"]
+    if data.pages:
+        args.extend(["-o", "page-ranges=" + data.pages])
+    if data.scaling == "fit":
+        args.extend(["-o", "fit-to-page"])
+    if data.margins != "default":
+        margin = 0 if data.margins == "none" else 18
+        for side in ("left", "right", "top", "bottom"):
+            args.extend(["-o", f"page-{side}={margin}"])
+    with tempfile.NamedTemporaryFile(dir=root(), prefix=".inkwell-print-", suffix=".pdf") as temporary:
+        temporary.write(output)
+        temporary.flush()
+        try:
+            result = subprocess.run([*args, temporary.name], capture_output=True, text=True, timeout=25)
+        except (OSError, subprocess.TimeoutExpired):
+            raise HTTPException(503, "Could not contact the printer") from None
+    if result.returncode:
+        raise HTTPException(502, "Printer rejected this job; check its status and settings")
+    return {"message": result.stdout.strip()[:240] or "Print job submitted"}
 
 
 @router.get("/download")
