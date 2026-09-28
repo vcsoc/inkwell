@@ -240,7 +240,12 @@ def inline_html(paragraph, part):
             except OSError:
                 continue
             if media in ("image/png", "image/jpeg", "image/gif", "image/webp"):
-                fragments.append(f'<img src="data:{media};base64,{base64.b64encode(data).decode()}" alt="Embedded image" width="480">')
+                extent = run.element.xpath(".//wp:extent")
+                try:
+                    width = min(720, max(40, round(int(extent[0].get("cx")) * 96 / 914400))) if extent else 480
+                except (TypeError, ValueError):
+                    width = 480
+                fragments.append(f'<img src="data:{media};base64,{base64.b64encode(data).decode()}" alt="Embedded image" width="{width}">')
     return "".join(fragments)
 
 
@@ -737,6 +742,7 @@ class PdfOperation(BaseModel):
     rect: list[float] | None = None
     image: str | None = None
     text: str | None = Field(default=None, max_length=5000)
+    font_size: int = Field(default=12, ge=6, le=32)
 
 
 def pdf_rect(page, rect):
@@ -753,7 +759,7 @@ def edit_pdf(data: PdfOperation):
     file = check_file(data.path)
     if file.suffix.lower() != ".pdf":
         raise HTTPException(415, "PDF tools require a PDF document")
-    if data.action not in {"redact", "image", "signature", "text", "compress"}:
+    if data.action not in {"redact", "image", "signature", "text", "replace_text", "compress"}:
         raise HTTPException(422, "Unknown PDF action")
     try:
         with pymupdf.open(file) as document:
@@ -773,17 +779,21 @@ def edit_pdf(data: PdfOperation):
                 elif data.action in ("image", "signature"):
                     image = image_bytes(data.image)
                     page.insert_image(rect, stream=image, keep_proportion=True)
-                elif data.action == "text":
+                elif data.action in ("text", "replace_text"):
                     if not data.text or not data.text.strip():
                         raise HTTPException(422, "Enter text to place")
-                    if page.insert_textbox(rect, data.text, fontsize=12, fontname="helv") < 0:
+                    if data.action == "replace_text":
+                        # Permanently remove covered text in the NEW copy before inserting the replacement.
+                        page.add_redact_annot(rect, fill=(1, 1, 1))
+                        page.apply_redactions(images=0, graphics=0, text=0)
+                    if page.insert_textbox(rect, data.text, fontsize=data.font_size, fontname="helv") < 0:
                         raise HTTPException(422, "The selected area is too small for this text")
             output = document.tobytes(garbage=4, deflate=True, deflate_images=True, deflate_fonts=True, clean=True)
     except (pymupdf.FileDataError, pymupdf.EmptyFileError):
         raise HTTPException(422, "Invalid PDF") from None
     if data.action == "compress" and len(output) >= file.stat().st_size:
         return {"path": relative(file), "saved_bytes": 0, "message": "The PDF is already as small as this compression can make it"}
-    result = output_path(file, {"signature": "signed-image", "image": "image", "redact": "redacted", "text": "annotated", "compress": "compressed"}[data.action])
+    result = output_path(file, {"signature": "signed-image", "image": "image", "redact": "redacted", "text": "annotated", "replace_text": "replaced-text", "compress": "compressed"}[data.action])
     atomic_write(result, output, exclusive=True)
     touch_recent(relative(result))
     return {"path": relative(result), "saved_bytes": file.stat().st_size - len(output) if data.action == "compress" else 0}

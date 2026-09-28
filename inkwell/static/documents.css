@@ -513,8 +513,25 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
 .doc-ribbon-title #doc-download {
   order: 7;
 }
+.doc-ribbon:has(#doc-pdf-tools:not([hidden])) {
+  flex-wrap: wrap;
+}
 .doc-ribbon:has(#doc-pdf-tools:not([hidden])) :is(#doc-save, .doc-line-toggle) {
   display: none;
+}
+.doc-ribbon:has(#doc-pdf-tools:not([hidden])) #doc-status {
+  display: block;
+  order: 21;
+  flex: 1 0 100%;
+  max-width: none;
+}
+.doc-ribbon:has(#doc-pdf-tools:not([hidden])) .doc-ribbon-title strong {
+  flex: 1 1 80px;
+}
+.doc-ribbon:has(#doc-pdf-tools:not([hidden])) #doc-pdf-tools {
+  order: 20;
+  flex: 1 0 100%;
+  scrollbar-width: thin;
 }
 .doc-zoom-controls {
   order: 8;
@@ -807,6 +824,12 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
   background: var(--surface);
   overflow-wrap: anywhere;
 }
+.doc-pdf-help {
+  max-width: 850px;
+  margin: 0 auto 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
 .doc-pdf-paper {
   position: relative;
   border: 0;
@@ -831,10 +854,35 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
   background: color-mix(in srgb, var(--accent) 24%, transparent);
   pointer-events: none;
 }
+.doc-selection-preview {
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  pointer-events: auto;
+  cursor: move;
+}
+.doc-pdf-paper .doc-selection-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.doc-selection-resize {
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--surface);
+  border-radius: 5px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--ink);
+  cursor: nwse-resize;
+  touch-action: none;
+}
 #doc-sign-dialog,
 #doc-password-dialog,
 #doc-print-dialog,
-#doc-create-dialog {
+#doc-create-dialog,
+#doc-pdf-text-dialog {
   width: min(650px, calc(100vw - 25px));
   max-height: 90dvh;
   overflow: auto;
@@ -847,7 +895,8 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
 #doc-sign-dialog::backdrop,
 #doc-password-dialog::backdrop,
 #doc-print-dialog::backdrop,
-#doc-create-dialog::backdrop {
+#doc-create-dialog::backdrop,
+#doc-pdf-text-dialog::backdrop {
   background: #0008;
 }
 #doc-sign-dialog h2 {
@@ -887,12 +936,14 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
   touch-action: none;
 }
 #doc-password-dialog,
-#doc-create-dialog {
+#doc-create-dialog,
+#doc-pdf-text-dialog {
   width: min(400px, calc(100vw - 25px));
 }
 #doc-password-dialog h2,
 #doc-print-dialog h2,
-#doc-create-dialog h2 {
+#doc-create-dialog h2,
+#doc-pdf-text-dialog h2 {
   margin: 0 0 10px;
   font-size: 20px;
 }
@@ -903,6 +954,7 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
 }
 #doc-password-dialog input,
 #doc-create-name,
+#doc-pdf-text-dialog :is(textarea, input),
 .doc-print-fields :is(input, select) {
   display: block;
   width: 100%;
@@ -915,16 +967,25 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
   background: var(--surface);
 }
 #doc-password-error,
-#doc-create-error {
+#doc-create-error,
+#doc-pdf-text-error {
   color: var(--danger, #d85d57);
 }
 #doc-password-error[hidden],
-#doc-create-error[hidden] {
+#doc-create-error[hidden],
+#doc-pdf-text-error[hidden] {
   display: none;
 }
-#doc-create-label {
+#doc-create-label,
+#doc-pdf-text-dialog label {
   display: block;
   margin-top: 12px;
+}
+#doc-pdf-text-dialog p {
+  line-height: 1.4;
+}
+#doc-pdf-text-value {
+  resize: vertical;
 }
 .doc-dialog-actions {
   display: flex;

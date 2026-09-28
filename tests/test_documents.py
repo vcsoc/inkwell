@@ -91,11 +91,44 @@ def test_pdf_image_signature_placement_and_compression(docs):
         result = client.post("/api/documents/pdf", json={"path": "original.pdf", "action": action, "page": 0, "rect": [30, 30, 230, 130], "image": payload})
         assert result.status_code == 200, result.text
         with pymupdf.open(folder / result.json()["path"]) as saved:
-            assert saved[0].get_images()
+            images = saved[0].get_images()
+            assert images
+            first = saved[0].get_image_rects(images[0][0])[0]
+            assert first.x0 >= 30 and first.x1 <= 230
+    moved = client.post("/api/documents/pdf", json={"path": "original.pdf", "action": "signature", "page": 0, "rect": [210, 240, 330, 295], "image": payload})
+    assert moved.status_code == 200, moved.text
+    with pymupdf.open(folder / moved.json()["path"]) as saved:
+        changed = saved[0].get_image_rects(saved[0].get_images()[0][0])[0]
+        assert changed.x0 > first.x0 + 100 and changed.width < first.width
+    with pymupdf.open(folder / "original.pdf") as original:
+        assert not original[0].get_images()
     result = client.post("/api/documents/pdf", json={"path": "original.pdf", "action": "compress"})
     assert result.status_code == 200
     assert result.json()["path"] == "original.pdf" or result.json()["path"].endswith(".compressed.pdf")
     assert client.post("/api/documents/pdf", json={"path": "original.pdf", "action": "image", "rect": [0, 0, 100, 100], "image": "data:image/svg+xml;base64,PHN2Zz4="}).status_code == 422
+
+
+def test_pdf_text_add_and_replace_preserve_original(docs):
+    client, folder = docs
+    pdf = pymupdf.open()
+    page = pdf.new_page()
+    page.insert_text((60, 80), "OLD VALUE")
+    original = pdf.tobytes()
+    (folder / "edit.pdf").write_bytes(original)
+    pdf.close()
+    request = {"path": "edit.pdf", "page": 0, "rect": [50, 55, 280, 120], "font_size": 16}
+    added = client.post("/api/documents/pdf", json={**request, "action": "text", "text": "NEW NOTE"})
+    assert added.status_code == 200, added.text
+    with pymupdf.open(folder / added.json()["path"]) as result:
+        assert "OLD VALUE" in result[0].get_text() and "NEW NOTE" in result[0].get_text()
+    replaced = client.post("/api/documents/pdf", json={**request, "action": "replace_text", "text": "UPDATED"})
+    assert replaced.status_code == 200, replaced.text
+    with pymupdf.open(folder / replaced.json()["path"]) as result:
+        assert "OLD VALUE" not in result[0].get_text()
+        assert "UPDATED" in result[0].get_text()
+    assert (folder / "edit.pdf").read_bytes() == original
+    assert client.post("/api/documents/pdf", json={**request, "action": "replace_text", "text": "X", "font_size": 4}).status_code == 422
+    assert client.post("/api/documents/pdf", json={**request, "action": "text", "text": " "}).status_code == 422
 
 
 def test_docx_table_and_text_formatting_round_trip(docs):
@@ -128,6 +161,7 @@ def test_rich_image_font_and_unsafe_html_attributes(docs):
     reopened = client.get("/api/documents/open", params={"path": "image.docx"}).json()["content"]
     assert "Styled" in reopened and "<s>" in reopened and "data:image/png;base64" in reopened
     assert "color=\"#345678\"" in reopened and "face=\"Georgia\"" in reopened
+    assert 'width="200"' in reopened
     assert (folder / "image.docx").stat().st_size > 0
     insecure = client.post("/api/documents/preview", json={"content": "<img src=\"https://evil.test/i.png\"><a href='javascript:alert(1)'>Bad</a><script>alert(1)</script>"})
     assert insecure.status_code == 200

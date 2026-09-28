@@ -226,6 +226,80 @@ test('PDF page previews, permanent redaction and image signatures save separate 
   await expect(page.locator('#doc-status')).toContainText(/already as small|Saved|new PDF copy/i);
 });
 
+test('PDF text editing and staged image/signature placement work without browser prompts', async ({
+  page,
+}, info) => {
+  const name = `pdf-tools-${info.project.name}-${Date.now()}.pdf`;
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAACAAAAAQCAYAAAB3AH1ZAAAAlElEQVR4nN2USw6AIAxEoRdw49r7n4s1G06gK4yBTj+kJsbZkFhm+qDElP6qbT/O54pEUUGSR/KKAJ4gK5QZYLWZ18cCSCGrNVSfACJP3mrJ2j71EbZa8hhkgeweDYJQAZm5vZpPyrkBtFOhEOvI0C1mFLLa0HprXeRprknzcaMhz7ykuhV6fJzEfXxbIX0ifs+f0AVXmW9Yksy07AAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  const drawArea = async () => {
+    const box = await page.locator('#doc-pdf-overlay').boundingBox();
+    await page.mouse.move(box.x + 20, box.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(box.x + Math.min(185, box.width - 20), box.y + 95, { steps: 5 });
+    await page.mouse.up();
+  };
+  await page.goto('/#/documents');
+  await revealTree(page);
+  await createItem(page, 'file', name);
+  const original = await (await page.request.get('/api/documents/download?path=' + name)).body();
+  await page.getByRole('button', { name: 'Add text', exact: true }).click();
+  await drawArea();
+  await page.locator('#doc-pdf-apply').click();
+  await expect(page.locator('#doc-pdf-text-dialog')).toBeVisible();
+  await page.locator('#doc-pdf-text-value').fill('Editable example');
+  await page.locator('#doc-pdf-text-submit').click();
+  await expect(page.locator('#doc-file-name')).toContainText('.annotated.pdf');
+  await expect(page.locator('#doc-pdf-text-dialog')).not.toBeVisible();
+  await page.getByRole('button', { name: 'Replace text' }).click();
+  await drawArea();
+  await page.locator('#doc-pdf-apply').click();
+  await expect(page.locator('#doc-pdf-text-hint')).toContainText('permanently removed');
+  await page.locator('#doc-pdf-text-value').fill('Updated example');
+  await page.locator('#doc-pdf-text-submit').click();
+  await expect(page.locator('#doc-file-name')).toContainText('.replaced-text.pdf');
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Place image' }).click();
+  await (await chooser).setFiles({ name: 'stamp.png', mimeType: 'image/png', buffer: png });
+  await expect(page.locator('#doc-status')).toContainText('Draw an area');
+  await drawArea();
+  const preview = page.locator('.doc-selection-preview');
+  await expect(preview.locator('img')).toBeVisible();
+  const before = await preview.boundingBox();
+  await page.mouse.move(before.x + 25, before.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(before.x + 55, before.y + 42, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => (await preview.boundingBox()).x).toBeGreaterThan(before.x + 10);
+  const moved = await preview.boundingBox();
+  const resize = await preview.locator('.doc-selection-resize').boundingBox();
+  await page.mouse.move(resize.x + resize.width / 2, resize.y + resize.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(resize.x + resize.width / 2 + 30, resize.y + resize.height / 2 + 20, {
+    steps: 5,
+  });
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await preview.boundingBox()).width)
+    .toBeGreaterThan(moved.width + 10);
+  await page.locator('#doc-pdf-apply').click();
+  await expect(page.locator('#doc-file-name')).toContainText('.image.pdf');
+  await page.getByRole('button', { name: 'Signature' }).click();
+  await page.locator('[data-sign-tab="image"]').click();
+  await page
+    .locator('#doc-sign-file')
+    .setInputFiles({ name: 'signature.png', mimeType: 'image/png', buffer: png });
+  await page.locator('#doc-sign-use-image').click();
+  await drawArea();
+  await expect(page.locator('.doc-selection-preview img')).toBeVisible();
+  await page.locator('#doc-pdf-apply').click();
+  await expect(page.locator('#doc-file-name')).toContainText('.signed-image.pdf');
+  const unchanged = await (await page.request.get('/api/documents/download?path=' + name)).body();
+  expect(unchanged).toEqual(original);
+});
+
 test('Folder search, sorting, visible path and drag-drop move preserve open document', async ({
   page,
 }, info) => {
@@ -296,7 +370,7 @@ test('PDF export, scoped zoom, print options and password retry dialog', async (
   await expect(page.locator('#doc-ribbon-tools')).toBeAttached();
   const toolbar = await page.locator('#doc-pdf-tools').boundingBox();
   const exportButton = await page.locator('#doc-export-pdf').boundingBox();
-  expect(Math.abs(toolbar.y - exportButton.y)).toBeLessThan(18);
+  expect(toolbar.y).toBeGreaterThan(exportButton.y + exportButton.height - 3);
 
   await page.route('**/api/documents/printers', (route) =>
     route.fulfill({ json: { printers: ['TestQueue'], default: 'TestQueue' } }),
@@ -354,6 +428,37 @@ test('PDF export, scoped zoom, print options and password retry dialog', async (
   await page.locator('#doc-password-submit').click();
   await expect(page.locator('#doc-password-dialog')).not.toBeVisible();
   await expect(page.locator('#doc-file-name')).toHaveText(pdf);
+});
+
+test('Inserting an image into a rich document survives save and reopening', async ({
+  page,
+}, info) => {
+  const name = `embedded-${info.project.name}-${Date.now()}.docx`;
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAACAAAAAQCAYAAAB3AH1ZAAAAlElEQVR4nN2USw6AIAxEoRdw49r7n4s1G06gK4yBTj+kJsbZkFhm+qDElP6qbT/O54pEUUGSR/KKAJ4gK5QZYLWZ18cCSCGrNVSfACJP3mrJ2j71EbZa8hhkgeweDYJQAZm5vZpPyrkBtFOhEOvI0C1mFLLa0HprXeRprknzcaMhz7ykuhV6fJzEfXxbIX0ifs+f0AVXmW9Yksy07AAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  await page.goto('/#/documents');
+  await revealTree(page);
+  await createItem(page, 'file', name);
+  await page.locator('#doc-rich-editor').fill('Before the picture');
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Insert an image' }).click();
+  await (await chooser).setFiles({ name: 'sample.png', mimeType: 'image/png', buffer: png });
+  const image = page.locator('#doc-rich-editor img');
+  await expect(image).toBeVisible();
+  await image.click();
+  await page.locator('#doc-image-width').evaluate((slider) => {
+    slider.value = '240';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.locator('#doc-image-wrap').selectOption('doc-float-right');
+  await page.locator('#doc-save').click();
+  await page.reload();
+  await revealTree(page);
+  await page.locator(`#doc-tree [data-doc-file="${name}"]`).click();
+  await expect(page.locator('#doc-rich-editor img')).toBeVisible();
+  await expect(page.locator('#doc-rich-editor img')).toHaveAttribute('width', '240');
 });
 
 test('Rich document formatting, table insertion and round-trip', async ({ page }, info) => {
