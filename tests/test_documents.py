@@ -159,6 +159,29 @@ def test_move_search_and_recent_paths_stay_inside_documents(docs):
     assert client.get("/api/documents/tree", params={"path": "Archive"}).json()["children"][0]["directory"]
 
 
+def test_copy_multiple_documents_and_folders_without_overwriting_or_escaping(docs):
+    client, folder = docs
+    (folder / "one.txt").write_text("one")
+    (folder / "two.md").write_text("two")
+    (folder / "Archive").mkdir()
+    (folder / "Archive" / "inside.txt").write_text("nested")
+    (folder / "Target").mkdir()
+    request = {"paths": ["one.txt", "two.md", "Archive"], "destination": "Target"}
+    response = client.post("/api/documents/copy", json=request)
+    assert response.status_code == 200, response.text
+    assert response.json()["paths"] == ["Target/one (copy).txt", "Target/two (copy).md", "Target/Archive (copy)"]
+    assert (folder / "Target/one (copy).txt").read_text() == "one"
+    assert (folder / "Target/Archive (copy)/inside.txt").read_text() == "nested"
+    assert client.post("/api/documents/copy", json=request).json()["paths"][0] == "Target/one (copy 2).txt"
+    assert (folder / "one.txt").read_text() == "one"
+    assert client.post("/api/documents/copy", json={"paths": ["Archive"], "destination": "Archive"}).status_code == 422
+    assert client.post("/api/documents/copy", json={"paths": ["../outside.txt"], "destination": "Target"}).status_code == 403
+    assert client.post("/api/documents/copy", json={"paths": ["Archive", "Archive/inside.txt"], "destination": "Target"}).status_code == 422
+    (folder / "Archive" / "link.txt").symlink_to(folder.parent / "outside.txt")
+    assert client.post("/api/documents/copy", json=request).status_code == 403
+    assert not (folder / "Target/Archive (copy 3)").exists()
+
+
 def test_encrypted_pdf_password_retry_and_preview(docs):
     client, folder = docs
     pdf = pymupdf.open()

@@ -1,6 +1,8 @@
 """Local Documents editor. File access is confined to the user's Documents directory."""
 
 import base64
+import ctypes
+import errno
 import html
 import io
 import json
@@ -476,6 +478,67 @@ def move_document(data: MoveItem):
     updated = [relative(target) + path[len(old_path):] if path == old_path or path.startswith(old_path + "/") else path for path in previous]
     store.set_setting("recent_documents", json.dumps(updated[:12]))
     return {"path": relative(target), "old_path": old_path}
+
+
+class CopyItems(BaseModel):
+    paths: list[str] = Field(min_length=1, max_length=128)
+    destination: str = ""
+
+
+@router.post("/copy")
+def copy_documents(data: CopyItems):
+    """Copy selected Documents items without following links or replacing existing files."""
+    folder = resolve(data.destination, expect="dir")
+    sources = [resolve(path) for path in data.paths]
+    if len(set(sources)) != len(sources):
+        raise HTTPException(422, "Select each item only once")
+    for source in sources:
+        if source == root() or not source.exists() or source.is_symlink():
+            raise HTTPException(404, "Document or folder not found")
+        if source.is_file() and source.suffix.lower() not in FORMATS:
+            raise HTTPException(415, "This file type cannot be copied here")
+        if source.is_dir() and folder.is_relative_to(source):
+            raise HTTPException(422, "A folder cannot be copied into itself or a descendant")
+        if any(source != other and source.is_relative_to(other) for other in sources):
+            raise HTTPException(422, "Select either a folder or its contents, not both")
+        if source.is_dir():
+            for base, directories, files in os.walk(source, followlinks=False):
+                if any((Path(base) / name).is_symlink() for name in [*directories, *files]):
+                    raise HTTPException(403, "Folders containing links cannot be copied")
+    copied = []
+    for source in sources:
+        # Temporary hidden staging keeps interrupted copies out of the visible tree.
+        with tempfile.TemporaryDirectory(prefix=".inkwell-copy-", dir=folder) as staging:
+            staged = Path(staging) / source.name
+            if source.is_dir():
+                shutil.copytree(source, staged, symlinks=True)
+            else:
+                shutil.copy2(source, staged, follow_symlinks=False)
+            stem = source.name if source.is_dir() else source.stem
+            suffix = "" if source.is_dir() else source.suffix
+            number = 1
+            while True:
+                label = " (copy)" if number == 1 else f" (copy {number})"
+                target = folder / (stem + label + suffix)
+                if not target.exists() and not target.is_symlink():
+                    break
+                number += 1
+            try:
+                if staged.is_dir():
+                    # Linux renameat2(NOREPLACE) publishes a staged tree atomically,
+                    # even if another process creates the target after our check.
+                    rename = ctypes.CDLL(None, use_errno=True).renameat2
+                    if rename(-100, os.fsencode(staged), -100, os.fsencode(target), 1):
+                        code = ctypes.get_errno()
+                        raise OSError(code, os.strerror(code))
+                else:
+                    os.link(staged, target, follow_symlinks=False)
+            except OSError as error:
+                if error.errno == errno.EEXIST:
+                    raise HTTPException(409, "A copied item already has that name; retry") from error
+                raise
+            copied.append(relative(target))
+    return {"paths": copied}
 
 
 @router.get("/recent")

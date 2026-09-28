@@ -314,6 +314,42 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
   background: var(--accent-light);
   color: var(--ink);
 }
+.doc-tree-row.doc-selected,
+#doc-search-results .doc-tree-row.doc-selected {
+  background: var(--accent-light);
+  box-shadow: inset 3px 0 var(--accent);
+}
+.doc-context-menu {
+  position: fixed;
+  z-index: 500;
+  width: 150px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 10px 30px #0003;
+}
+.doc-context-menu[hidden] {
+  display: none;
+}
+.doc-context-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.doc-context-menu button:hover:not(:disabled) {
+  background: var(--accent-light);
+}
+.doc-context-menu button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 .doc-tree-row > span:last-child {
   min-width: 0;
   overflow: hidden;
@@ -635,6 +671,8 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
   overscroll-behavior: contain;
 }
 .doc-editor-viewport > :is(.doc-paper, .doc-pdf-paper, .doc-code-shell, #doc-markdown-preview) {
+  width: var(--doc-page-width, min(100%, 850px));
+  max-width: none;
   zoom: var(--doc-zoom, 1);
 }
 .doc-empty {

@@ -10,9 +10,9 @@ window.InkwellHotkeys = {
     down: 'ArrowDown',
     left: 'ArrowLeft',
     right: 'ArrowRight',
-    zoom_in: 'Ctrl+=',
-    zoom_out: 'Ctrl+-',
-    zoom_reset: 'Ctrl+0',
+    zoom_in: 'Ctrl+Shift+=',
+    zoom_out: 'Ctrl+Shift+-',
+    zoom_reset: 'Ctrl+Shift+0',
   },
   labels: {
     sync: 'Check server mail',
@@ -33,11 +33,13 @@ window.InkwellHotkeys = {
     if (!key) return '';
     const plus = key === '+';
     if (plus) key = '=';
+    if (key === '_') key = '-';
+    if (key === ')') key = '0';
     if (key.length === 1) key = key.toUpperCase();
     return [
       e.ctrlKey || e.metaKey ? 'Ctrl' : '',
       e.altKey ? 'Alt' : '',
-      e.shiftKey && !plus ? 'Shift' : '',
+      e.shiftKey ? 'Shift' : '',
       key,
     ]
       .filter(Boolean)
@@ -49,7 +51,16 @@ window.InkwellHotkeys = {
       const action = Object.entries(getPreferences().shortcuts || this.defaults).find(
         ([, key]) => key && key === this.key(e),
       )?.[0];
-      if (!action) return false;
+      if (!action) {
+        if (
+          (e.ctrlKey || e.metaKey) &&
+          !e.shiftKey &&
+          !e.altKey &&
+          ['+', '=', '-', '_'].includes(e.key)
+        )
+          e.preventDefault?.();
+        return false;
+      }
       if (e.repeat && !['up', 'down', 'left', 'right'].includes(action)) return false;
       const target = preview
         ? document.querySelector('#reader iframe')

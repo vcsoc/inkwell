@@ -13,7 +13,7 @@ Open **Settings → Shortcuts**. Focus a binding field and press the desired com
 | Ctrl+Shift+K | Open quick filter |
 | ↑ / ↓ | Navigate up/down; previous/next message in the mail list |
 | ← / → | Navigate panes or collapse/expand a folder branch |
-| Ctrl+= / Ctrl+- / Ctrl+0 | Zoom in/out/reset |
+| Ctrl+Shift+= / Ctrl+Shift+- / Ctrl+Shift+0 | Zoom the application in/out/reset; Ctrl+= / Ctrl+- or Ctrl+mouse wheel zoom the open document |
 
 Ctrl also accepts Command on macOS. Typing, date pickers, menus and editors retain normal key behavior. Plain arrows in the sandboxed HTML reader scroll its content. Function/modifier shortcuts for sync and zoom also work while typing. Delete does not act on typed text or server mail. Native shortcut forwarding remains restricted to trusted application code; the reader gains no scripts or preload privileges. Operating-system/browser bindings may take precedence.
 

@@ -95,6 +95,9 @@ window.InkwellDocuments = (() => {
       directory: '',
       sort: 'name-asc',
       zoom: 100,
+      selectedPaths: new Set(),
+      selectionAnchor: null,
+      copiedPaths: [],
       dragPath: null,
       dragDestination: null,
       showLineNumbers: false,
@@ -124,6 +127,10 @@ window.InkwellDocuments = (() => {
     };
 
     nav.innerHTML = `<div class="doc-sidebar"><div class="doc-sidebar-sticky"><div class="doc-nav-heading"><strong>Documents</strong><button type="button" id="doc-refresh" title="Refresh files" aria-label="Refresh files">↻</button></div><div class="doc-nav-path" id="doc-nav-path" title="Documents" aria-label="Visible folder path">${folderIcon(true)}<span>Documents</span></div><div class="doc-find-row"><input id="doc-search" type="search" placeholder="Search Documents" aria-label="Search Documents" autocomplete="off"><button id="doc-sort" type="button" title="Order by" aria-label="Order by" aria-haspopup="true" aria-expanded="false">${uiIcon('sort')}</button><div id="doc-sort-menu" class="doc-sort-menu" hidden role="menu" aria-label="Order by"><button type="button" role="menuitemradio" aria-checked="true" data-doc-order="name-asc">Name · A to Z</button><button type="button" role="menuitemradio" aria-checked="false" data-doc-order="name-desc">Name · Z to A</button><button type="button" role="menuitemradio" aria-checked="false" data-doc-order="modified-desc">Modified · newest first</button><button type="button" role="menuitemradio" aria-checked="false" data-doc-order="modified-asc">Modified · oldest first</button></div></div><div class="doc-nav-actions"><button type="button" id="doc-new-folder" title="New folder">＋ Folder</button><button type="button" id="doc-new-file" title="New file">＋ File</button><label title="Import files into the selected folder">↥ Import<input id="doc-import" type="file" multiple hidden></label></div></div><div id="doc-search-results" hidden aria-label="Document search results"></div><details id="doc-recent-group" open><summary>Recent files</summary><div id="doc-recent"></div></details><div id="doc-tree" role="tree" aria-label="Documents folder tree"></div></div>`;
+    nav.insertAdjacentHTML(
+      'beforeend',
+      '<div id="doc-context-menu" class="doc-context-menu" role="menu" aria-label="Document actions" hidden><button type="button" role="menuitem" data-doc-menu="copy">Copy</button><button type="button" role="menuitem" data-doc-menu="paste">Paste</button></div>',
+    );
     root.innerHTML = `<div class="doc-shell" id="documents-workspace"><aside class="doc-pages" id="doc-pages" aria-label="Document page thumbnails"><div class="doc-pages-heading">Pages <button type="button" id="doc-hide-pages" aria-label="Close page thumbnails" title="Close page thumbnails">×</button></div><div id="doc-thumbnails"><p class="doc-empty">Open a document to see its pages.</p></div></aside><section class="doc-main"><header class="doc-ribbon"><div class="doc-ribbon-title"><button class="secondary" type="button" id="doc-show-pages" title="Show page thumbnails" aria-label="Show page thumbnails">${uiIcon('pages')}</button><strong id="doc-file-name">Document editor</strong><span id="doc-status" role="status">Select a file from Documents or Recent.</span><button class="doc-icon-button primary" type="button" id="doc-save" disabled title="Save document (Ctrl+S)" aria-label="Save document">${uiIcon('save')}</button><button class="doc-icon-button" type="button" id="doc-export-pdf" disabled title="Export the current document to PDF" aria-label="Export to PDF">${uiIcon('export')}</button><button class="doc-icon-button" type="button" id="doc-print" disabled title="Choose printer and print settings" aria-label="Print document">${uiIcon('print')}</button><a class="doc-icon-button secondary hidden" id="doc-download" download title="Download a copy of this document" aria-label="Download document">${uiIcon('download')}</a><div class="doc-zoom-controls" aria-label="Document zoom"><button type="button" id="doc-zoom-out" title="Zoom out (Ctrl+-)" aria-label="Zoom out">${uiIcon('minus')}</button><output id="doc-zoom-label" title="Document zoom level">100%</output><button type="button" id="doc-zoom-in" title="Zoom in (Ctrl++)" aria-label="Zoom in">${uiIcon('plus')}</button></div></div><div class="doc-ribbon-tools" id="doc-ribbon-tools" hidden><div id="doc-rich-tools" class="doc-toolset" hidden><select id="doc-style" aria-label="Paragraph style" title="Paragraph style"><option value="p">Normal text</option><option value="h1">Heading 1</option><option value="h2">Heading 2</option><option value="h3">Heading 3</option><option value="blockquote">Quote</option></select><select id="doc-font" aria-label="Font"><option value="Arial">Arial</option><option value="Georgia">Georgia</option><option value="Times New Roman">Times New Roman</option><option value="Courier New">Courier New</option></select><select id="doc-font-size" aria-label="Font size"><option value="2">Small</option><option value="3" selected>Normal</option><option value="4">Large</option><option value="5">Extra large</option></select><button data-doc-command="bold" title="Bold (Ctrl+B)" aria-label="Bold"><b>B</b></button><button data-doc-command="italic" title="Italic (Ctrl+I)" aria-label="Italic"><i>I</i></button><button data-doc-command="underline" title="Underline (Ctrl+U)" aria-label="Underline"><u>U</u></button><button data-doc-command="strikeThrough" title="Strikethrough" aria-label="Strikethrough"><s>S</s></button><label class="doc-color-control" title="Text color">Text <input id="doc-color" type="color" aria-label="Text color" value="#26372b"></label><button class="doc-icon-button" data-doc-command="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list">${uiIcon('bullets')}</button><button class="doc-icon-button" data-doc-command="insertOrderedList" title="Numbered list" aria-label="Numbered list">${uiIcon('numbered')}</button><button data-doc-command="justifyLeft" title="Align left" aria-label="Align left">≡</button><button data-doc-command="justifyCenter" title="Center" aria-label="Center text">≡</button><button data-doc-command="justifyRight" title="Align right" aria-label="Align right">≡</button><button class="doc-icon-button" data-doc-command="indent" title="Indent paragraph (Tab)" aria-label="Indent paragraph">${uiIcon('indent')}</button><button class="doc-icon-button" data-doc-command="outdent" title="Outdent paragraph (Shift+Tab)" aria-label="Outdent paragraph">${uiIcon('outdent')}</button><button class="doc-icon-button" id="doc-table" title="Insert a table" aria-label="Insert a table">${uiIcon('table')}</button><button class="doc-icon-button" id="doc-link" title="Insert a link" aria-label="Insert a link">${uiIcon('link')}</button><button class="doc-icon-button" id="doc-insert-image" title="Insert an image" aria-label="Insert an image">${uiIcon('image')}</button><label id="doc-image-settings" hidden>Image width <input id="doc-image-width" type="range" min="80" max="900" value="480"><select id="doc-image-wrap" aria-label="Image placement"><option value="">Inline</option><option value="doc-float-left">Left · wrap text</option><option value="doc-float-right">Right · wrap text</option></select></label></div><div id="doc-text-tools" class="doc-toolset" hidden><button class="doc-icon-button" id="doc-indent" type="button" title="Indent selected lines" aria-label="Indent selected lines">${uiIcon('indent')}</button><button class="doc-icon-button" id="doc-outdent" type="button" title="Outdent selected lines" aria-label="Outdent selected lines">${uiIcon('outdent')}</button><button class="doc-icon-button" id="doc-wrap" type="button" aria-pressed="true" title="Toggle word wrap" aria-label="Toggle word wrap">${uiIcon('wrap')}</button><button class="doc-icon-button" id="doc-preview" type="button" hidden title="Preview Markdown" aria-label="Preview Markdown">${uiIcon('preview')}</button></div><div id="doc-pdf-tools" class="doc-toolset" hidden><button class="doc-icon-button" type="button" data-pdf-tool="redact" title="Redact area permanently in a new PDF copy" aria-label="Redact area">${uiIcon('redact')}</button><button class="doc-icon-button" type="button" id="doc-pdf-place-image" title="Place an image in a selected PDF area" aria-label="Place image">${uiIcon('image')}</button><button class="doc-icon-button" type="button" data-pdf-tool="text" title="Place text in a selected PDF area" aria-label="Add text">${uiIcon('text')}</button><button class="doc-icon-button" type="button" id="doc-signature" title="Draw, import or digitally sign this PDF" aria-label="Signature">${uiIcon('sign')}</button><button class="doc-icon-button" type="button" id="doc-pdf-apply" disabled title="Apply selected PDF change to a new copy" aria-label="Apply PDF change">${uiIcon('apply')}</button><button class="doc-icon-button" type="button" id="doc-pdf-compress" title="Try reducing the PDF file size and keep the original" aria-label="Compress PDF">${uiIcon('compress')}</button></div><label class="doc-line-toggle" title="Toggle line numbers"><input id="doc-line-numbers" type="checkbox" aria-label="Line numbers"><span class="doc-switch-track" aria-hidden="true"></span><span class="sr-only">Line numbers</span></label></div></header><div class="doc-editor-viewport" id="doc-editor-viewport"><div class="doc-empty doc-welcome"><h2>Your documents, together.</h2><p>Open or import a PDF, Word document, Markdown, CSV or another text file from the folder tree.</p><p>Files stay in your Documents directory. PDF redactions and signatures create new copies; originals remain available.</p></div></div></section><dialog id="doc-sign-dialog" aria-labelledby="doc-sign-title"><h2 id="doc-sign-title">Sign PDF</h2><p>Choose an area on the PDF page first, or use the bottom-right of the page by default.</p><div class="doc-sign-tabs"><button type="button" data-sign-tab="draw">Draw</button><button type="button" data-sign-tab="image">Image</button><button type="button" data-sign-tab="digital">Digital certificate</button></div><section id="doc-sign-draw"><canvas id="doc-sign-canvas" width="520" height="160" aria-label="Draw your signature using a mouse, pen or touch"></canvas><button type="button" id="doc-sign-clear">Clear drawing</button><button type="button" id="doc-sign-use-drawing" class="primary">Place drawn signature</button></section><section id="doc-sign-image" hidden><label>Signature image (PNG, JPEG, WebP or GIF) <input id="doc-sign-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif"></label><button type="button" id="doc-sign-use-image" class="primary">Place image signature</button></section><section id="doc-sign-digital" hidden><p>Cryptographically sign a new PDF copy with your PKCS#12 certificate (.p12 or .pfx). Your certificate and password are sent only to your Inkwell backend for this request and are never stored.</p><label>PKCS#12 certificate <input id="doc-cert-file" type="file" accept=".p12,.pfx"></label><label>Certificate password <input id="doc-cert-pass" type="password" autocomplete="off"></label><button type="button" id="doc-cert-apply" class="primary">Digitally sign a new PDF copy</button></section><button type="button" id="doc-sign-close" class="secondary">Cancel</button></dialog><dialog id="doc-password-dialog" aria-labelledby="doc-password-title"><form id="doc-password-form"><h2 id="doc-password-title">Unlock document</h2><p id="doc-password-description">Enter the password to open this protected document.</p><label for="doc-password-input">Document password</label><input id="doc-password-input" type="password" autocomplete="off" required><p id="doc-password-error" role="alert" hidden></p><div class="doc-dialog-actions"><button type="button" id="doc-password-cancel" class="secondary">Cancel</button><button type="submit" id="doc-password-submit" class="primary">Unlock</button></div></form></dialog><dialog id="doc-print-dialog" aria-labelledby="doc-print-title"><form id="doc-print-form"><h2 id="doc-print-title">Print document</h2><div class="doc-print-layout"><div class="doc-print-fields"><label>Printer<select id="doc-print-printer" required></select></label><label>Pages<input id="doc-print-pages" type="text" inputmode="text" placeholder="All pages, or 1-3,5" title="Leave blank for all pages"></label><label>Copies<input id="doc-print-copies" type="number" min="1" max="99" value="1" required></label><label>Paper size<select id="doc-print-paper"><option>A4</option><option>Letter</option><option>Legal</option></select></label><label>Orientation<select id="doc-print-orientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label><label>Color<select id="doc-print-color"><option value="color">Color</option><option value="monochrome">Black and white</option></select></label><label>Double-sided<select id="doc-print-duplex"><option value="none">Single-sided</option><option value="long">Flip on long edge</option><option value="short">Flip on short edge</option></select></label><label>Scaling<select id="doc-print-scaling"><option value="fit">Fit to page</option><option value="actual">Actual size</option></select></label><label>Margins<select id="doc-print-margins"><option value="default">Printer default</option><option value="narrow">Narrow</option><option value="none">None (if supported)</option></select></label></div><div class="doc-print-preview"><strong>First page preview</strong><img id="doc-print-preview-image" alt="First printable page preview"><p id="doc-print-message" role="status"></p></div></div><div class="doc-dialog-actions"><button type="button" id="doc-print-cancel" class="secondary">Cancel</button><button type="submit" id="doc-print-submit" class="primary">Print</button></div></form></dialog><input id="doc-image-file" type="file" hidden accept="image/png,image/jpeg,image/webp,image/gif">`;
     current.dialog = $('#doc-sign-dialog');
     current.dialogs = [current.dialog, $('#doc-password-dialog'), $('#doc-print-dialog')];
@@ -136,7 +143,16 @@ window.InkwellDocuments = (() => {
       if (!$('#doc-password-dialog').open) $('#doc-password-dialog').showModal();
       $('#doc-password-input').focus();
     }
+    const sizePage = () => {
+      const editor = $('#doc-editor-viewport');
+      editor.style.setProperty(
+        '--doc-page-width',
+        `${Math.min(850, Math.max(280, editor.clientWidth - 48))}px`,
+      );
+    };
     const setZoom = (value) => {
+      if (!current.document) return;
+      sizePage();
       current.zoom = Math.max(60, Math.min(240, value));
       $('#doc-zoom-label').textContent = `${current.zoom}%`;
       $('#doc-editor-viewport').style.setProperty('--doc-zoom', current.zoom / 100);
@@ -147,11 +163,16 @@ window.InkwellDocuments = (() => {
           Math.min(1800, Math.round(current.zoom * 11)),
         );
     };
+    current.adjustZoom = (step) => {
+      if (live() && current.document && !current.dialogs.some((dialog) => dialog.open))
+        setZoom(current.zoom + step);
+    };
     const zoomKey = (event) => {
       if (
         !live() ||
         !(event.ctrlKey || event.metaKey) ||
         event.altKey ||
+        event.shiftKey ||
         current.dialogs.some((dialog) => dialog.open)
       )
         return;
@@ -167,8 +188,25 @@ window.InkwellDocuments = (() => {
       event.stopImmediatePropagation();
       setZoom(direction === 0 ? 100 : current.zoom + direction);
     };
+    const zoomWheel = (event) => {
+      if (
+        !live() ||
+        !current.document ||
+        !(event.ctrlKey || event.metaKey) ||
+        !root.contains(event.target)
+      )
+        return;
+      event.preventDefault();
+      setZoom(current.zoom + (event.deltaY < 0 ? 10 : -10));
+    };
     document.addEventListener('keydown', zoomKey, true);
-    current.dispose = () => document.removeEventListener('keydown', zoomKey, true);
+    root.addEventListener('wheel', zoomWheel, { passive: false });
+    window.addEventListener('resize', sizePage);
+    current.dispose = () => {
+      document.removeEventListener('keydown', zoomKey, true);
+      root.removeEventListener('wheel', zoomWheel);
+      window.removeEventListener('resize', sizePage);
+    };
 
     async function refreshRecent() {
       const entries = await api('/documents/recent');
@@ -230,10 +268,15 @@ window.InkwellDocuments = (() => {
     function highlight() {
       nav.querySelectorAll('[data-doc-file]').forEach((button) => {
         button.classList.toggle('active', button.dataset.docFile === current.document?.path);
+        button.classList.toggle('doc-selected', current.selectedPaths.has(button.dataset.docFile));
       });
       nav.querySelectorAll('[data-doc-folder]').forEach((button) => {
         const active = button.dataset.docFolder === current.directory;
         button.classList.toggle('active-folder', active);
+        button.classList.toggle(
+          'doc-selected',
+          current.selectedPaths.has(button.dataset.docFolder),
+        );
         const icon = button.querySelector('.doc-item-icon');
         if (icon)
           icon.outerHTML = folderIcon(active || button.getAttribute('aria-expanded') === 'true');
@@ -320,6 +363,9 @@ window.InkwellDocuments = (() => {
     function showDoc() {
       const doc = current.document;
       $('#doc-file-name').textContent = doc.name;
+      const breadcrumb = document.querySelector('#breadcrumb');
+      if (breadcrumb && live()) breadcrumb.textContent = `documents. ${doc.name}`;
+      sizePage();
       $('#doc-download').classList.remove('hidden');
       $('#doc-download').href = '/api/documents/download?path=' + query(doc.path);
       $('#doc-download').download = doc.name;
@@ -595,8 +641,91 @@ window.InkwellDocuments = (() => {
       if (last) await open(last);
     }
 
+    const contextMenu = nav.querySelector('#doc-context-menu');
+    const itemPath = (button) => button?.dataset.docFile ?? button?.dataset.docFolder;
+    const selectItem = (button, event) => {
+      const path = itemPath(button);
+      if (path === undefined || path === '') return;
+      const visible = [
+        ...nav.querySelectorAll(
+          '#doc-tree:not([hidden]) .doc-tree-row, #doc-search-results:not([hidden]) .doc-tree-row',
+        ),
+      ].filter((row) => itemPath(row) && row.getClientRects().length);
+      if (event.shiftKey && current.selectionAnchor) {
+        const start = visible.findIndex((row) => itemPath(row) === current.selectionAnchor);
+        const end = visible.indexOf(button);
+        if (start >= 0 && end >= 0) {
+          if (!event.ctrlKey && !event.metaKey) current.selectedPaths.clear();
+          for (const row of visible.slice(Math.min(start, end), Math.max(start, end) + 1))
+            current.selectedPaths.add(itemPath(row));
+        } else current.selectedPaths.add(path);
+      } else if (event.ctrlKey || event.metaKey) {
+        if (current.selectedPaths.has(path)) current.selectedPaths.delete(path);
+        else current.selectedPaths.add(path);
+        current.selectionAnchor = path;
+      } else {
+        current.selectedPaths = new Set([path]);
+        current.selectionAnchor = path;
+      }
+      highlight();
+    };
+    nav.addEventListener('contextmenu', (event) => {
+      if (!live()) return;
+      const button = event.target.closest(
+        '#doc-tree [data-doc-file], #doc-tree [data-doc-folder], #doc-search-results [data-doc-file], #doc-search-results [data-doc-folder], #doc-recent [data-doc-file]',
+      );
+      if (!button && !event.target.closest('#doc-tree, #doc-search-results')) return;
+      event.preventDefault();
+      const path = itemPath(button);
+      if (path && !current.selectedPaths.has(path)) selectItem(button, {});
+      contextMenu.dataset.destination = button?.hasAttribute('data-doc-folder')
+        ? button.dataset.docFolder
+        : button?.hasAttribute('data-doc-file')
+          ? path.includes('/')
+            ? path.slice(0, path.lastIndexOf('/'))
+            : ''
+          : current.directory;
+      contextMenu.querySelector('[data-doc-menu="copy"]').disabled = !current.selectedPaths.size;
+      contextMenu.querySelector('[data-doc-menu="paste"]').disabled = !current.copiedPaths.length;
+      contextMenu.hidden = false;
+      contextMenu.style.left = `${Math.max(8, Math.min(event.clientX, window.innerWidth - 160))}px`;
+      contextMenu.style.top = `${Math.max(8, Math.min(event.clientY, window.innerHeight - 90))}px`;
+    });
+    const dismissMenu = (event) => {
+      if (event.type === 'keydown' ? event.key === 'Escape' : !nav.contains(event.target))
+        contextMenu.hidden = true;
+    };
+    document.addEventListener('pointerdown', dismissMenu);
+    document.addEventListener('keydown', dismissMenu);
+    const disposeZoom = current.dispose;
+    current.dispose = () => {
+      disposeZoom();
+      document.removeEventListener('pointerdown', dismissMenu);
+      document.removeEventListener('keydown', dismissMenu);
+    };
     nav.addEventListener('click', (event) =>
       go(async () => {
+        const menuAction = event.target.closest('[data-doc-menu]');
+        if (menuAction) {
+          contextMenu.hidden = true;
+          if (menuAction.dataset.docMenu === 'copy') {
+            current.copiedPaths = [...current.selectedPaths].filter(
+              (path, _, paths) =>
+                !paths.some((other) => other !== path && path.startsWith(other + '/')),
+            );
+            toast(`Copied ${current.copiedPaths.length} item(s)`);
+          } else if (current.copiedPaths.length) {
+            const destination = contextMenu.dataset.destination ?? current.directory;
+            const result = await api('/documents/copy', {
+              method: 'POST',
+              body: { paths: current.copiedPaths, destination },
+            });
+            await refreshTree();
+            toast(`Pasted ${result.paths.length} item(s) into ${destination || 'Documents'}`);
+          }
+          return;
+        }
+        contextMenu.hidden = true;
         if (event.target.closest('#doc-refresh')) return refreshTree();
         const sortButton = event.target.closest('#doc-sort');
         if (sortButton) {
@@ -645,6 +774,12 @@ window.InkwellDocuments = (() => {
         }
         const button = event.target.closest('[data-doc-file], [data-doc-folder]');
         if (!button) return;
+        if (event.ctrlKey || event.metaKey || event.shiftKey) {
+          event.preventDefault();
+          selectItem(button, event);
+          return;
+        }
+        if (itemPath(button)) selectItem(button, event);
         if (button.hasAttribute('data-doc-file')) return open(button.dataset.docFile);
         const path = button.dataset.docFolder;
         if (button.closest('#doc-search-results')) {
@@ -1186,5 +1321,11 @@ window.InkwellDocuments = (() => {
     void go(refreshTree);
     return { open, save };
   }
-  return { mount, confirmLeave, stop };
+  return {
+    mount,
+    confirmLeave,
+    stop,
+    openName: () => session?.document?.name || '',
+    zoom: (step) => session?.adjustZoom?.(step),
+  };
 })();

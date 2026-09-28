@@ -223,9 +223,9 @@ async function launch() {
   let nativeKeys = {
     sync: 'F9',
     quick_filter: 'Ctrl+Shift+K',
-    zoom_in: 'Ctrl+=',
-    zoom_out: 'Ctrl+-',
-    zoom_reset: 'Ctrl+0',
+    zoom_in: 'Ctrl+Shift+=',
+    zoom_out: 'Ctrl+Shift+-',
+    zoom_reset: 'Ctrl+Shift+0',
   };
   const configureKeys = (event, values) => {
     if (
@@ -270,11 +270,33 @@ async function launch() {
     if (input.type !== 'keyDown' || input.isComposing) return;
     const key = String(input.key).slice(0, 40),
       plus = key === '+';
+    if (
+      (input.control || input.meta) &&
+      !input.shift &&
+      !input.alt &&
+      ['+', '=', '-', '_'].includes(key)
+    ) {
+      event.preventDefault();
+      window.webContents
+        .executeJavaScript(
+          `window.InkwellDocuments?.zoom(${key === '-' || key === '_' ? -10 : 10})`,
+        )
+        .catch(() => {});
+      return;
+    }
     const combo = [
       input.control || input.meta ? 'Ctrl' : '',
       input.alt ? 'Alt' : '',
-      input.shift && !plus ? 'Shift' : '',
-      plus ? '=' : key.length === 1 ? key.toUpperCase() : key,
+      input.shift ? 'Shift' : '',
+      plus
+        ? '='
+        : key === '_'
+          ? '-'
+          : key === ')'
+            ? '0'
+            : key.length === 1
+              ? key.toUpperCase()
+              : key,
     ]
       .filter(Boolean)
       .join('+');

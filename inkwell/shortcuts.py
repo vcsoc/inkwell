@@ -12,9 +12,9 @@ DEFAULTS = {
     "down": "ArrowDown",
     "left": "ArrowLeft",
     "right": "ArrowRight",
-    "zoom_in": "Ctrl+=",
-    "zoom_out": "Ctrl+-",
-    "zoom_reset": "Ctrl+0",
+    "zoom_in": "Ctrl+Shift+=",
+    "zoom_out": "Ctrl+Shift+-",
+    "zoom_reset": "Ctrl+Shift+0",
 }
 RESERVED = {
     "Ctrl+C",
@@ -38,6 +38,10 @@ def validate(value):
     if not isinstance(value, dict) or set(value) - set(DEFAULTS):
         raise ValueError("Unknown shortcut action")
     result = {**DEFAULTS, **value}
+    # Migrate previously saved default bindings without changing custom bindings.
+    for action, old in (("zoom_in", "Ctrl+="), ("zoom_out", "Ctrl+-"), ("zoom_reset", "Ctrl+0")):
+        if result[action] == old:
+            result[action] = DEFAULTS[action]
     used = set()
     for action, combo in result.items():
         if not isinstance(combo, str) or len(combo) > 40:

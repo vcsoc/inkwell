@@ -69,6 +69,73 @@ test('Nested folders expand and newly created files open from their selected fol
   ).toBeVisible();
 });
 
+test('Document zoom keys, wheel and controls stay scoped; title follows the open file', async ({
+  page,
+}, info) => {
+  const name = `zoom-${info.project.name}-${Date.now()}.md`;
+  await page.goto('/#/documents');
+  await revealTree(page);
+  page.once('dialog', (dialog) => dialog.accept(name));
+  await page.locator('#doc-new-file').click();
+  await expect(page.locator('#breadcrumb')).toHaveText(`documents. ${name}`);
+  const paper = page.locator('.doc-code-shell');
+  const before = await paper.boundingBox();
+  const appZoom = await page.locator('html').evaluate((element) => element.style.zoom);
+  await page.locator('#doc-zoom-in').click();
+  await expect(page.locator('#doc-zoom-label')).toHaveText('110%');
+  expect((await paper.boundingBox()).width).toBeGreaterThan(before.width);
+  await page.keyboard.press('ControlOrMeta+-');
+  await expect(page.locator('#doc-zoom-label')).toHaveText('100%');
+  await page.locator('#doc-editor-viewport').hover();
+  await page.keyboard.down('ControlOrMeta');
+  await page.mouse.wheel(0, -140);
+  await page.keyboard.up('ControlOrMeta');
+  await expect(page.locator('#doc-zoom-label')).toHaveText('110%');
+  expect(await page.locator('html').evaluate((element) => element.style.zoom)).toBe(appZoom);
+  await page.keyboard.press('ControlOrMeta+Shift+-');
+  expect(await page.locator('html').evaluate((element) => element.style.zoom)).not.toBe(appZoom);
+  await page.keyboard.press('ControlOrMeta+Shift+0');
+});
+
+test('Multiple selection and context-menu copy/paste preserve originals', async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== 'desktop', 'Desktop pointer and modifier gesture');
+  const suffix = `${info.project.name}-${Date.now()}`;
+  await page.goto('/#/documents');
+  await revealTree(page);
+  for (const name of [`first-${suffix}.txt`, `second-${suffix}.txt`, `third-${suffix}.txt`]) {
+    page.once('dialog', (dialog) => dialog.accept(name));
+    await page.locator('#doc-new-file').click();
+  }
+  const first = page.locator(`#doc-tree [data-doc-file="first-${suffix}.txt"]`);
+  const second = page.locator(`#doc-tree [data-doc-file="second-${suffix}.txt"]`);
+  const third = page.locator(`#doc-tree [data-doc-file="third-${suffix}.txt"]`);
+  await first.click({ modifiers: ['Control'] });
+  await third.click({ modifiers: ['Control'] });
+  await expect(first).toHaveClass(/doc-selected/);
+  await expect(third).toHaveClass(/doc-selected/);
+  await first.click({ button: 'right' });
+  await page.locator('[data-doc-menu="copy"]').click();
+  page.once('dialog', (dialog) => dialog.accept(`destination-${suffix}`));
+  await page.locator('#doc-new-folder').click();
+  const destination = page.locator(`#doc-tree [data-doc-folder="destination-${suffix}"]`);
+  await destination.click({ button: 'right' });
+  await page.locator('[data-doc-menu="paste"]').click();
+  await destination.click();
+  await expect(
+    page.locator(`#doc-tree [data-doc-file="destination-${suffix}/first-${suffix} (copy).txt"]`),
+  ).toBeVisible();
+  await expect(
+    page.locator(`#doc-tree [data-doc-file="destination-${suffix}/third-${suffix} (copy).txt"]`),
+  ).toBeVisible();
+  await expect(first).toBeVisible();
+  await second.click({ modifiers: ['Control'] });
+  await third.click({ modifiers: ['Shift'] });
+  await expect(second).toHaveClass(/doc-selected/);
+  await expect(third).toHaveClass(/doc-selected/);
+});
+
 test('PDF page previews, permanent redaction and image signatures save separate copies', async ({
   page,
 }, info) => {
@@ -184,7 +251,9 @@ test('PDF export, scoped zoom, print options and password retry dialog', async (
   await page.locator('#doc-export-pdf').click();
   await expect(page.locator('#doc-file-name')).toHaveText(file.replace('.txt', '.export.pdf'));
   await expect(page.locator('#doc-pdf-image')).toBeVisible();
+  const originalWidth = (await page.locator('#doc-pdf-paper').boundingBox()).width;
   await page.locator('#doc-zoom-in').click();
+  expect((await page.locator('#doc-pdf-paper').boundingBox()).width).toBeGreaterThan(originalWidth);
   await expect(page.locator('#doc-zoom-label')).toHaveText('110%');
   await page.keyboard.press('ControlOrMeta+-');
   await expect(page.locator('#doc-zoom-label')).toHaveText('100%');

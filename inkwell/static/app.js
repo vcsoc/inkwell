@@ -848,6 +848,8 @@ async function navigate(route, { historyMode = 'push' } = {}) {
     view === 'settings' && settingsPage
       ? 'settings.  ' + settingsPage.name.toLocaleLowerCase() + '.'
       : title.toLocaleLowerCase().replace(/\.$/, '') + '.';
+  if (view === 'documents' && InkwellDocuments.openName())
+    $('#breadcrumb').textContent = `documents. ${InkwellDocuments.openName()}`;
   document.title =
     (view === 'settings' && settingsPage ? settingsPage.name + ' · Settings' : title) +
     ' — inkwell';

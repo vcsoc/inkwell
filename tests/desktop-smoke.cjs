@@ -217,8 +217,8 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
     const zoomKey = (key) =>
       app.evaluate(({ BrowserWindow }, keyCode) => {
         const wc = BrowserWindow.getAllWindows()[0].webContents;
-        wc.sendInputEvent({ type: 'keyDown', keyCode, modifiers: ['control'] });
-        wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers: ['control'] });
+        wc.sendInputEvent({ type: 'keyDown', keyCode, modifiers: ['control', 'shift'] });
+        wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers: ['control', 'shift'] });
       }, key);
     await zoomKey('=');
     await expect(window.locator('html')).toHaveCSS('zoom', '1.1');
