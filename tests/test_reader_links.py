@@ -1,5 +1,7 @@
+import html
 import io
 from email.message import EmailMessage
+from urllib.parse import quote
 
 import pytest
 from PIL import Image
@@ -54,6 +56,49 @@ def test_sender_cannot_remove_enabled_link_underlines():
         links=True,
     )
     assert "text-decoration" not in clean and "color:red" not in clean
+
+
+def test_outlook_safe_links_show_original_url_without_bypassing_protection():
+    target = "https://www.aroac.com/"
+    protected = "https://na01.safelinks.protection.outlook.com/?url=" + quote(target, safe="") + "&data=private-token&reserved=0"
+    escaped = html.escape(protected, quote=True)
+    source = f'<p>Download from <a href="{escaped}">{escaped}</a> safely.</p>'
+    blocked, _, _ = html_mail.sanitize(source, links=False)
+    assert f'>{target}</a>' in blocked
+    assert 'safelinks.protection.outlook.com' not in blocked and 'href=' not in blocked
+    shown, _, _ = html_mail.sanitize(source, links=True)
+    assert f'>{target}</a>' in shown
+    assert 'href="https://na01.safelinks.protection.outlook.com/' in shown
+    assert 'data=private-token' in shown
+    assert 'href="https://www.aroac.com/' not in shown
+    readable = html_mail.text_links('Click ' + protected)
+    assert readable[0]['display'] == target
+    assert readable[0]['url'] == protected
+
+
+@pytest.mark.parametrize('href,text', [
+    ('https://na01.safelinks.protection.outlook.com.evil.org/?url=https%3A%2F%2Fgood.org', None),
+    ('https://na01.safelinks.protection.outlook.com/?url=javascript%3Aalert%281%29', None),
+    ('https://na01.safelinks.protection.outlook.com/?url=https%3A%2F%2Flocalhost%2F', None),
+    ('https://na01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fgood.org&url=https%3A%2F%2Fevil.org', None),
+    ('https://na01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fgood.org', 'Click this'),
+])
+def test_unsafe_or_nonmatching_safe_link_labels_are_not_rewritten(href, text):
+    label = text or href
+    result, _, _ = html_mail.sanitize(f'<a href="{html.escape(href)}">{html.escape(label)}</a>', links=True)
+    assert f'>{html.escape(label)}</a>' in result
+
+
+def test_sent_link_default_uses_folder_provenance_not_spoofable_sender(client):
+    with store.db() as db:
+        own = db.execute("INSERT INTO messages(sender,recipient,subject,body,date,folder) VALUES ('Me <me@example.org>','you@example.org','Sent','https://example.org','2026-09-29','sent')").lastrowid
+        spoof = db.execute("INSERT INTO messages(sender,recipient,subject,body,date,folder) VALUES ('Me <me@example.org>','me@example.org','Spoof','https://evil.org','2026-09-29','inbox')").lastrowid
+        account = db.execute("INSERT INTO accounts(name,email,imap_host,imap_port,smtp_host,smtp_port,username,secret,smtp_security,provider,client_id) VALUES ('Me','me@example.org','',993,'',587,'me@example.org','not-used','starttls','microsoft','')").lastrowid
+        folder = db.execute("INSERT INTO remote_folders(account_id,remote_id,name,path,well_known) VALUES (?,'provider-sent-id','Sent Items','Sent Items','sentitems')", (account,)).lastrowid
+        imported = db.execute("INSERT INTO messages(account_id,remote_folder_id,remote_key,folder,sender,recipient,subject,body,date) VALUES (?,?,?,'remote','Me <me@example.org>','you@example.org','Provider sent','https://example.org','2026-09-29')", (account, folder, f'{account}:graph:immutable-id')).lastrowid
+    assert client.get(f'/api/messages/{own}').json()['sent_by_me'] == 1
+    assert client.get(f'/api/messages/{spoof}').json()['sent_by_me'] == 0
+    assert client.get(f'/api/messages/{imported}').json()['sent_by_me'] == 1
 
 
 def test_enabling_links_preserves_scriptless_sandbox_and_does_not_enable_images(client):

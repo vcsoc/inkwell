@@ -534,7 +534,10 @@ def counts():
 
 @app.get("/api/messages/{message_id}")
 def message(message_id: int):
-    result = rows("SELECT * FROM messages WHERE id=?", (message_id,))
+    result = rows("""SELECT m.*, CASE WHEN m.folder='sent' THEN 1
+        WHEN EXISTS (SELECT 1 FROM remote_folders f WHERE f.id=m.remote_folder_id
+          AND f.account_id=m.account_id AND f.well_known='sentitems') THEN 1 ELSE 0 END
+        AS sent_by_me FROM messages m WHERE m.id=?""", (message_id,))
     if not result:
         raise HTTPException(404, "Message not found")
     return result[0]

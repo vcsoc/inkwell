@@ -5,7 +5,7 @@ The Linux x86_64 build includes Electron, a frozen Python runtime, the Inkwell b
 ## Install
 
 ```sh
-sh dist/inkwell-0.1.12-linux-x64.run
+sh dist/inkwell-0.1.13-linux-x64.run
 ```
 
 Run as your ordinary desktop user, **not root**. The installer works offline, verifies its embedded payload checksum, and installs:

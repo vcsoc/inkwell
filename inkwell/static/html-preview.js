@@ -22,11 +22,15 @@ window.InkwellHtmlPreview = async (root, message, options) => {
     origins = [],
     changed = false,
     savedChoice = [],
+    linkChanged = false,
     infoPromise = null,
     frame = null;
   root.innerHTML = '<div class="email-preview-content"></div>';
   const checkbox = options.linksControl,
     content = root.querySelector('.email-preview-content');
+  // Only the server can attest Sent-folder ownership; a spoofed From header
+  // in Inbox must never grant automatic link permission.
+  checkbox.checked = !!message.sent_by_me;
   const current = () => root.isConnected && isCurrent();
   const info = () =>
     (infoPromise ||= api('/messages/' + message.id + '/preview-info').catch((error) => {
@@ -49,7 +53,7 @@ window.InkwellHtmlPreview = async (root, message, options) => {
       if (link.start < offset || message.body.slice(link.start, link.end) !== link.text) continue;
       fragment.append(document.createTextNode(message.body.slice(offset, link.start)));
       const anchor = document.createElement('a');
-      anchor.textContent = link.text;
+      anchor.textContent = link.display || link.text;
       anchor.href = link.url;
       anchor.target = '_blank';
       anchor.rel = 'noopener noreferrer';
@@ -74,6 +78,7 @@ window.InkwellHtmlPreview = async (root, message, options) => {
     frame.src = '/api/messages/' + message.id + '/html?' + query;
   };
   checkbox.onchange = async () => {
+    linkChanged = true;
     try {
       if (text) await renderText();
       else updateFrame();
@@ -117,6 +122,7 @@ window.InkwellHtmlPreview = async (root, message, options) => {
           : [origins[Number(choice.slice(7))]].filter(Boolean);
     const oldSelected = selected;
     const oldInline = allowInline;
+    const oldLinks = checkbox.checked;
     try {
       await api('/messages/' + message.id + '/remote-content', {
         method: 'PUT',
@@ -127,13 +133,15 @@ window.InkwellHtmlPreview = async (root, message, options) => {
       savedChoice = next;
       selected = next.includes('*') ? origins : next;
       allowInline = !!next.length;
+      checkbox.checked = allowInline || !!message.sent_by_me;
       updateFrame();
       banner.textContent = allowInline
-        ? 'Remote content enabled for this message. Listed HTTPS images and available embedded images may load; scripts remain blocked.'
+        ? 'Remote content enabled for this message. Images may load, and links can open on click; links may track you. Scripts remain blocked.'
         : 'To protect your privacy, inkwell has blocked remote content in this message.';
     } catch (error) {
       selected = oldSelected;
       allowInline = oldInline;
+      checkbox.checked = oldLinks;
       menu.value = oldInline
         ? oldSelected.length === origins.length
           ? 'all'
@@ -155,6 +163,7 @@ window.InkwellHtmlPreview = async (root, message, options) => {
     });
     if (!changed && metadata.saved_origins?.length) {
       allowInline = true;
+      if (!linkChanged) checkbox.checked = true;
       selected = metadata.saved_origins.includes('*')
         ? origins
         : metadata.saved_origins.filter((origin) => origins.includes(origin));
@@ -162,7 +171,8 @@ window.InkwellHtmlPreview = async (root, message, options) => {
         ? 'all'
         : `origin-${origins.indexOf(selected[0])}`;
       updateFrame();
-      banner.textContent = 'Remote content enabled for this message. Scripts remain blocked.';
+      banner.textContent =
+        'Remote content enabled for this message. Images may load, and links can open on click; links may track you. Scripts remain blocked.';
     } else if (changed && allowInline) {
       selected = savedChoice.includes('*')
         ? origins

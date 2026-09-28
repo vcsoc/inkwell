@@ -8,7 +8,7 @@ A desktop/mobile-first email, calendar, contacts and AI workspace. The desktop a
 
 ## Install on this Linux machine
 
-Build a bundled installer with `npm run build:linux`, then run `sh dist/inkwell-0.1.12-linux-x64.run`. The installed app appears as **inkwell** in your launcher and includes its Python backend—no development tools are required to run it. This is an unsigned Linux x86_64 user installer. See [Installing](docs/INSTALLING.md).
+Build a bundled installer with `npm run build:linux`, then run `sh dist/inkwell-0.1.13-linux-x64.run`. The installed app appears as **inkwell** in your launcher and includes its Python backend—no development tools are required to run it. This is an unsigned Linux x86_64 user installer. See [Installing](docs/INSTALLING.md).
 
 ## Start testing from source
 
@@ -44,7 +44,7 @@ For a phone, see [Mobile setup](docs/MOBILE.md). `localhost` on a phone refers t
 | --- | --- |
 | Desktop | Native OS window, isolated renderer, automatic local backend startup, single-instance launcher, Linux ICS Open with integration, optional Omarchy Super+I launch binding |
 | Mobile | Touch-oriented navigation, responsive mail reader, full-screen forms, safe-area support, install manifest, offline connectivity explanation |
-| Email | Multiple IMAP/SMTP accounts, inbox sync, isolated HTML/text previews, opt-in remote images and text links, search, pagination, persistent Today/This Week/This Month/Older date grouping, unread/tag pills, provider-backed Microsoft read/unread, flags, folder moves and deletion after write consent; local IMAP changes, drafts, reply, forward, explicit SMTP sending, draft autosave, local drag-and-drop, Trash restore, and [cached .eml file export](docs/EMAIL-EXPORT.md) |
+| Email | Multiple IMAP/SMTP accounts, inbox sync, isolated HTML/text previews, per-message remote-content consent, verified Sent-folder links by default and readable Outlook Safe Links, search, pagination, persistent Today/This Week/This Month/Older date grouping, unread/tag pills, provider-backed Microsoft read/unread, flags, folder moves and deletion after write consent; local IMAP changes, drafts, reply, forward, explicit SMTP sending, draft autosave, local drag-and-drop, Trash restore, and [cached .eml file export](docs/EMAIL-EXPORT.md) |
 | Attachments | Top-reader filenames/sizes/downloads, exact Outlook conversation discovery across folders, selected-message IMAP inspection, inline groups, cached/offline status; [scope and limits](docs/ATTACHMENTS.md) |
 | Calendar | Themed month grid/agenda, all-day and multi-day events, drag/two-endpoint ranges, timezone-aware daily/weekly/monthly/yearly repeats, whole-series editing, ICS/Outlook-invite import, `.ics` export, native 15-minute reminders while open, optional Microsoft Graph calendar writes with consent; [scope and retry boundaries](docs/PROVIDER-SYNC.md) |
 | Documents (0.1.11) | Local Documents folder tree and recent files, search/sort, safe moves, rich/UTF-8 editing, PDF page thumbnails, redaction, signatures, compression, export and print; [supported formats and limitations](docs/DOCUMENTS.md) |

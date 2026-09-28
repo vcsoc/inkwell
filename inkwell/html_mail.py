@@ -8,7 +8,7 @@ import ipaddress
 import json
 import re
 from functools import lru_cache
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 import nh3
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -165,15 +165,60 @@ def link_url(value, blocked_host=""):
     return None
 
 
+def outlook_target(value, blocked_host=""):
+    """Extract a display label only; retain Microsoft's actual Safe Links href."""
+    if not link_url(value, blocked_host):
+        return None
+    parsed = urlsplit(value)
+    if (
+        parsed.scheme != "https"
+        or not re.fullmatch(
+            r"(?:[a-z0-9-]+\.)?safelinks\.protection\.outlook\.com",
+            (parsed.hostname or "").lower(),
+        )
+        or parsed.path not in ("", "/")
+        or parsed.fragment
+    ):
+        return None
+    try:
+        targets = parse_qs(parsed.query, max_num_fields=12).get("url", [])
+    except ValueError:
+        return None
+    return link_url(targets[0], blocked_host) if len(targets) == 1 else None
+
+
+def readable_outlook_links(source, blocked_host=""):
+    # Exchange wraps plain-text URLs in simple anchor tags. Only rewrite their
+    # *visible text* when it exactly matches the protected href. The original
+    # href is kept so Microsoft's reputation/redirect service still applies.
+    anchor = re.compile(
+        r"(<a\b[^>]*?\bhref\s*=\s*([\"'])([^\"']+)\2[^>]*>)([^<>]*)(</a\s*>)",
+        re.IGNORECASE,
+    )
+
+    def replace(match):
+        href = html.unescape(match.group(3))
+        if html.unescape(match.group(4)).strip() != href:
+            return match.group(0)
+        target = outlook_target(href, blocked_host)
+        if not target:
+            return match.group(0)
+        display = target if len(target) <= 220 else target[:217] + "…"
+        return match.group(1) + html.escape(display, quote=False) + match.group(5)
+
+    return anchor.sub(replace, source[:500000])
+
+
 def text_links(body, blocked_host=""):
     links = []
     for match in re.finditer(r'https?://[^\s<>"\x27]+', body):
         text = match.group().rstrip(".,;:!?)]}")
         url = link_url(text, blocked_host)
         if url:
-            links.append(
-                {"start": match.start(), "end": match.start() + len(text), "text": text, "url": url}
-            )
+            item = {"start": match.start(), "end": match.start() + len(text), "text": text, "url": url}
+            if display := outlook_target(url, blocked_host):
+                item["display"] = display if len(display) <= 220 else display[:217] + "…"
+            links.append(item)
         if len(links) >= 500:
             break
     return links
@@ -208,7 +253,7 @@ def sanitize(source, allowed=(), blocked_host="", reader_colors=False, links=Fal
         return value
 
     result = nh3.clean(
-        source[:500000],
+        readable_outlook_links(source, blocked_host),
         tags=TAGS,
         clean_content_tags={
             "script",
