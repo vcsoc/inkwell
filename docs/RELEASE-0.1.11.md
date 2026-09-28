@@ -1,0 +1,9 @@
+# Inkwell 0.1.11
+
+Linux x86_64 mail and calendar update over 0.1.10.
+
+- **Load remote content** is now available even for mail with only CID inline images. The explicit choice persists for that one message until **Keep remote content blocked** is selected. Eligible HTTPS images remain sender-visible and privacy-sensitive. After permission, supported Outlook CID image parts are read without marking mail and converted to inert PNGs; scripts, SVGs, forms and untrusted image URLs remain blocked. An offline provider may prevent CID images from appearing.
+- Calendar shows tentative dated meetings detected in cached Microsoft Bookings reminders and parseable ICS text in cached email. The FinGlobal-style reminder can now appear at its date without accepting it first. Select it in Calendar to **Accept locally** (create an event), **Reject locally** (leave it visibly rejected), or **Ignore** (hide it). Repeated reminders are deduplicated and tentative items never trigger reminders.
+- These local actions do **not** send Outlook RSVPs or synchronize provider calendars; the Microsoft connection does not request calendar permissions. Undated mail, unseen attachment-only invitations and unsupported formats cannot reliably be added automatically. Check the original sender and displayed time zone before accepting; [manual ICS import](CALENDAR-IMPORT-REMINDERS.md) remains available.
+
+This update adds local database schema 18 for message-scoped permissions and meeting decisions. It preserves mail, prior installed releases and other workspace data; do not downgrade the active workspace to an older binary without a matching backup. The installer is unsigned Linux x86_64, built on a current host and not guaranteed to run on older glibc. `SHA256SUMS` verifies download integrity but not publisher authenticity.

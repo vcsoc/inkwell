@@ -1,6 +1,6 @@
 # Documents editor (development)
 
-**Documents is included in the 0.1.10 Linux x86_64 release.** Search, moves, export, printing and the compact toolbar are included. Open **Documents** from the desktop icon rail or mobile tab. On mobile, use the ☰ menu to open the folder tree; tap the pages icon to open the thumbnail drawer.
+**Documents is included in the 0.1.11 Linux x86_64 release.** Search, moves, export, printing and the compact toolbar are included. Open **Documents** from the desktop icon rail or mobile tab. On mobile, use the ☰ menu to open the folder tree; tap the pages icon to open the thumbnail drawer.
 
 ## Supported files
 

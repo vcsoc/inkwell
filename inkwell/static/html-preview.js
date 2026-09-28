@@ -18,7 +18,10 @@ window.InkwellHtmlPreview = async (root, message, options) => {
   root.style.setProperty('--email-link', color);
   let text = mode === 'text' || !message.html_body,
     selected = [],
+    allowInline = false,
     origins = [],
+    changed = false,
+    savedChoice = [],
     infoPromise = null,
     frame = null;
   root.innerHTML = '<div class="email-preview-content"></div>';
@@ -62,6 +65,7 @@ window.InkwellHtmlPreview = async (root, message, options) => {
     if (!current() || !frame) return;
     const query = new URLSearchParams({ appearance, q: options.query || '' });
     selected.forEach((origin) => query.append('allow', origin));
+    if (allowInline) query.set('inline', 'true');
     if (checkbox.checked) query.set('links', 'true');
     frame.setAttribute(
       'sandbox',
@@ -88,7 +92,7 @@ window.InkwellHtmlPreview = async (root, message, options) => {
     return;
   }
   content.innerHTML =
-    '<div class="privacy-banner" role="note"><span>To protect your privacy, inkwell has blocked remote content in this message.</span><label>Options<select aria-label="Remote content options"><option value="block">Keep remote content blocked</option><option value="all" disabled>Load listed HTTPS images for this view…</option><option value="text">Use text preview for this view</option><option value="settings">Preview settings…</option></select></label></div><p class="html-safety-note">Scripts, forms, external styles/fonts remain disabled. Loading images shares your IP and may report that you opened this message.</p><iframe class="html-message" title="Email HTML preview" sandbox="" referrerpolicy="no-referrer"></iframe>';
+    '<div class="privacy-banner" role="note"><span>To protect your privacy, inkwell has blocked remote content in this message.</span><label>Options<select aria-label="Remote content options"><option value="block">Keep remote content blocked</option><option value="all">Load remote content</option><option value="text">Use text preview for this view</option><option value="settings">Preview settings…</option></select></label></div><p class="html-safety-note">Scripts, forms, external styles/fonts remain disabled. Loading images shares your IP and may report that you opened this message.</p><iframe class="html-message" title="Email HTML preview" sandbox="" referrerpolicy="no-referrer"></iframe>';
   frame = content.querySelector('iframe');
   frame.style.backgroundColor = getComputedStyle(root).getPropertyValue('--surface');
   updateFrame();
@@ -105,16 +109,39 @@ window.InkwellHtmlPreview = async (root, message, options) => {
       await checkbox.onchange();
       return;
     }
-    selected =
+    const next =
       choice === 'block'
         ? []
         : choice === 'all'
-          ? origins
+          ? ['*']
           : [origins[Number(choice.slice(7))]].filter(Boolean);
-    updateFrame();
-    banner.textContent = selected.length
-      ? 'Remote images are allowed from the selected origins for this view. Scripts and other active content remain blocked.'
-      : 'To protect your privacy, inkwell has blocked remote content in this message.';
+    const oldSelected = selected;
+    const oldInline = allowInline;
+    try {
+      await api('/messages/' + message.id + '/remote-content', {
+        method: 'PUT',
+        body: { origins: next },
+      });
+      if (!current()) return;
+      changed = true;
+      savedChoice = next;
+      selected = next.includes('*') ? origins : next;
+      allowInline = !!next.length;
+      updateFrame();
+      banner.textContent = allowInline
+        ? 'Remote content enabled for this message. Listed HTTPS images and available embedded images may load; scripts remain blocked.'
+        : 'To protect your privacy, inkwell has blocked remote content in this message.';
+    } catch (error) {
+      selected = oldSelected;
+      allowInline = oldInline;
+      menu.value = oldInline
+        ? oldSelected.length === origins.length
+          ? 'all'
+          : `origin-${origins.indexOf(oldSelected[0])}`
+        : 'block';
+      if (current())
+        banner.textContent = 'Could not save remote content permission: ' + error.message;
+    }
   };
   try {
     const metadata = await info();
@@ -126,7 +153,22 @@ window.InkwellHtmlPreview = async (root, message, options) => {
       option.textContent = 'Load images from ' + origin + '…';
       menu.append(option);
     });
-    menu.querySelector('[value=all]').disabled = !origins.length;
+    if (!changed && metadata.saved_origins?.length) {
+      allowInline = true;
+      selected = metadata.saved_origins.includes('*')
+        ? origins
+        : metadata.saved_origins.filter((origin) => origins.includes(origin));
+      menu.value = metadata.saved_origins.includes('*')
+        ? 'all'
+        : `origin-${origins.indexOf(selected[0])}`;
+      updateFrame();
+      banner.textContent = 'Remote content enabled for this message. Scripts remain blocked.';
+    } else if (changed && allowInline) {
+      selected = savedChoice.includes('*')
+        ? origins
+        : savedChoice.filter((origin) => origins.includes(origin));
+      updateFrame();
+    }
   } catch (error) {
     if (current()) banner.textContent = 'Remote content remains blocked. ' + error.message;
   }

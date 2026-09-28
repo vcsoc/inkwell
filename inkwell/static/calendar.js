@@ -39,10 +39,11 @@ window.InkwellCalendar = ({ api, modal, state, esc, field, textarea, toast, impo
     start.setDate(1 - start.getDay());
     const end = new Date(start);
     end.setDate(end.getDate() + 42);
-    const events = await api(
-      '/events/occurrences?' +
-        new URLSearchParams({ start: start.toISOString(), end: end.toISOString() }),
-    );
+    const range = new URLSearchParams({ start: start.toISOString(), end: end.toISOString() });
+    const [events, pending] = await Promise.all([
+      api('/events/occurrences?' + range),
+      api('/calendar/pending?' + range),
+    ]);
     if (generation !== state.generation) return;
     state.events = events;
     let days = '';
@@ -51,12 +52,23 @@ window.InkwellCalendar = ({ api, modal, state, esc, field, textarea, toast, impo
       day.setDate(day.getDate() + i);
       const next = new Date(day);
       next.setDate(next.getDate() + 1);
-      const items = events.filter((e) => date(e, 'start') < next && date(e, 'end') > day);
+      const items = [
+        ...events
+          .filter((e) => date(e, 'start') < next && date(e, 'end') > day)
+          .map((e) => ({ event: e })),
+        ...pending
+          .filter((p) => date(p.event, 'start') < next && date(p.event, 'end') > day)
+          .map((p) => ({ pending: p })),
+      ].sort(
+        (a, b) =>
+          date(a.event || a.pending.event, 'start') - date(b.event || b.pending.event, 'start'),
+      );
       days += `<div class="calendar-day ${day.getMonth() !== month ? 'outside' : ''} ${key(day) === key(new Date()) ? 'is-today' : ''}" data-date="${key(day)}"><button class="day-number" data-day="${key(day)}" aria-label="Add event on ${esc(day.toDateString())}">${day.getDate()}</button>${items
         .slice(0, 3)
-        .map(
-          (e) =>
-            `<button class="calendar-event" data-event="${e.id}" title="${esc(e.title)}">${e.all_day ? '▰ ' : ''}${esc(e.title)}</button>`,
+        .map(({ event: e, pending: p }) =>
+          p
+            ? `<button class="calendar-event calendar-pending ${p.status === 'rejected' ? 'rejected' : ''}" data-pending="${esc(p.uid)}" title="${esc(p.event.title)} · ${esc(p.status)}">◌ ${esc(p.event.title)}</button>`
+            : `<button class="calendar-event" data-event="${e.id}" title="${esc(e.title)}">${e.all_day ? '▰ ' : ''}${esc(e.title)}</button>`,
         )
         .join('')}${items.length > 3 ? `<small>+${items.length - 3} more</small>` : ''}</div>`;
     }
@@ -65,17 +77,29 @@ window.InkwellCalendar = ({ api, modal, state, esc, field, textarea, toast, impo
         date(e, 'start') < new Date(year, month + 1, 1) &&
         date(e, 'end') > new Date(year, month, 1),
     );
-    const agendaRows = visible.length
-      ? visible
-          .map(
-            (e) =>
-              `<button class="agenda-row" data-event="${e.id}"><div class="agenda-date">${date(e, 'start').toLocaleDateString([], { month: 'short' })}<strong>${date(e, 'start').getDate()}</strong></div><div><h3>${esc(e.title)}</h3><p>${e.all_day ? 'All day' : esc(date(e, 'start').toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}${JSON.parse(e.recurrence || '{}').frequency && JSON.parse(e.recurrence).frequency !== 'none' ? ' · Repeating series' : ''}${e.location ? ' · ' + esc(e.location) : ''}</p></div></button>`,
-          )
-          .join('')
-      : '<div class="notice">A clear calendar. Tap a date to make room for something good.</div>';
+    const pendingVisible = pending.filter(
+      (p) =>
+        date(p.event, 'start') < new Date(year, month + 1, 1) &&
+        date(p.event, 'end') > new Date(year, month, 1),
+    );
+    const agendaRows =
+      visible.length || pendingVisible.length
+        ? visible
+            .map(
+              (e) =>
+                `<button class="agenda-row" data-event="${e.id}"><div class="agenda-date">${date(e, 'start').toLocaleDateString([], { month: 'short' })}<strong>${date(e, 'start').getDate()}</strong></div><div><h3>${esc(e.title)}</h3><p>${e.all_day ? 'All day' : esc(date(e, 'start').toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}${JSON.parse(e.recurrence || '{}').frequency && JSON.parse(e.recurrence).frequency !== 'none' ? ' · Repeating series' : ''}${e.location ? ' · ' + esc(e.location) : ''}</p></div></button>`,
+            )
+            .join('') +
+          pendingVisible
+            .map(
+              (p) =>
+                `<button class="agenda-row calendar-pending ${p.status === 'rejected' ? 'rejected' : ''}" data-pending="${esc(p.uid)}"><div class="agenda-date">${date(p.event, 'start').toLocaleDateString([], { month: 'short' })}<strong>${date(p.event, 'start').getDate()}</strong></div><div><h3>${esc(p.event.title)}</h3><p>${esc(p.status === 'rejected' ? 'Rejected locally' : 'Pending · Review invitation')} · ${esc(date(p.event, 'start').toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}</p></div></button>`,
+            )
+            .join('')
+        : '<div class="notice">A clear calendar. Tap a date to make room for something good.</div>';
     const agendaOpen = !!state.calendarAgendaOpen;
     $('#workspace').innerHTML =
-      `<div id="calendar-layout" class="calendar-layout"><div class="calendar-main"><div class="calendar-header"><h2>${state.month.toLocaleDateString([], { month: 'long', year: 'numeric' })}</h2><div class="calendar-controls"><button class="secondary" id="import-calendar">Import .ics</button><button class="secondary" id="select-range" aria-pressed="false" title="Choose the first and last day of an event">Select date range</button><button class="icon-button" id="month-prev" aria-label="Previous month">‹</button><button class="secondary" id="month-today">Today</button><button class="icon-button" id="month-next" aria-label="Next month">›</button></div></div><p id="range-hint" class="sr-only" role="status">Click a date, drag across days, or use Select date range to choose two endpoints.</p><div class="calendar-grid" aria-describedby="range-hint">${['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((d) => `<div class="day-label">${d}</div>`).join('')}${days}</div></div><aside class="calendar-agenda-panel ${agendaOpen ? 'open' : ''}" aria-label="Monthly agenda"><button type="button" id="agenda-toggle" class="calendar-agenda-toggle" aria-expanded="${agendaOpen}" aria-controls="calendar-agenda" aria-label="${agendaOpen ? 'Collapse' : 'Expand'} monthly agenda" title="${agendaOpen ? 'Collapse' : 'Expand'} monthly agenda"><span aria-hidden="true">▤</span><strong>Agenda</strong><small>${visible.length}</small></button><section class="agenda" id="calendar-agenda" ${agendaOpen ? '' : 'hidden'}><div class="calendar-header"><h2>This month’s agenda</h2><a class="secondary" href="/api/calendar.ics" download>Export .ics ↗</a></div>${agendaRows}<div class="quiet-note">Local calendar · not provider-synced · Desktop reminders for timed events: 15 minutes before, while Inkwell is open. Sleep or OS notification settings may delay/suppress alerts. All-day events have no timed alert.</div></section></aside></div>`;
+      `<div id="calendar-layout" class="calendar-layout"><div class="calendar-main"><div class="calendar-header"><h2>${state.month.toLocaleDateString([], { month: 'long', year: 'numeric' })}</h2><div class="calendar-controls"><button class="secondary" id="import-calendar">Import .ics</button><button class="secondary" id="select-range" aria-pressed="false" title="Choose the first and last day of an event">Select date range</button><button class="icon-button" id="month-prev" aria-label="Previous month">‹</button><button class="secondary" id="month-today">Today</button><button class="icon-button" id="month-next" aria-label="Next month">›</button></div></div><p id="range-hint" class="sr-only" role="status">Click a date, drag across days, or use Select date range to choose two endpoints.</p><div class="calendar-grid" aria-describedby="range-hint">${['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((d) => `<div class="day-label">${d}</div>`).join('')}${days}</div></div><aside class="calendar-agenda-panel ${agendaOpen ? 'open' : ''}" aria-label="Monthly agenda"><button type="button" id="agenda-toggle" class="calendar-agenda-toggle" aria-expanded="${agendaOpen}" aria-controls="calendar-agenda" aria-label="${agendaOpen ? 'Collapse' : 'Expand'} monthly agenda" title="${agendaOpen ? 'Collapse' : 'Expand'} monthly agenda"><span aria-hidden="true">▤</span><strong>Agenda</strong><small>${visible.length + pendingVisible.length}</small></button><section class="agenda" id="calendar-agenda" ${agendaOpen ? '' : 'hidden'}><div class="calendar-header"><h2>This month’s agenda</h2><a class="secondary" href="/api/calendar.ics" download>Export .ics ↗</a></div>${agendaRows}<div class="quiet-note">Local calendar · not provider-synced · Desktop reminders for timed events: 15 minutes before, while Inkwell is open. Sleep or OS notification settings may delay/suppress alerts. All-day events have no timed alert.</div></section></aside></div>`;
     $('#agenda-toggle').onclick = () => {
       state.calendarAgendaOpen = !state.calendarAgendaOpen;
       const panel = $('#calendar-layout .calendar-agenda-panel');
@@ -109,6 +133,33 @@ window.InkwellCalendar = ({ api, modal, state, esc, field, textarea, toast, impo
           (b.onclick = () =>
             window.inkwellEventForm(events.find((e) => e.id === Number(b.dataset.event)))),
       );
+    document.querySelectorAll('[data-pending]').forEach((button) => {
+      button.onclick = () => {
+        const item = pending.find((p) => p.uid === button.dataset.pending);
+        if (!item) return;
+        modal(
+          'Review meeting from email',
+          `<section id="calendar-pending-review"><h3>${esc(item.event.title)}</h3><p>${esc(new Date(item.event.start).toLocaleString())} – ${esc(new Date(item.event.end).toLocaleTimeString())}</p><p class="notice">Suggested from an unverified email. Check the original message and timezone before accepting. These decisions are local to Inkwell; no Outlook RSVP or provider calendar changes are sent. Pending and rejected meetings do not trigger reminders.</p><div class="form-actions"><button type="button" class="primary" data-meeting-decision="accept">Accept locally</button><button type="button" class="secondary" data-meeting-decision="reject">Reject locally</button><button type="button" class="secondary" data-meeting-decision="ignore">Ignore</button></div></section>`,
+        );
+        document.querySelectorAll('[data-meeting-decision]').forEach((action) => {
+          action.onclick = async () => {
+            action.disabled = true;
+            try {
+              await api(`/calendar/pending/${item.message_id}`, {
+                method: 'POST',
+                body: { uid: item.uid, action: action.dataset.meetingDecision },
+              });
+              $('#modal').close();
+              await render();
+              toast('Meeting decision saved locally; no provider RSVP was sent.');
+            } catch (error) {
+              action.disabled = false;
+              toast(error.message);
+            }
+          };
+        });
+      };
+    });
     let rangeMode = false,
       anchor = null,
       drag = null,
@@ -167,7 +218,7 @@ window.InkwellCalendar = ({ api, modal, state, esc, field, textarea, toast, impo
     );
     const grid = $('.calendar-grid');
     grid.onpointerdown = (e) => {
-      if (e.button !== 0 || e.target.closest('[data-event]') || rangeMode) return;
+      if (e.button !== 0 || e.target.closest('[data-event], [data-pending]') || rangeMode) return;
       const cell = e.target.closest('[data-date]');
       if (!cell) return;
       drag = finish = cell.dataset.date;

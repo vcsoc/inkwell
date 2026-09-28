@@ -13,12 +13,12 @@ Above the HTML body, Inkwell displays:
 Its **Options** dropdown offers:
 
 - Keep remote content blocked (also re-blocks a currently permitted view).
-- Load listed HTTPS images for this view by explicitly choosing that option.
+- **Load remote content** (always selectable for HTML, including messages with only CID inline images). HTTPS images from listed origins may contact the sender; available CID images are fetched read-only from the mail provider and re-encoded as inert PNGs.
 - Load images from an individual listed origin by selecting it. The inline warning explains IP disclosure and open tracking; there is no second confirmation dialog.
 - Use text preview for this view.
 - Open preview settings.
 
-Image permission is never silently persisted by sender or domain. Reopening/reloading the message, or rebuilding the reader, starts blocked again. There is no permanent sender allowlist: a displayed From address is not reliable evidence of trust. Switching back to blocked cannot undo requests that already occurred.
+Your explicit selection is persisted for **that individual message**, across reopening/reloading; it can be revoked with **Keep remote content blocked**. Permission is never silently granted to a sender or domain: a displayed From address is not reliable evidence of trust. Switching back to blocked cannot undo requests that already occurred.
 
 ## Text links
 
@@ -34,16 +34,16 @@ Links use `_blank`, `noopener noreferrer` and no-referrer policy. Web/PWA opens 
 
 The backend uses **nh3** (an HTML5-aware sanitizer) with explicit allowed HTML tags, attributes and CSS properties. Mail is never inserted directly into the app's DOM. The preview is a separate authenticated HTML response in an iframe with an empty `sandbox` attribute by default (no scripts, same-origin privilege, forms, navigation privileges or popups). Enabling text links adds only `allow-popups allow-popups-to-escape-sandbox` to both iframe and response sandbox. Scripts, same-origin access, forms and top navigation remain forbidden. Its response also has a sandbox CSP, `script-src 'none'`, `default-src 'none'`, restricted inline styles, `base-uri 'none'`, `form-action 'none'`, frame-ancestor restrictions and no-referrer policy. The main app's CSP remains unchanged.
 
-Initially image `src` attributes are removed, and the frame's `img-src` is `none`. Explicit opt-in permits only eligible images from selected origins that actually occur in that message; CSP independently restricts image loading to those origins. The backend does not proxy or fetch those images. Browser security tests observe zero initial remote requests and only the selected image requests after opt-in, with no referrer.
+Initially image `src` attributes are removed, and the frame's `img-src` is `none`. Explicit opt-in permits only eligible HTTPS images from selected origins in that message; CSP restricts requests to those origins. Browser security tests observe zero initial remote requests and only selected image requests after opt-in, with no referrer. For Outlook CID images, a read-only MIME fetch occurs only after opt-in; allowlisted small raster attachments are re-encoded as static PNG data images. HTML mail cannot supply arbitrary data URLs or SVGs. If the provider is offline, those CID images remain blocked.
 
-Only HTTPS images using the standard port and eligible hostnames/global IP literals are offered. Localhost/private IP literals, local/internal names, relative URLs, credentials in URLs, data URLs, CID images and insecure HTTP images are not loaded. This validation is **not a DNS-aware firewall**; after permission the browser resolves/connects to the chosen hostnames. Loading images can disclose your IP, contact a tracking service and tell the sender the message was opened.
+Only HTTPS images using the standard port and eligible hostnames/global IP literals are offered. Localhost/private IP literals, local/internal names, relative URLs, credentials in URLs, user-supplied data URLs, unsafe CID attachments and insecure HTTP images are not loaded. This validation is **not a DNS-aware firewall**; after permission the browser resolves/connects to the chosen hostnames. Loading images can disclose your IP, contact a tracking service and tell the sender the message was opened.
 
 Scripts, forms, SVG/MathML documents, embedded frames/objects, CSS image URLs, external stylesheets, fonts, audio/video remain disabled even after image permission. Text links stay disabled unless separately enabled for the current reader view. Inline presentational styles are limited. Layout will not exactly match every newsletter. This is not an antivirus, a guarantee against all browser vulnerabilities, or a guarantee that an email's claims are trustworthy. Up to 50 eligible origins can be offered in one view; other resources remain blocked.
 
 ## Local storage and preservation
 
-Schema **4** adds HTML storage and local tag metadata. Raw HTML/text and tags are local plaintext data with the same private file permissions as the rest of the workspace, not encrypted email storage. HTML and text are capped at 500,000 characters each. IMAP uses its supplied text alternative where available; Microsoft Graph's text copy is derived from the HTML response.
+Schema **18** adds saved per-message image permissions and local meeting decisions (after HTML storage was introduced in schema 4). Raw HTML/text and tags are local plaintext data with the same private file permissions as the rest of the workspace, not encrypted email storage. HTML and text are capped at 500,000 characters each. IMAP uses its supplied text alternative where available; Microsoft Graph's text copy is derived from the HTML response.
 
 IMAP remains read-only with BODY.PEEK, and Graph retrieval remains GET-only with existing Mail.Read permission. Downloading HTML, changing preview format, allowing image loads and editing tags never deletes, moves or marks server mail. Images do contact their hosts only when explicitly permitted. Existing local moves, read flags, stars and tags survive imports.
 
-Older schema-3 binaries cannot open an upgraded schema-4 workspace. Keep a consistent pre-upgrade backup and its vault key if rollback is needed; installing an older executable alone is not a data rollback.
+Older binaries cannot open a schema-18 workspace. Keep a consistent pre-upgrade backup and its vault key if rollback is needed; installing an older executable alone is not a data rollback.

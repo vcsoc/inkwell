@@ -1,13 +1,20 @@
 """Script-free isolated HTML previews. No remote requests are made by the backend."""
 
+import base64
+import hashlib
 import html
+import io
 import ipaddress
+import json
 import re
+from functools import lru_cache
 from urllib.parse import urlsplit, urlunsplit
 
 import nh3
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, Field
+from PIL import Image, UnidentifiedImageError
 
 from . import store, preferences
 from typing import Literal
@@ -172,7 +179,7 @@ def text_links(body, blocked_host=""):
     return links
 
 
-def sanitize(source, allowed=(), blocked_host="", reader_colors=False, links=False):
+def sanitize(source, allowed=(), blocked_host="", reader_colors=False, links=False, inline_images=None):
     origins = set()
     blocked = 0
 
@@ -188,6 +195,8 @@ def sanitize(source, allowed=(), blocked_host="", reader_colors=False, links=Fal
         if tag == "a" and attr == "href":
             return link_url(value, blocked_host) if links else None
         if tag == "img" and attr == "src":
+            if inline_images and value.lower().startswith("cid:"):
+                return inline_images.get(value[4:].strip("<>").casefold())
             url = image_url(value, blocked_host)
             if url:
                 origin = "https://" + urlsplit(url).netloc
@@ -226,7 +235,7 @@ def sanitize(source, allowed=(), blocked_host="", reader_colors=False, links=Fal
         filter_style_properties=STYLES - {"color", "background-color", "border-color"}
         if reader_colors
         else STYLES,
-        url_schemes={"http", "https"} if links else {"https"},
+        url_schemes={"http", "https", "cid", "data"} if inline_images else {"http", "https"} if links else {"https"},
         link_rel="noopener noreferrer",
         set_tag_attribute_values={"a": {"target": "_blank"}} if links else {},
         url_relative="deny",
@@ -248,13 +257,65 @@ def message(id):
 def preview_info(message_id: int, request: Request):
     row = message(message_id)
     _, origins, blocked = sanitize(row["html_body"] or "", blocked_host=request.url.hostname or "")
+    with store.db() as db:
+        saved = db.execute("SELECT origins FROM message_remote_content WHERE message_id=?", (message_id,)).fetchone()
     return {
+        "saved_origins": json.loads(saved[0]) if saved else [],
         "has_html": bool(row["html_body"]),
         "needs_sync": row["html_body"] is None and bool(row["remote_key"]),
         "origins": origins,
         "blocked_images": blocked,
         "text_links": text_links(row["body"], request.url.hostname or ""),
     }
+
+
+class RemoteContentChoice(BaseModel):
+    origins: list[str] = Field(max_length=50)
+
+
+@router.put("/{message_id}/remote-content")
+def remember_remote_content(message_id: int, choice: RemoteContentChoice, request: Request):
+    row = message(message_id)
+    _, origins, _ = sanitize(row["html_body"] or "", blocked_host=request.url.hostname or "")
+    selected = choice.origins
+    if len(selected) != len(set(selected)) or any(origin not in origins for origin in selected if origin != "*") or ("*" in selected and selected != ["*"]):
+        raise HTTPException(422, "Choose only image origins listed in this message")
+    with store.db() as db:
+        db.execute("INSERT INTO message_remote_content(message_id,origins) VALUES (?,?) ON CONFLICT(message_id) DO UPDATE SET origins=excluded.origins", (message_id, json.dumps(selected)))
+    return {"origins": selected}
+
+
+@lru_cache(maxsize=12)
+def embedded_images(message_id, revision):
+    """Re-encode explicitly requested Outlook CID images as inert inline PNGs."""
+    from . import calendar_import
+
+    mail = calendar_import.message_mime(message_id)
+    images = {}
+    total = 0
+    for index, part in enumerate(mail.walk()):
+        if index >= 300 or len(images) >= 30 or total >= 3_000_000:
+            break
+        cid = (part.get("Content-ID") or "").strip("<>").casefold()
+        if not cid or part.get_content_type() not in {"image/png", "image/jpeg", "image/webp", "image/gif"}:
+            continue
+        payload = part.get_payload(decode=True)
+        if not payload or len(payload) > 1_000_000:
+            continue
+        try:
+            with Image.open(io.BytesIO(payload)) as image:
+                if image.width * image.height > 4_000_000 or image.width < 1 or image.height < 1:
+                    continue
+                output = io.BytesIO()
+                image.convert("RGBA" if "A" in image.getbands() else "RGB").save(output, format="PNG")
+                data = output.getvalue()
+        except (OSError, ValueError, UnidentifiedImageError, Image.DecompressionBombError):
+            continue
+        if len(data) > 1_000_000 or total + len(data) > 3_000_000:
+            continue
+        images[cid] = "data:image/png;base64," + base64.b64encode(data).decode("ascii")
+        total += len(data)
+    return images
 
 
 @router.get("/{message_id}/html")
@@ -264,6 +325,7 @@ def preview(
     allow: list[str] = Query(default=[]),
     appearance: Literal["theme", "light", "dark"] = "theme",
     links: bool = False,
+    inline: bool = False,
     q: str = Query(default="", max_length=200),
 ):
     row = message(message_id)
@@ -273,9 +335,17 @@ def preview(
     _, origins, _ = sanitize(row["html_body"] or "", blocked_host=host)
     if any(origin not in origins for origin in allow):
         raise HTTPException(400, "Image origin is not part of this message")
+    images = {}
+    if inline and "cid:" in (row["html_body"] or "").lower():
+        try:
+            images = embedded_images(message_id, hashlib.sha256((row["html_body"] or "").encode()).hexdigest())
+        except HTTPException:
+            # A disconnected account can still display ordinary safe HTML.
+            pass
     body, _, _ = sanitize(
         row["html_body"] or "",
         allowed=set(allow),
+        inline_images=images,
         blocked_host=host,
         reader_colors=True,
         links=links,
@@ -297,7 +367,7 @@ def preview(
     colors += "body mark[data-search-hit],body a[href] mark[data-search-hit]{background-color:#ffdf68!important;color:#17212b!important;border-radius:2px}"
     policy = (
         "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src "
-        + (" ".join(allow) if allow else "'none'")
+        + (" ".join([*allow, *(["data:"] if images else [])]) if allow or images else "'none'")
         + "; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox"
         + (" allow-popups allow-popups-to-escape-sandbox" if links else "")
     )

@@ -41,6 +41,7 @@ from . import (
     rules,
     calendar_tools,
     calendar_import,
+    meeting_suggestions,
     calendar_reminders,
     attachments,
     documents,
@@ -840,6 +841,7 @@ def delete_event(event_id: int):
 
 
 app.include_router(calendar_import.router(Event, event_values))
+app.include_router(meeting_suggestions.router_for(Event, event_values))
 app.include_router(calendar_reminders.router)
 app.include_router(attachments.router)
 

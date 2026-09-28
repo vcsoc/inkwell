@@ -36,6 +36,14 @@ html .calendar-event,
 html .agenda-row {
   border-radius: var(--radius);
 }
+html .calendar-pending {
+  border: 1px dashed var(--accent);
+  background: var(--accent-light);
+}
+html .calendar-pending.rejected {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
 html .agenda-row {
   padding: calc(16px * var(--space-scale));
 }

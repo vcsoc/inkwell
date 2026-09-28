@@ -168,7 +168,8 @@ def parse(content, zone_name, model):
     return entries
 
 
-def message_calendars(message_id):
+def message_mime(message_id):
+    """Fetch the original Outlook MIME without changing provider mail or responses."""
     with store.db() as db:
         message = db.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
         if not message:
@@ -210,7 +211,11 @@ def message_calendars(message_id):
             (account["id"], account["email"]),
         ).fetchone():
             raise HTTPException(409, "Account disconnected while reading invitation")
-    mail = BytesParser(policy=policy.default).parsebytes(bytes(chunks))
+    return BytesParser(policy=policy.default).parsebytes(bytes(chunks))
+
+
+def message_calendars(message_id):
+    mail = message_mime(message_id)
     calendars = []
     for part in mail.walk():
         if part.get_content_type() == "text/calendar" or (

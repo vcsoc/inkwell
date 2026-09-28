@@ -1665,6 +1665,7 @@ const backgroundSync = InkwellBackgroundSync({
   toast,
   refresh: async () => {
     await refreshCounts();
+    if (state.view === 'calendar' && !$('#modal').open) await renderCalendar();
     if (
       !state.composer &&
       !$('#modal').open &&

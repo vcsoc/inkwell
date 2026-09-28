@@ -1,5 +1,9 @@
+import io
+from email.message import EmailMessage
+
 import pytest
-from inkwell import html_mail, store
+from PIL import Image
+from inkwell import calendar_import, html_mail, store
 
 
 @pytest.mark.parametrize(
@@ -88,3 +92,44 @@ def test_enabling_links_preserves_scriptless_sandbox_and_does_not_enable_images(
     assert links == [
         {"start": 4, "end": 27, "text": "http://example.org/path", "url": "http://example.org/path"}
     ]
+
+
+def test_remote_content_permission_is_message_scoped_persistent_and_validated(client):
+    with store.db() as db:
+        id = db.execute(
+            "INSERT INTO messages(sender,recipient,subject,body,html_body,date) VALUES ('a@example.org','b@example.org','Remote image','Text',?,'2099-01-01')",
+            ('<img src="https://images.example.org/icon.png"><img src="cid:icon">',),
+        ).lastrowid
+        other = db.execute(
+            "INSERT INTO messages(sender,recipient,subject,body,html_body,date) VALUES ('a@example.org','b@example.org','Other','Text','<p>No images</p>','2099-01-01')"
+        ).lastrowid
+    endpoint = f"/api/messages/{id}/remote-content"
+    assert client.get(f"/api/messages/{id}/preview-info").json()["saved_origins"] == []
+    assert client.put(endpoint, json={"origins": ["https://evil.example.org"]}).status_code == 422
+    assert client.put(endpoint, json={"origins": ["*"]}).json() == {"origins": ["*"]}
+    assert client.get(f"/api/messages/{id}/preview-info").json()["saved_origins"] == ["*"]
+    assert client.get(f"/api/messages/{other}/preview-info").json()["saved_origins"] == []
+    assert client.put(endpoint, json={"origins": []}).status_code == 200
+    assert client.get(f"/api/messages/{id}/preview-info").json()["saved_origins"] == []
+
+
+def test_explicit_cid_images_are_safe_reencoded_and_scripts_remain_blocked(client, monkeypatch):
+    with store.db() as db:
+        id = db.execute(
+            "INSERT INTO messages(sender,recipient,subject,body,html_body,date) VALUES ('a@example.org','b@example.org','Embedded','Text',?,'2099-01-01')",
+            ('<img src="cid:icon" alt="Safe"><img src="data:image/svg+xml;base64,PHN2Zz4=" alt="Blocked"><script>alert(1)</script>',),
+        ).lastrowid
+    image = io.BytesIO()
+    Image.new("RGB", (2, 2), "blue").save(image, format="PNG")
+    mail = EmailMessage()
+    mail.set_content("Body")
+    mail.add_attachment(image.getvalue(), maintype="image", subtype="png", filename="inline.png", cid="<icon>")
+    monkeypatch.setattr(calendar_import, "message_mime", lambda message_id: mail)
+    html_mail.embedded_images.cache_clear()
+    assert 'src="data:' not in client.get(f"/api/messages/{id}/html").text
+    result = client.get(f"/api/messages/{id}/html?inline=true")
+    assert result.status_code == 200
+    assert 'src="data:image/png;base64,' in result.text
+    assert "image/svg+xml" not in result.text and "<script" not in result.text
+    assert "img-src data:" in result.headers["content-security-policy"]
+    assert "script-src 'none'" in result.headers["content-security-policy"]

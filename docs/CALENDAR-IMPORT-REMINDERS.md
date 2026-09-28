@@ -1,5 +1,7 @@
 # Meeting invitations, ICS import and native reminders
 
+Calendar now shows **tentative suggestions** for dated Microsoft Bookings reminders and valid calendar entries embedded in cached plain-text mail. These appear on their date even before you accept them. Open a suggestion to **Accept locally** (creates a normal local event with reminders), **Reject locally** (keeps it visibly marked rejected), or **Ignore** (hides it). Repeated reminders for the same booking are deduplicated; no unsolicited email becomes a reminder until accepted. The sender is unverified; check the original email and time zone before accepting. These choices do **not** send an Outlook RSVP or change the provider calendar: the connected Microsoft account has only Mail.Read/Mail.Send, not Calendars.ReadWrite. Invitations present only in MIME attachments, undated mail, provider calendar items not cached in mail, and unsupported/unrecognised formats cannot be inferred automatically; use the explicit ICS import action below. There is no guarantee every meeting can be detected from arbitrary email text.
+
 ## Add events
 
 - **Calendar → Import .ics**: choose a file, review its titles/times, then **Add to local calendar**. The calendar displays the first imported event's month.
@@ -9,7 +11,7 @@
 
 The native file capability accepts only explicitly supplied local ICS paths or local file URLs, reads regular files with a 2 MB bound, and never executes them or follows remote calendar URLs. Only the trusted main app document can retrieve queued contents; renderer code cannot request arbitrary filesystem paths. The command-line equivalent is `inkwell --open-calendar /path/to/meeting.ics`.
 
-Imports are local only: no RSVP, acceptance, decline, meeting response, provider calendar synchronization or provider mail mutation occurs. Original messages and files remain unchanged. Opening the review does not create events. Import commits the entire selected batch atomically.
+Imports are local only: no provider RSVP, meeting response, provider calendar synchronization or provider mail mutation occurs. Original messages and files remain unchanged. Opening the review does not create events. Import commits the entire selected batch atomically.
 
 Files are limited to 2 MB and 100 events; Outlook MIME retrieval is capped at 8 MB. UID deduplication skips previously imported invitations instead of overwriting locally edited events. Updates and cancellations must be reviewed/applied manually. Deleting the local event clears its import marker so an explicit later reimport is possible.
 

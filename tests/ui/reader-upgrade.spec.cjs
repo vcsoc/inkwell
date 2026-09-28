@@ -64,9 +64,7 @@ test.afterEach(async ({ page }) => {
   if (original) await request(page, '/preferences', 'PUT', original);
 });
 
-test('HTML is sandboxed, no remote fetch until explicit permission, and reopening blocks again', async ({
-  page,
-}) => {
+test('HTML is sandboxed, remote content is explicit and saved per message', async ({ page }) => {
   const requests = [],
     requestHeaders = [];
   await page.route('https://**/*', (route) => {
@@ -99,11 +97,35 @@ test('HTML is sandboxed, no remote fetch until explicit permission, and reopenin
   await page.reload();
   await page.locator(`[data-message="${id}"]`).click();
   await expect(frame.getByRole('heading', { name: 'Safe HTML fixture' })).toBeVisible();
-  expect(requests.length).toBe(2);
+  await expect(page.getByLabel('Remote content options')).toHaveValue('origin-0');
+  await expect.poll(() => requests.length).toBe(3);
+  await page.getByLabel('Remote content options').selectOption('block');
+  await page.reload();
+  await page.locator(`[data-message="${id}"]`).click();
+  await expect(page.getByLabel('Remote content options')).toHaveValue('block');
+  expect(requests.length).toBe(3);
   await page.screenshot({
     path: 'test-results/' + test.info().project.name + '-secure-html.png',
     fullPage: true,
   });
+});
+
+test('Load remote content stays selectable when no HTTPS image origin is listed', async ({
+  page,
+}) => {
+  await page.route(`**/api/messages/${id}/preview-info`, async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      json: { ...(await response.json()), origins: [], blocked_images: 8 },
+    });
+  });
+  await page.locator(`[data-message="${id}"]`).click();
+  const menu = page.getByLabel('Remote content options');
+  await expect(menu.locator('[value="all"]')).toBeEnabled();
+  await menu.selectOption('all');
+  await expect(menu).toHaveValue('all');
+  expect((await request(page, `/messages/${id}/preview-info`)).saved_origins).toEqual(['*']);
 });
 
 test('Enabling reader links opens an isolated browser tab without loading tracking images', async ({
@@ -258,7 +280,7 @@ test('unread and editable reusable tags appear as pills; text preview preference
   await expect(page.locator('#reader .tag-pill')).toHaveText(['Project', 'Follow up']);
 });
 
-test('pane widths resize by pointer and keyboard and persist; Ctrl zoom resets', async ({
+test('pane widths resize by pointer and keyboard and persist; Ctrl+Shift zoom resets', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1500, height: 1000 });
@@ -277,7 +299,7 @@ test('pane widths resize by pointer and keyboard and persist; Ctrl zoom resets',
   await page.reload();
   await expect(page.locator('#sidebar')).toHaveCSS('width', '270px');
   await expect(page.locator('#message-list')).toHaveCSS('width', '440px');
-  await page.keyboard.press('Control+=');
+  await page.keyboard.press('Control+Shift+=');
   await expect(page.locator('html')).toHaveCSS('zoom', '1.1');
   expect((await page.locator('#sidebar').boundingBox()).height).toBeLessThanOrEqual(1000.5);
   await page.setViewportSize({ width: 800, height: 1000 });
@@ -291,10 +313,10 @@ test('pane widths resize by pointer and keyboard and persist; Ctrl zoom resets',
   expect(menu.x + menu.width).toBeLessThanOrEqual(1500);
   expect(menu.y + menu.height).toBeLessThanOrEqual(1000);
   await page.keyboard.press('Escape');
-  await page.keyboard.press('Control+-');
+  await page.keyboard.press('Control+Shift+-');
   await expect(page.locator('html')).toHaveCSS('zoom', '1');
-  await page.keyboard.press('Control+=');
-  await page.keyboard.press('Control+0');
+  await page.keyboard.press('Control+Shift+=');
+  await page.keyboard.press('Control+Shift+0');
   await expect(page.locator('html')).toHaveCSS('zoom', '1');
   await expect.poll(async () => (await request(page, '/preferences')).ui_zoom).toBe(100);
 });

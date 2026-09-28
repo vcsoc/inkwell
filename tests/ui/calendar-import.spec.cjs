@@ -46,6 +46,44 @@ test('ICS review imports into calendar once and explains native reminder limitat
   }
 });
 
+test('cached Bookings reminder appears as a tentative calendar item for local acceptance', async ({
+  page,
+}) => {
+  const title = 'Bookings review ' + Date.now();
+  await page.goto('/');
+  const reminder = await request(page, '/drafts', 'POST', {
+    subject: 'Reminder: ' + title,
+    body: `Upcoming booking for\nAttendee\n${title}\nMonday, September 28, 2026\n7:10 AM - 7:30 AM\n(UTC-05:00) Eastern Time (US & Canada)\nPowered by Microsoft Bookings`,
+  });
+  try {
+    await request(page, '/messages/' + reminder.id, 'PATCH', { folder: 'inbox' });
+    await page.goto('/#/calendar');
+    await page.evaluate(async () => {
+      state.month = new Date(2026, 8, 1);
+      await renderCalendar();
+    });
+    await expect(page.locator('.calendar-grid [data-pending]').first()).toContainText(title);
+    expect((await request(page, '/events')).filter((event) => event.title === title)).toHaveLength(
+      0,
+    );
+    await page.locator('.calendar-grid [data-pending]').first().click();
+    await expect(page.locator('#calendar-pending-review')).toContainText('no Outlook RSVP');
+    await page.getByRole('button', { name: 'Accept locally' }).click();
+    await expect(page.locator('.calendar-grid [data-pending]')).toHaveCount(0);
+    await expect(
+      page.locator('.calendar-grid [data-event]').filter({ hasText: title }).first(),
+    ).toBeVisible();
+    expect((await request(page, '/events')).filter((event) => event.title === title)).toHaveLength(
+      1,
+    );
+  } finally {
+    for (const event of await request(page, '/events'))
+      if (event.title === title) await request(page, '/events/' + event.id, 'DELETE');
+    await request(page, '/messages/' + reminder.id, 'PATCH', { folder: 'trash' });
+    await request(page, '/messages/' + reminder.id, 'DELETE');
+  }
+});
+
 test('message menu opens invite review without sending an RSVP or auto-adding events', async ({
   page,
 }) => {
