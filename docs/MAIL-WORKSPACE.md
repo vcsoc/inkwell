@@ -26,6 +26,10 @@ Open **Settings → Notifications** to enable new-mail audio, choose **all new m
 
 Right-click a built-in, local or server folder (or use Shift+F10 / touch-and-hold), then choose **Pin folder**. A **Pinned** group above Inbox shows a shortcut with the folder's name, full path and cached message count. Choose **Unpin folder** from the shortcut or original folder to remove it. Pins are saved in this workspace and never move messages or change the provider. Selecting a folder displays an open-folder icon; other folders use a closed-folder icon. Hierarchical indentation reflects actual parent folders; local branches use the same level spacing as their siblings.
 
+## Folder colors
+
+Right-click a folder in the Mail sidebar and use the visible color swatch in the **Folder color…** row to choose a color immediately. Click **Folder color…** to open the dialog, including **Use theme color** to reset. The Mail icon in the narrow application rail also offers Inbox's menu on right-click. Keyboard users can focus a folder and press Shift+F10, then End to focus the swatch. Colors affect only local appearance; mail and provider folders are unchanged.
+
 ## Create local subfolders
 
 Right-click Inbox, Archive, Sent, Drafts, Trash, a local folder or a displayed server folder and choose **New subfolder…**. Enter a name and click **Create subfolder**. Keyboard users can use Shift+F10/Context Menu; on touch screens, hold a folder. Escape dismisses the menu and restores focus. The name form can be closed without creating anything.

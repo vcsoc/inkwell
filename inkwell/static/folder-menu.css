@@ -25,6 +25,30 @@
 .folder-context-menu button:focus-visible {
   background: var(--accent-light);
 }
+.folder-context-menu .folder-color-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.folder-context-menu .folder-color-row button {
+  width: auto;
+  min-width: 0;
+  flex: 1;
+}
+.folder-context-menu .folder-color-row input[type='color'] {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.folder-context-menu .folder-color-row input[type='color']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 #navigation [data-local-branch] > summary {
   display: flex;
   position: relative;

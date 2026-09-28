@@ -657,6 +657,13 @@ async function moveFolderForm(selected) {
     }
   };
 }
+function saveFolderColor(key, value) {
+  const colors = { ...(preferences.folder_colors || {}) };
+  if (value) colors[key] = value;
+  else delete colors[key];
+  saveWorkspace({ folder_colors: colors });
+  paintNavigation();
+}
 InkwellFolderMenu(
   $('#navigation'),
   async (parent) => {
@@ -712,11 +719,7 @@ InkwellFolderMenu(
     );
     const form = $('#folder-color-form');
     const update = async (value) => {
-      const colors = { ...(preferences.folder_colors || {}) };
-      if (value) colors[selected.key] = value;
-      else delete colors[selected.key];
-      saveWorkspace({ folder_colors: colors });
-      paintNavigation();
+      saveFolderColor(selected.key, value);
       await requestModalClose();
     };
     form.onsubmit = (event) => {
@@ -726,6 +729,10 @@ InkwellFolderMenu(
     $('#folder-color-reset').onclick = () => void update(null);
   },
   (key) => preferences.folder_colors?.[key] || '',
+  (selected, value) => {
+    saveFolderColor(selected.key, value);
+    toast('Folder color saved.');
+  },
 );
 async function refreshCounts() {
   const [counts, accounts, remoteFolders, localFolders, pinnedFolders] = await Promise.all([

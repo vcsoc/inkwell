@@ -8,6 +8,7 @@ window.InkwellFolderMenu = (
   isPinned,
   setColor,
   getColor,
+  setColorDirect,
 ) => {
   const menu = document.createElement('div');
   menu.id = 'folder-menu';
@@ -25,12 +26,20 @@ window.InkwellFolderMenu = (
   const pinItem = document.createElement('button');
   pinItem.type = 'button';
   pinItem.setAttribute('role', 'menuitem');
+  const colorRow = document.createElement('div');
+  colorRow.className = 'folder-color-row';
   const colorItem = document.createElement('button');
   colorItem.type = 'button';
   colorItem.textContent = 'Folder color…';
   colorItem.setAttribute('role', 'menuitem');
-  menu.append(item, moveItem, pinItem, colorItem);
+  const colorInput = document.createElement('input');
+  colorInput.type = 'color';
+  colorInput.setAttribute('aria-label', 'Choose folder color');
+  colorInput.title = 'Choose a color directly for this folder';
+  colorRow.append(colorItem, colorInput);
+  menu.append(item, moveItem, pinItem, colorRow);
   document.body.append(menu);
+  const mailRailButton = document.querySelector('.app-rail [data-view="inbox"]');
   let trigger = null,
     parent = null,
     timer = null,
@@ -38,7 +47,7 @@ window.InkwellFolderMenu = (
   let scrollSnapshot = new Map();
   const target = (e) => {
     const b = e.target.closest('[data-view],[data-remote-folder]');
-    if (!b || !navigation.contains(b)) return null;
+    if (!b || (!navigation.contains(b) && b !== mailRailButton)) return null;
     const key = b.dataset.remoteFolder ? 'remote:' + b.dataset.remoteFolder : b.dataset.view;
     return /^(inbox|archive|sent|drafts|trash|local-[1-9][0-9]*|remote:[1-9][0-9]*)$/.test(key)
       ? { button: b, key }
@@ -50,7 +59,13 @@ window.InkwellFolderMenu = (
   };
   const show = (t, x, y) => {
     trigger = t.button;
-    parent = { key: t.key, name: trigger.getAttribute('aria-label') || trigger.textContent.trim() };
+    parent = {
+      key: t.key,
+      name:
+        trigger === mailRailButton
+          ? 'Inbox'
+          : trigger.getAttribute('aria-label') || trigger.textContent.trim(),
+    };
     scrollSnapshot = new Map();
     for (let element = trigger; element; element = element.parentElement)
       scrollSnapshot.set(element, [element.scrollLeft, element.scrollTop]);
@@ -61,8 +76,14 @@ window.InkwellFolderMenu = (
     moveItem.hidden = !move || !t.key.startsWith('local-');
     pinItem.hidden = !togglePin;
     pinItem.textContent = isPinned?.(t.key) ? 'Unpin folder' : 'Pin folder';
-    colorItem.hidden = !setColor;
+    colorRow.hidden = !setColor;
     colorItem.textContent = getColor?.(t.key) ? 'Change folder color…' : 'Folder color…';
+    colorInput.hidden = !setColorDirect;
+    colorInput.value =
+      getColor?.(t.key) ||
+      getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() ||
+      '#486b54';
+    colorInput.setAttribute('aria-label', `Choose color for ${parent.name}`);
     menu.classList.remove('hidden');
     const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
     menu.style.maxWidth = Math.max(1, (innerWidth - 16) / zoom) + 'px';
@@ -74,21 +95,25 @@ window.InkwellFolderMenu = (
     menu.style.top = Math.max(8, Math.min(y, innerHeight - box.height - 8)) / zoom + 'px';
     item.focus({ preventScroll: true });
   };
-  navigation.addEventListener('contextmenu', (e) => {
+  const openMenu = (e) => {
     const t = target(e);
     if (!t) return;
     e.preventDefault();
     clearTimeout(timer);
     show(t, e.clientX, e.clientY);
-  });
-  navigation.addEventListener('keydown', (e) => {
+  };
+  const openKeyboardMenu = (e) => {
     if (e.key !== 'ContextMenu' && !(e.shiftKey && e.key === 'F10')) return;
     const t = target(e);
     if (!t) return;
     e.preventDefault();
     const r = t.button.getBoundingClientRect();
     show(t, r.left, r.bottom);
-  });
+  };
+  navigation.addEventListener('contextmenu', openMenu);
+  navigation.addEventListener('keydown', openKeyboardMenu);
+  mailRailButton?.addEventListener('contextmenu', openMenu);
+  mailRailButton?.addEventListener('keydown', openKeyboardMenu);
   let touchStart = null;
   navigation.addEventListener('pointerdown', (e) => {
     suppressClick = false;
@@ -141,6 +166,12 @@ window.InkwellFolderMenu = (
     close(true);
     Promise.resolve(setColor(selected)).catch((e) => onError(e.message));
   };
+  colorInput.onchange = () => {
+    const selected = parent;
+    const value = colorInput.value;
+    close(true);
+    Promise.resolve(setColorDirect(selected, value)).catch((e) => onError(e.message));
+  };
   menu.onkeydown = (e) => {
     e.stopPropagation();
     if (['Escape', 'Tab'].includes(e.key)) {
@@ -148,7 +179,12 @@ window.InkwellFolderMenu = (
       close(true);
     } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
       e.preventDefault();
-      const items = [item, moveItem, pinItem, colorItem].filter((b) => !b.hidden),
+      const items = [
+          item,
+          moveItem,
+          pinItem,
+          ...(colorRow.hidden ? [] : [colorItem, colorInput]),
+        ].filter((b) => !b.hidden),
         index = items.indexOf(document.activeElement);
       items[
         e.key === 'Home'
@@ -172,7 +208,7 @@ window.InkwellFolderMenu = (
     if (!menu.contains(e.target)) close();
   });
   document.addEventListener('contextmenu', (e) => {
-    if (!navigation.contains(e.target)) close();
+    if (!navigation.contains(e.target) && !mailRailButton?.contains(e.target)) close();
   });
   document.addEventListener(
     'scroll',

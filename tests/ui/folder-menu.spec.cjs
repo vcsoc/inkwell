@@ -105,6 +105,38 @@ test('Folder menu closes on another folder and color stays after reload', async 
   await expect(page.locator(inbox + ' .folder-icon')).not.toHaveCSS('color', 'rgb(194, 116, 57)');
 });
 
+test('Inline Inbox color swatch saves directly and the Mail rail offers the same menu', async ({
+  page,
+}) => {
+  const original = await api(page, '/preferences');
+  try {
+    await api(page, '/preferences', 'PUT', { ...original, layout: 'classic' });
+    await page.reload();
+    const inbox = '#navigation [data-view="inbox"]:not(.pinned-link)';
+    await showSidebar(page, inbox);
+    await page.locator(inbox).click({ button: 'right' });
+    const picker = page
+      .getByRole('menu', { name: 'Folder actions' })
+      .getByLabel('Choose color for Inbox');
+    await expect(picker).toBeVisible();
+    await picker.fill('#b5632f');
+    await expect(page.locator(inbox + ' .folder-icon')).toHaveCSS('color', 'rgb(181, 99, 47)');
+    await expect
+      .poll(async () => (await api(page, '/preferences')).folder_colors.inbox)
+      .toBe('#b5632f');
+    await page.reload();
+    await expect(page.locator(inbox + ' .folder-icon')).toHaveCSS('color', 'rgb(181, 99, 47)');
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await page.locator('.app-rail [data-view="inbox"]').click({ button: 'right' });
+    await expect(page.getByRole('menuitem', { name: 'Change folder color…' })).toBeVisible();
+    await expect(
+      page.getByRole('menu', { name: 'Folder actions' }).getByLabel('Choose color for Inbox'),
+    ).toBeVisible();
+  } finally {
+    await api(page, '/preferences', 'PUT', original);
+  }
+});
+
 test('Server-folder context creates a local child and keeps the server tree outside Inbox summary', async ({
   page,
 }) => {
