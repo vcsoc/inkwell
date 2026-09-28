@@ -404,10 +404,12 @@ $('#navigation').addEventListener('dblclick', (event) => {
 function navigation() {
   if (state.view === 'documents') {
     navigationKey = '';
-    $('#navigation').innerHTML = '<p class="doc-side-muted">Loading Documents…</p>';
     $$('.mobile-tabs button, .app-rail button').forEach((button) =>
       button.classList.toggle('active', button.dataset.view === 'documents'),
     );
+    // Mail refreshes also call navigation(): keep the active Documents tree and its listeners.
+    if (!$('#navigation .doc-sidebar'))
+      $('#navigation').innerHTML = '<p class="doc-side-muted">Loading Documents…</p>';
     return;
   }
   const key = JSON.stringify([

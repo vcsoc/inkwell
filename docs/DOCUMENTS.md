@@ -1,6 +1,6 @@
-# Documents editor (0.1.7 local review build)
+# Documents editor (0.1.8 local review build)
 
-**This feature is in development and included in the 0.1.7 local review build, not a published stable release.** Start Inkwell from this repository or install the 0.1.7 review build to try it. Open **Documents** from the desktop icon rail or mobile tab. On mobile, use the ☰ menu to open the folder tree; tap **Pages** to open the thumbnail drawer.
+**This feature is in development and included in the 0.1.8 local review build, not a published stable release.** Start Inkwell from this repository or install the 0.1.8 review build to try it. Open **Documents** from the desktop icon rail or mobile tab. On mobile, use the ☰ menu to open the folder tree; tap **Pages** to open the thumbnail drawer.
 
 ## Supported files
 

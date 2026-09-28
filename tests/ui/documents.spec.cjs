@@ -51,6 +51,11 @@ test('Nested folders expand and newly created files open from their selected fol
   await expect(row).toBeVisible();
   await row.click();
   await expect(row).toHaveAttribute('aria-expanded', 'true');
+  // Background mail refreshes call navigation(); they must not replace this tree.
+  await page.evaluate(() => navigation());
+  await page.evaluate(() => navigation());
+  await expect(row).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#doc-new-file')).toBeVisible();
   page.once('dialog', (dialog) => dialog.accept('work.txt'));
   await page.locator('#doc-new-file').click();
   await expect(page.locator('#doc-file-name')).toHaveText('work.txt');
