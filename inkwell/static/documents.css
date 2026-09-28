@@ -833,7 +833,8 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
 }
 #doc-sign-dialog,
 #doc-password-dialog,
-#doc-print-dialog {
+#doc-print-dialog,
+#doc-create-dialog {
   width: min(650px, calc(100vw - 25px));
   max-height: 90dvh;
   overflow: auto;
@@ -845,7 +846,8 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
 }
 #doc-sign-dialog::backdrop,
 #doc-password-dialog::backdrop,
-#doc-print-dialog::backdrop {
+#doc-print-dialog::backdrop,
+#doc-create-dialog::backdrop {
   background: #0008;
 }
 #doc-sign-dialog h2 {
@@ -884,11 +886,13 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
   background: #fff;
   touch-action: none;
 }
-#doc-password-dialog {
+#doc-password-dialog,
+#doc-create-dialog {
   width: min(400px, calc(100vw - 25px));
 }
 #doc-password-dialog h2,
-#doc-print-dialog h2 {
+#doc-print-dialog h2,
+#doc-create-dialog h2 {
   margin: 0 0 10px;
   font-size: 20px;
 }
@@ -898,6 +902,7 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
   line-height: 1.4;
 }
 #doc-password-dialog input,
+#doc-create-name,
 .doc-print-fields :is(input, select) {
   display: block;
   width: 100%;
@@ -909,11 +914,17 @@ html[data-documents='true'] .sidebar #navigation.doc-scrolling::-webkit-scrollba
   color: var(--ink);
   background: var(--surface);
 }
-#doc-password-error {
+#doc-password-error,
+#doc-create-error {
   color: var(--danger, #d85d57);
 }
-#doc-password-error[hidden] {
+#doc-password-error[hidden],
+#doc-create-error[hidden] {
   display: none;
+}
+#doc-create-label {
+  display: block;
+  margin-top: 12px;
 }
 .doc-dialog-actions {
   display: flex;

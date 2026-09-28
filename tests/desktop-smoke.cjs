@@ -85,6 +85,12 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 14000 }, async (t) 
     await expect(window.locator('#documents-workspace')).toBeVisible();
     if (!(await window.locator('#doc-tree').isVisible())) await window.locator('#menu').click();
     await expect(window.locator('#doc-tree')).toBeVisible();
+    await window.locator('#doc-new-file').click();
+    await expect(window.locator('#doc-create-dialog')).toBeVisible();
+    await expect(window.locator('#doc-create-name')).toHaveValue('Untitled.docx');
+    await window.locator('#doc-create-submit').click();
+    await expect(window.locator('#doc-file-name')).toHaveText('Untitled.docx');
+    expect(fs.existsSync(path.join(data, 'Documents', 'Untitled.docx'))).toBe(true);
     await window.keyboard.press('Escape');
     await window.locator('[data-view="inbox"]:visible').click();
     await expect(window.locator('.message-row')).toHaveCount(5);

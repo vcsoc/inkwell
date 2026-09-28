@@ -6,6 +6,14 @@ async function revealTree(page) {
   await expect(page.locator('#doc-tree')).toBeVisible();
 }
 
+async function createItem(page, kind, name) {
+  await page.locator(kind === 'folder' ? '#doc-new-folder' : '#doc-new-file').click();
+  await expect(page.locator('#doc-create-dialog')).toBeVisible();
+  await page.locator('#doc-create-name').fill(name);
+  await page.locator('#doc-create-submit').click();
+  await expect(page.locator('#doc-create-dialog')).not.toBeVisible();
+}
+
 test('Documents rail, folder tree, recent files, text editing and conflict-safe save', async ({
   page,
 }, info) => {
@@ -14,8 +22,7 @@ test('Documents rail, folder tree, recent files, text editing and conflict-safe 
   await expect(page.locator('#documents-workspace')).toBeVisible();
   await revealTree(page);
   await expect(page.locator(`[data-view="documents"]:visible`)).toHaveClass(/active/);
-  page.once('dialog', (dialog) => dialog.accept(file));
-  await page.locator('#doc-new-file').click();
+  await createItem(page, 'file', file);
   await expect(page.locator('#doc-file-name')).toHaveText(file);
   await expect(page.locator('#doc-code-editor')).toBeVisible();
   await page.locator('#doc-code-editor').fill('# My notes\nA working draft');
@@ -39,14 +46,50 @@ test('Documents rail, folder tree, recent files, text editing and conflict-safe 
   await expect(page).toHaveURL(/#\/documents$/);
 });
 
+test('New document dialog validates names, protects unsaved edits and preserves existing files', async ({
+  page,
+}, info) => {
+  const name = `safe-${info.project.name}-${Date.now()}.md`;
+  await page.goto('/#/documents');
+  await revealTree(page);
+  await page.locator('#doc-new-file').click();
+  await expect(page.locator('#doc-create-name')).toHaveValue('Untitled.docx');
+  await page.locator('#doc-create-cancel').click();
+  await expect(page.locator('#doc-create-dialog')).not.toBeVisible();
+  await page.locator('#doc-new-file').click();
+  await page.locator('#doc-create-name').fill('no-extension');
+  await page.locator('#doc-create-submit').click();
+  await expect(page.locator('#doc-create-error')).toContainText('supported document format');
+  await page.locator('#doc-create-name').fill(name);
+  await page.locator('#doc-create-submit').click();
+  await expect(page.locator('#doc-file-name')).toHaveText(name);
+  await page.locator('#doc-code-editor').fill('Keep this draft');
+  await revealTree(page);
+  await page.locator('#doc-new-file').click();
+  await page.locator('#doc-create-name').fill('other.md');
+  await page.locator('#doc-create-submit').click();
+  await expect(page.locator('#doc-create-error')).toContainText('Save your current document');
+  await page.locator('#doc-create-cancel').click();
+  await expect(page.locator('#doc-code-editor')).toHaveValue('Keep this draft');
+  await page.keyboard.press('Escape');
+  await page.locator('#doc-save').click();
+  await revealTree(page);
+  await page.locator('#doc-new-file').click();
+  await page.locator('#doc-create-name').fill(name);
+  await page.locator('#doc-create-submit').click();
+  await expect(page.locator('#doc-create-error')).toContainText('already has that name');
+  await page.locator('#doc-create-cancel').click();
+  await expect(page.locator('#doc-file-name')).toHaveText(name);
+  await expect(page.locator('#doc-code-editor')).toHaveValue('Keep this draft');
+});
+
 test('Nested folders expand and newly created files open from their selected folder', async ({
   page,
 }, info) => {
   const folder = `drafts-${info.project.name}-${Date.now()}`;
   await page.goto('/#/documents');
   await revealTree(page);
-  page.once('dialog', (dialog) => dialog.accept(folder));
-  await page.locator('#doc-new-folder').click();
+  await createItem(page, 'folder', folder);
   const row = page.locator('#doc-tree').getByRole('button', { name: new RegExp(folder) });
   await expect(row).toBeVisible();
   await row.click();
@@ -56,8 +99,7 @@ test('Nested folders expand and newly created files open from their selected fol
   await page.evaluate(() => navigation());
   await expect(row).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('#doc-new-file')).toBeVisible();
-  page.once('dialog', (dialog) => dialog.accept('work.txt'));
-  await page.locator('#doc-new-file').click();
+  await createItem(page, 'file', 'work.txt');
   await expect(page.locator('#doc-file-name')).toHaveText('work.txt');
   await expect(page.locator('#doc-recent [data-doc-file]').first()).toHaveAttribute(
     'data-doc-file',
@@ -75,8 +117,7 @@ test('Document zoom keys, wheel and controls stay scoped; title follows the open
   const name = `zoom-${info.project.name}-${Date.now()}.md`;
   await page.goto('/#/documents');
   await revealTree(page);
-  page.once('dialog', (dialog) => dialog.accept(name));
-  await page.locator('#doc-new-file').click();
+  await createItem(page, 'file', name);
   await expect(page.locator('#breadcrumb')).toHaveText(`documents. ${name}`);
   const paper = page.locator('.doc-code-shell');
   const before = await paper.boundingBox();
@@ -105,8 +146,7 @@ test('Multiple selection and context-menu copy/paste preserve originals', async 
   await page.goto('/#/documents');
   await revealTree(page);
   for (const name of [`first-${suffix}.txt`, `second-${suffix}.txt`, `third-${suffix}.txt`]) {
-    page.once('dialog', (dialog) => dialog.accept(name));
-    await page.locator('#doc-new-file').click();
+    await createItem(page, 'file', name);
   }
   const first = page.locator(`#doc-tree [data-doc-file="first-${suffix}.txt"]`);
   const second = page.locator(`#doc-tree [data-doc-file="second-${suffix}.txt"]`);
@@ -117,8 +157,7 @@ test('Multiple selection and context-menu copy/paste preserve originals', async 
   await expect(third).toHaveClass(/doc-selected/);
   await first.click({ button: 'right' });
   await page.locator('[data-doc-menu="copy"]').click();
-  page.once('dialog', (dialog) => dialog.accept(`destination-${suffix}`));
-  await page.locator('#doc-new-folder').click();
+  await createItem(page, 'folder', `destination-${suffix}`);
   const destination = page.locator(`#doc-tree [data-doc-folder="destination-${suffix}"]`);
   await destination.click({ button: 'right' });
   await page.locator('[data-doc-menu="paste"]').click();
@@ -142,8 +181,7 @@ test('PDF page previews, permanent redaction and image signatures save separate 
   const original = `pdf-${info.project.name}-${Date.now()}.pdf`;
   await page.goto('/#/documents');
   await revealTree(page);
-  page.once('dialog', (dialog) => dialog.accept(original));
-  await page.locator('#doc-new-file').click();
+  await createItem(page, 'file', original);
   await expect(page.locator('#doc-pdf-image')).toBeVisible();
   if (!(await page.locator('[data-doc-page="0"]').isVisible()))
     await page.locator('#doc-show-pages').click();
@@ -197,14 +235,12 @@ test('Folder search, sorting, visible path and drag-drop move preserve open docu
   await page.goto('/#/documents');
   await revealTree(page);
   for (const folder of [from, into]) {
-    page.once('dialog', (dialog) => dialog.accept(folder));
-    await page.locator('#doc-new-folder').click();
+    await createItem(page, 'folder', folder);
     await expect(page.locator(`#doc-tree [data-doc-folder="${folder}"]`)).toBeVisible();
   }
   await page.locator(`#doc-tree [data-doc-folder="${from}"]`).click();
   await expect(page.locator('#doc-nav-path')).toContainText(from);
-  page.once('dialog', (dialog) => dialog.accept('move-me.txt'));
-  await page.locator('#doc-new-file').click();
+  await createItem(page, 'file', 'move-me.txt');
   await page.locator('#doc-code-editor').fill('Preserved during move');
   await page.locator('#doc-save').click();
   await page.locator('#doc-code-editor').fill('Unsaved work survives a move');
@@ -245,8 +281,7 @@ test('PDF export, scoped zoom, print options and password retry dialog', async (
   const file = `print-${info.project.name}-${Date.now()}.txt`;
   await page.goto('/#/documents');
   await revealTree(page);
-  page.once('dialog', (dialog) => dialog.accept(file));
-  await page.locator('#doc-new-file').click();
+  await createItem(page, 'file', file);
   await page.locator('#doc-code-editor').fill('A print test');
   await page.locator('#doc-export-pdf').click();
   await expect(page.locator('#doc-file-name')).toHaveText(file.replace('.txt', '.export.pdf'));
@@ -326,8 +361,7 @@ test('Rich document formatting, table insertion and round-trip', async ({ page }
   await page.goto('/#/documents');
   await revealTree(page);
   await expect(page.locator('#doc-new-file')).toBeVisible();
-  page.once('dialog', (dialog) => dialog.accept(file));
-  await page.locator('#doc-new-file').click();
+  await createItem(page, 'file', file);
   await expect(page.locator('#doc-rich-editor')).toBeVisible();
   await page.locator('#doc-rich-editor').fill('Hello world');
   await page.locator('#doc-rich-editor').press('End');
