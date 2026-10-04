@@ -28,6 +28,7 @@ module.exports = defineConfig({
     env: {
       INKWELL_DATA_DIR: testData,
       INKWELL_DOCUMENTS_DIR: path.join(testData, 'Documents'),
+      XDG_DATA_HOME: path.join(testData, 'xdg-data'),
       INKWELL_ACCESS_KEY: '',
       INKWELL_HOSTS: '',
     },

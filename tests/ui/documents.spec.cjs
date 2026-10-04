@@ -175,6 +175,109 @@ test('Multiple selection and context-menu copy/paste preserve originals', async 
   await expect(third).toHaveClass(/doc-selected/);
 });
 
+test('Nested Documents, contextual rename and OS Trash preserve open drafts and close menus', async ({
+  page,
+}, info) => {
+  const suffix = `${info.project.name}-${Date.now()}`;
+  const parent = `parent-${suffix}`;
+  const renamed = `renamed-${suffix}`;
+  const child = 'nested';
+  const original = 'draft.txt';
+  await page.goto('/#/documents');
+  await revealTree(page);
+  await createItem(page, 'folder', parent);
+  let parentRow = page.locator(`#doc-tree [data-doc-folder="${parent}"]`);
+  await parentRow.click();
+  await createItem(page, 'folder', child);
+  const nestedRow = page.locator(`#doc-tree [data-doc-folder="${parent}/${child}"]`);
+  expect((await nestedRow.boundingBox()).x).toBeGreaterThan((await parentRow.boundingBox()).x + 15);
+  await nestedRow.click();
+  await createItem(page, 'file', original);
+  await expect(page.locator('#doc-top-filename')).toHaveText(original);
+  await expect(page.locator('#doc-file-name')).toBeHidden();
+  await page.locator('#doc-code-editor').fill('Unsaved, keep me while renaming');
+  await revealTree(page);
+  let fileRow = page.locator(`#doc-tree [data-doc-file="${parent}/${child}/${original}"]`);
+  await fileRow.click({ button: 'right' });
+  await expect(page.locator('#doc-context-menu')).toBeVisible();
+  await page.locator('[data-doc-menu="rename"]').click();
+  await expect(page.locator('#doc-rename-dialog')).toBeVisible();
+  await page.locator('#doc-rename-name').fill('draft.pdf');
+  await page.locator('#doc-rename-submit').click();
+  await expect(page.locator('#doc-rename-error')).toContainText('file extension');
+  await page.locator('#doc-rename-name').fill('first.txt');
+  await page.locator('#doc-rename-submit').click();
+  await expect(page.locator('#doc-top-filename')).toHaveText('first.txt');
+  await expect(page.locator('#doc-code-editor')).toHaveValue('Unsaved, keep me while renaming');
+  await expect(page.locator('#doc-save')).toBeEnabled();
+  if (info.project.name === 'mobile') await page.keyboard.press('Escape');
+  await page.locator('#doc-top-rename').click();
+  await expect(page.locator('#doc-top-rename-input')).toBeVisible();
+  await page.locator('#doc-top-rename-input').fill('finished.txt');
+  await page.locator('#doc-top-rename-input').press('Enter');
+  await expect(page.locator('#doc-top-filename')).toHaveText('finished.txt');
+  await page.screenshot({ path: `test-results/documents-top-name-${info.project.name}.png` });
+  await page.locator('#doc-save').click();
+  const path = `${parent}/${child}/finished.txt`;
+  expect(
+    (
+      await (
+        await page.request.get('/api/documents/download?path=' + encodeURIComponent(path))
+      ).body()
+    ).toString(),
+  ).toBe('Unsaved, keep me while renaming');
+  await revealTree(page);
+  const regularColor = await parentRow.evaluate((row) => getComputedStyle(row).backgroundColor);
+  await parentRow.click({ button: 'right' });
+  await expect(parentRow).toHaveClass(/doc-context-target/);
+  const contextColor = await parentRow.evaluate((row) => getComputedStyle(row).backgroundColor);
+  expect(contextColor).not.toBe(regularColor);
+  await page.locator('#doc-root-folder').click();
+  await expect(page.locator('#doc-context-menu')).toBeHidden();
+  await expect(parentRow).not.toHaveClass(/doc-context-target/);
+  await page.locator('#doc-root-folder').click();
+  await parentRow.click({ button: 'right' });
+  await page.locator('[data-doc-menu="rename"]').click();
+  await page.locator('#doc-rename-name').fill(renamed);
+  await page.locator('#doc-rename-submit').click();
+  parentRow = page.locator(`#doc-tree [data-doc-folder="${renamed}"]`);
+  const renamedChild = page.locator(`#doc-tree [data-doc-folder="${renamed}/${child}"]`);
+  await expect(renamedChild).toBeVisible();
+  if ((await renamedChild.getAttribute('aria-expanded')) !== 'true') await renamedChild.click();
+  await expect(page.locator('#doc-top-filename')).toHaveText('finished.txt');
+  const newPath = `${renamed}/${child}/finished.txt`;
+  expect(
+    (await page.request.get('/api/documents/download?path=' + encodeURIComponent(newPath))).ok(),
+  ).toBe(true);
+  fileRow = page.locator(`#doc-tree [data-doc-file="${newPath}"]`);
+  await page.locator('#doc-code-editor').fill('Another unsaved edit');
+  await fileRow.click({ button: 'right' });
+  await page.locator('[data-doc-menu="trash"]').click();
+  await expect(page.locator('#doc-trash-dialog')).toBeVisible();
+  await expect(page.locator('#doc-trash-description')).toContainText('discard its unsaved edits');
+  await page.locator('#doc-trash-cancel').click();
+  await expect(page.locator('#doc-code-editor')).toHaveValue('Another unsaved edit');
+  expect(
+    (await page.request.get('/api/documents/download?path=' + encodeURIComponent(newPath))).ok(),
+  ).toBe(true);
+  await fileRow.click({ button: 'right' });
+  await page.locator('[data-doc-menu="trash"]').click();
+  await page.locator('#doc-trash-submit').click();
+  await expect(page.locator('#doc-trash-dialog')).toBeHidden();
+  await expect(page.locator('#doc-top-name')).toBeHidden();
+  await expect(fileRow).toHaveCount(0);
+  expect(
+    (
+      await page.request.get('/api/documents/download?path=' + encodeURIComponent(newPath))
+    ).status(),
+  ).toBe(404);
+  await parentRow.click({ button: 'right' });
+  await page.locator('[data-doc-menu="trash"]').click();
+  await page.locator('#doc-trash-submit').click();
+  await expect(parentRow).toHaveCount(0);
+  await expect(page.locator('#documents-footer-status')).toContainText('operating system’s Trash');
+});
+
 test('PDF page previews, permanent redaction and image signatures save separate copies', async ({
   page,
 }, info) => {

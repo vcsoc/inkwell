@@ -54,6 +54,52 @@ def test_document_tree_recent_text_and_safe_paths(docs):
     assert client.post("/api/documents/import", params={"name": "large.txt"}, content=b"a" * 40_000_001).status_code == 413
 
 
+def test_rename_and_os_trash_preserve_other_documents_and_recent(docs, monkeypatch, tmp_path):
+    client, folder = docs
+    (folder / "Reports").mkdir()
+    (folder / "Reports" / "review.md").write_text("private draft", encoding="utf-8")
+    (folder / "collision.md").write_text("untouched", encoding="utf-8")
+    client.get("/api/documents/open", params={"path": "Reports/review.md"})
+    rename = client.post("/api/documents/rename", json={"path": "Reports", "name": "Archive"})
+    assert rename.status_code == 200, rename.text
+    assert rename.json() == {"path": "Archive", "old_path": "Reports"}
+    assert (folder / "Archive" / "review.md").read_text() == "private draft"
+    assert client.get("/api/documents/recent").json()[0]["path"] == "Archive/review.md"
+    assert client.post("/api/documents/rename", json={"path": "Archive/review.md", "name": "review.pdf"}).status_code == 422
+    assert client.post("/api/documents/rename", json={"path": "Archive/review.md", "name": "../escape.md"}).status_code == 422
+    assert client.post("/api/documents/rename", json={"path": "", "name": "elsewhere"}).status_code == 404
+    assert client.post("/api/documents/rename", json={"path": "../outside", "name": "note.md"}).status_code == 403
+    (folder / "Archive" / "collision.md").write_text("untouched", encoding="utf-8")
+    assert client.post("/api/documents/rename", json={"path": "Archive/review.md", "name": "collision.md"}).status_code == 409
+    assert (folder / "Archive" / "collision.md").read_text() == "untouched"
+    result = client.post("/api/documents/rename", json={"path": "Archive/review.md", "name": "final.md"})
+    assert result.status_code == 200, result.text
+    assert client.get("/api/documents/recent").json()[0]["path"] == "Archive/final.md"
+    (folder / "shortcut").symlink_to(tmp_path, target_is_directory=True)
+    assert client.post("/api/documents/rename", json={"path": "shortcut", "name": "renamed"}).status_code == 403
+    assert client.post("/api/documents/trash", json={"path": "shortcut"}).status_code == 403
+    trashed = tmp_path / "OS Trash"
+    trashed.mkdir()
+    calls = []
+
+    def recycle(path):
+        calls.append(path)
+        Path(path).rename(trashed / Path(path).name)
+
+    monkeypatch.setattr(documents, "send2trash", recycle)
+    assert client.post("/api/documents/trash", json={"path": ""}).status_code == 404
+    result = client.post("/api/documents/trash", json={"path": "Archive"})
+    assert result.status_code == 200 and result.json()["trashed"] is True
+    assert calls == [str(folder / "Archive")]
+    assert (trashed / "Archive" / "final.md").read_text() == "private draft"
+    assert not (folder / "Archive").exists()
+    assert (folder / "collision.md").read_text() == "untouched"
+    assert client.get("/api/documents/recent").json() == []
+    monkeypatch.setattr(documents, "send2trash", lambda _: (_ for _ in ()).throw(OSError("trash unavailable")))
+    assert client.post("/api/documents/trash", json={"path": "collision.md"}).status_code == 503
+    assert (folder / "collision.md").exists()
+
+
 def test_pdf_redaction_is_permanent_and_outputs_a_new_file(docs):
     client, folder = docs
     pdf = pymupdf.open()
@@ -246,8 +292,11 @@ def test_encrypted_pdf_password_retry_and_preview(docs):
     with pymupdf.open(folder / changed.json()["path"]) as redacted:
         assert "PRIVATE-CONTENT" not in redacted[0].get_text()
     assert (folder / "locked.pdf").read_bytes() == encrypted
-    (folder / "locked.pdf").write_bytes(encrypted + b"\n")
-    assert client.get("/api/documents/open", params={"path": "locked.pdf"}).status_code == 423
+    renamed = client.post("/api/documents/rename", json={"path": "locked.pdf", "name": "secured.pdf"})
+    assert renamed.status_code == 200, renamed.text
+    assert client.get("/api/documents/page", params={"path": "secured.pdf", "page": 0}).content.startswith(b"\x89PNG")
+    (folder / "secured.pdf").write_bytes(encrypted + b"\n")
+    assert client.get("/api/documents/open", params={"path": "secured.pdf"}).status_code == 423
 
 
 def test_pdf_export_preview_and_safe_printer_options(docs, monkeypatch):

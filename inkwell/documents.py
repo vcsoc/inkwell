@@ -34,6 +34,7 @@ from lxml import html as lxml_html
 from markdown_it import MarkdownIt
 from PIL import Image
 from pydantic import BaseModel, Field
+from send2trash import send2trash
 
 from . import store
 
@@ -459,6 +460,93 @@ class MoveItem(BaseModel):
     destination: str = ""
 
 
+class RenameItem(BaseModel):
+    path: str
+    name: str = Field(max_length=160)
+
+
+def managed_item(path):
+    source = resolve(path)
+    if source == root() or not source.exists() or source.is_symlink() or source.name.startswith("."):
+        raise HTTPException(404, "Document or folder not found")
+    if source.is_file() and source.suffix.lower() not in FORMATS:
+        raise HTTPException(415, "This file type is not available in Documents")
+    if not source.is_file() and not source.is_dir():
+        raise HTTPException(415, "This item is not available in Documents")
+    return source
+
+
+def update_pdf_password_paths(old_path, new_path=None):
+    with PDF_PASSWORD_LOCK:
+        for (path, file_revision), password in list(PDF_PASSWORDS.items()):
+            if path == old_path or path.startswith(old_path + "/"):
+                PDF_PASSWORDS.pop((path, file_revision), None)
+                if new_path is not None:
+                    PDF_PASSWORDS[(new_path + path[len(old_path):], file_revision)] = password
+
+
+def update_recent_path(old_path, new_path=None):
+    try:
+        paths = json.loads(store.setting("recent_documents", "[]"))
+    except ValueError:
+        paths = []
+    updated = []
+    for path in paths[:30] if isinstance(paths, list) else []:
+        if not isinstance(path, str):
+            continue
+        if path == old_path or path.startswith(old_path + "/"):
+            if new_path is not None:
+                updated.append(new_path + path[len(old_path):])
+        else:
+            updated.append(path)
+    store.set_setting("recent_documents", json.dumps(updated[:12]))
+
+
+@router.post("/rename")
+def rename_document(data: RenameItem):
+    source = managed_item(data.path)
+    name = name_ok(data.name)
+    if source.is_file() and Path(name).suffix.lower() != source.suffix.lower():
+        raise HTTPException(422, "Keep the document's file extension when renaming")
+    target = source.with_name(name)
+    if target == source:
+        return {"path": relative(source), "old_path": relative(source), "unchanged": True}
+    if target.exists() or target.is_symlink():
+        raise HTTPException(409, "A file or folder already has that name")
+    old_path = relative(source)
+    try:
+        rename = ctypes.CDLL(None, use_errno=True).renameat2
+        if rename(-100, os.fsencode(source), -100, os.fsencode(target), 1):
+            code = ctypes.get_errno()
+            raise OSError(code, os.strerror(code))
+    except AttributeError:
+        raise HTTPException(503, "Safe renaming is not available on this system") from None
+    except OSError as error:
+        if error.errno == errno.EEXIST:
+            raise HTTPException(409, "A file or folder already has that name") from error
+        raise HTTPException(422, "Could not rename this item") from error
+    update_recent_path(old_path, relative(target))
+    update_pdf_password_paths(old_path, relative(target))
+    return {"path": relative(target), "old_path": old_path}
+
+
+class TrashItem(BaseModel):
+    path: str
+
+
+@router.post("/trash")
+def trash_document(data: TrashItem):
+    source = managed_item(data.path)
+    old_path = relative(source)
+    try:
+        send2trash(str(source))
+    except OSError as error:
+        raise HTTPException(503, "Could not move this item to the operating system Trash") from error
+    update_recent_path(old_path)
+    update_pdf_password_paths(old_path)
+    return {"path": old_path, "trashed": True}
+
+
 @router.post("/move")
 def move_document(data: MoveItem):
     source = resolve(data.path)
@@ -475,13 +563,12 @@ def move_document(data: MoveItem):
     if target.exists() or target.is_symlink():
         raise HTTPException(409, "A file or folder already has that name")
     old_path = relative(source)
-    previous = [item["path"] for item in recent()]
     try:
         source.rename(target)
     except OSError as error:
         raise HTTPException(422, "Could not move this item between these folders") from error
-    updated = [relative(target) + path[len(old_path):] if path == old_path or path.startswith(old_path + "/") else path for path in previous]
-    store.set_setting("recent_documents", json.dumps(updated[:12]))
+    update_recent_path(old_path, relative(target))
+    update_pdf_password_paths(old_path, relative(target))
     return {"path": relative(target), "old_path": old_path}
 
 

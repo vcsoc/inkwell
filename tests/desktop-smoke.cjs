@@ -57,7 +57,7 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 24000 }, async (t) 
         ...(process.env.INKWELL_TEST_EXECUTABLE ? [] : ['.']),
         `--user-data-dir=${path.join(data, 'electron-profile')}`,
       ],
-      env: { ...process.env, INKWELL_DATA_DIR: data, INKWELL_DOCUMENTS_DIR: path.join(data, 'Documents') },
+      env: { ...process.env, INKWELL_DATA_DIR: data, INKWELL_DOCUMENTS_DIR: path.join(data, 'Documents'), XDG_DATA_HOME: path.join(data, 'xdg-data') },
       timeout: 5000,
     });
     const window = await app.firstWindow({ timeout: 5000 });
@@ -121,6 +121,18 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 24000 }, async (t) 
     await expect(window.locator('.doc-selection-preview img')).toBeVisible();
     await window.locator('#doc-pdf-apply').click();
     await expect(window.locator('#doc-file-name')).toContainText('.image.pdf');
+    const beforeRename = await window.locator('#doc-top-filename').textContent();
+    await window.locator('#doc-top-rename').click();
+    await window.locator('#doc-top-rename-input').fill('Desktop renamed.pdf');
+    await window.locator('#doc-top-rename-input').press('Enter');
+    await expect(window.locator('#doc-top-filename')).toHaveText('Desktop renamed.pdf');
+    await expect.poll(() => window.locator('#doc-pdf-image').evaluate((img) => img.complete && img.naturalWidth > 0)).toBe(true);
+    expect(fs.existsSync(path.join(data, 'Documents', beforeRename))).toBe(false);
+    await window.locator('#doc-tree [data-doc-file="Desktop renamed.pdf"]').click({ button: 'right' });
+    await window.locator('[data-doc-menu="trash"]').click();
+    await window.locator('#doc-trash-submit').click();
+    await expect(window.locator('#doc-top-name')).toBeHidden();
+    expect(fs.existsSync(path.join(data, 'Documents', 'Desktop renamed.pdf'))).toBe(false);
     await window.keyboard.press('Escape');
     await window.locator('[data-view="inbox"]:visible').click();
     await expect(window.locator('.message-row')).toHaveCount(5);

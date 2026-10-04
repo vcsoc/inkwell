@@ -1,6 +1,6 @@
 [project]
 name = "inkwell-mail"
-version = "0.1.17"
+version = "0.1.18"
 description = "A local-first email, calendar and contacts workspace"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
@@ -17,6 +17,7 @@ dependencies = [
     "pyhanko>=0.31,<1",
     "pillow>=11,<13",
     "markdown-it-py>=3,<5",
+    "send2trash>=1.8.3,<2",
 ]
 
 [dependency-groups]
