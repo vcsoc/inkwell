@@ -12,6 +12,7 @@ def seed():
 
 
 def test_discovery_hierarchy_folder_import_and_search_scopes(client, monkeypatch):
+    client.put('/api/provider-sync', json={'local_changes_only': True})
     account = seed()
     calls = []
     monkeypatch.setattr(microsoft, "access_token", lambda a: "mock-token")

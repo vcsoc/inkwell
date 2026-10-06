@@ -17,9 +17,11 @@ While inkwell is running with connected accounts and remembered senders, it atte
 
 Existing import limits still apply: newest **200** messages per eligible folder per sync. "All existing" means all cached incoming copies, not uncached historical server mail. The extra standard-Junk check currently supports Microsoft accounts; IMAP imports remain Inbox-only. Mail in other provider folders is processed when those folders are imported.
 
-## Local only and reversible sender memory
+## Server filing and reversible sender memory
 
-This does **not** move/delete provider messages, remove a provider junk flag, modify Outlook safe-sender lists, or train Outlook's spam filter. The provider copy may remain in Junk while inkwell shows its local copy in Inbox or the rule destination. No additional Microsoft write permissions are requested. Remote content remains blocked normally.
+For authorized Outlook copies, Not Junk queues a server move to Inbox and any eligible subsequent rule destination. Explicit Not Junk requires write consent or an explicit Local changes only choice; automatic imports skip unauthorized server moves rather than interrupting import. IMAP and opted-out copies stay local. The decision, cached filing and provider jobs commit together. Queued is not yet confirmed; see [Server changes](PROVIDER-SYNC.md).
+
+This does **not** remove a separate provider junk flag, modify Outlook safe-sender lists, or train Outlook's spam filter. No permissions are upgraded silently. Remote content remains blocked normally.
 
 Sender headers can be spoofed. A remembered address is a filing preference, not proof of identity or an authentication override.
 
@@ -37,4 +39,4 @@ Schema **9** adds `not_junk_senders(sender_key,created_at)`. The list is local p
 - `GET /api/not-junk-senders` lists remembered decisions.
 - `DELETE /api/not-junk-senders?sender=…` forgets an address.
 
-Tests cover all-copy filing, rule priority, junk-destination bypass, future imports, localized Microsoft folders, GET-only provider access, rollback, protected outgoing copies, desktop/mobile controls and background polling without discarding composition.
+Tests cover all-copy filing, rule priority, junk-destination bypass, future imports, localized Microsoft folders, read-only import discovery, transactional server-write queues, rollback, protected outgoing copies, desktop/mobile controls and background polling without discarding composition.

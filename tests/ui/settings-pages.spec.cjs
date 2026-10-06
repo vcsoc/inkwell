@@ -60,8 +60,9 @@ for (const [id, name, selector] of pages) {
 test('provider writes cannot be enabled without Microsoft consent', async ({ page }) => {
   await page.goto('/#/settings/mail');
   const local = page.getByRole('checkbox', { name: /Local changes only/ });
-  await expect(local).toBeChecked();
   await expect(local.locator('..')).toHaveAttribute('title', /When checked/);
+  if (!(await local.isChecked())) await local.check();
+  await expect(local).toBeChecked();
   await local.uncheck();
   await expect(local).toBeChecked();
   await expect(page.locator('#provider-sync-progress')).toContainText('0 queued');

@@ -80,7 +80,7 @@ No confirmation is shown. Held-key repeats and modified Delete shortcuts are ign
 
 `POST /api/messages/trash-selection` accepts `{ids, permanent}`. The whole selection is validated under an immediate transaction; missing messages or a changed non-Trash location abort permanent deletion without deleting other selected copies. Later responses cannot replace a different page's editor.
 
-All operations are **local only**. Outlook's Deleted Items folder is not inkwell's local Trash. Permanent removal is not secure disk erasure and does not remove mail still on the server; a later provider import can download that server copy again.
+Authorized Outlook messages also move to the server's **Deleted Items**; permanent deletion queues a server deletion. Without write consent, Outlook moves/deletion are blocked unless **Local changes only** is explicitly enabled. IMAP/local copies remain local. Permanent removal is not secure disk erasure. Queued actions are not yet confirmed server changes; see [Server changes](PROVIDER-SYNC.md).
 
 ## Expanded message context menu
 
@@ -92,11 +92,11 @@ Available actions:
 - Find all by sender, organisation or subject.
 - Open message / edit local draft.
 - Reply, Forward, or New message to sender (opens a compose form; never sends automatically).
-- Mark read/unread and Star/Remove star, locally.
-- Move local copy to Inbox, Archive or Trash; Archive local copy; Trash local copy.
-- Permanently delete a local copy from Trash or local Drafts immediately, without a confirmation prompt.
+- Mark read/unread and Star/Remove star; authorized Outlook changes queue to the server.
+- Move email to Inbox, Archive, Trash or a same-account server folder; Archive email; Trash email.
+- Permanently delete mail from Trash (also queued on authorized Outlook) or remove a local draft, without a confirmation prompt.
 - Restore from Trash to the remembered previous local folder (Inbox fallback for older copies or missing destinations).
-- Select multiple messages and drag to a local/server-tree folder, or use the selection toolbar's Move control. Filing changes local views only, never the provider's folders.
+- Select multiple messages and drag to a folder, or use the selection toolbar's Move control. Authorized Outlook filing queues the same server move; local-only destinations require the explicit opt-out.
 - Add sender to People (opens an editable contact form).
 - Copy sender address (selectable text dialog, usable without clipboard permissions).
 - Save message as plain text (not original MIME/EML and not attachments).
@@ -104,17 +104,17 @@ Available actions:
 
 HTML preview is now the default, with a privacy banner and explicit per-view image choices. See [HTML preview security and limits](HTML-PREVIEW.md). Pane widths are adjustable in side-by-side layouts; see [Appearance](APPEARANCE.md).
 
-**Rule Manager** in the sidebar (also under Settings → Mail rules) lists existing inkwell rules and provides an AND/OR condition builder with multiple local move/read/star/tag actions. Compose/Reply support optional Cc/Bcc and shared local address autocomplete. See [Rule Manager and recipients](RULE-MANAGER-COMPOSE.md).
+**Rule Manager** in the sidebar (also under Settings → Mail rules) lists existing inkwell rules and provides an AND/OR condition builder with multiple move/read/star/tag actions. Compose/Reply support optional Cc/Bcc and shared local address autocomplete. See [Rule Manager and recipients](RULE-MANAGER-COMPOSE.md).
 
 These are working actions, **not full Outlook menu parity**. Reply all, provider categories, reminders, provider junk/block controls, original-source viewing, mail printing, and server folder creation/rename/move/delete remain unimplemented. Read-only attachment listing, downloads and script-free opening are available separately in the reader; see [Attachments](ATTACHMENTS.md).
 
 ## Not Junk
 
-**Not Junk** in the message menu and toolbar refiles all cached incoming mail from the exact sender using applicable non-junk rules or Inbox, and remembers future imports. Rule Manager lists these senders with a Forget action. Microsoft sync also checks Junk for remembered senders; an open app polls about every two minutes. Provider mail remains unchanged. See [Not Junk](NOT-JUNK.md) for scope, limits and safeguards.
+**Not Junk** in the message menu and toolbar refiles all cached incoming mail from the exact sender using applicable non-junk rules or Inbox, and remembers future imports. Rule Manager lists these senders with a Forget action. Microsoft sync also checks Junk for remembered senders; an open app polls about every two minutes. Authorized Outlook copies queue an Inbox/server-rule move; IMAP and explicitly local-only changes stay local. It does not change Outlook spam filtering or safe-sender lists. See [Not Junk](NOT-JUNK.md) for scope, limits and safeguards.
 
 ## Reader toolbar
 
-The reader uses consistent SVG icon-only buttons with tooltips and accessible names, docked on the **Select messages** row rather than occupying email-content space. This row stays visible while scrolling the reader. Bulk actions expand below it; narrow screens put secondary reader actions in More. Direct actions include Reply, Forward, archive/restore, mark unread, star/unstar, Move, Tags, Save text, add sender to contacts, copy sender address, reader light/dark, Trash/delete and More. Controls stay on one line and retain 44px touch targets on phones. Pane-width container queries move secondary controls out of the visible toolbar when necessary; every such action remains in More's grouped menu, including reader light/dark when a reader is open. Extremely narrow panes have an internal horizontal-scroll fallback instead of page overflow. Save text exports the readable cached message, not original MIME. Actions remain local except explicitly sending from the composer; no unsupported provider operations are shown as working buttons.
+The reader uses consistent SVG icon-only buttons with tooltips and accessible names, docked on the **Select messages** row rather than occupying email-content space. This row stays visible while scrolling the reader. Bulk actions expand below it; narrow screens put secondary reader actions in More. Direct actions include Reply, Forward, archive/restore, mark unread, star/unstar, Move, Tags, Save text, add sender to contacts, copy sender address, reader light/dark, Trash/delete and More. Controls stay on one line and retain 44px touch targets on phones. Pane-width container queries move secondary controls out of the visible toolbar when necessary; every such action remains in More's grouped menu, including reader light/dark when a reader is open. Extremely narrow panes have an internal horizontal-scroll fallback instead of page overflow. Save text exports the readable cached message, not original MIME. Authorized Outlook move/read/star/delete actions also queue to the server, with accurate queued-status notices; tags and local drafts remain local. Sending is always explicit.
 
 ## Tags and quick filters
 
@@ -122,4 +122,4 @@ Tag Manager sits above Settings and supports reusable colored tags, usage counts
 
 ## Server preservation
 
-There is no POP3 transport. IMAP reads Inbox with read-only selection and BODY.PEEK. Microsoft discovery/import uses GET requests. Context-menu message management changes SQLite copies only: it does not move, expunge or delete server messages. Sync does not restore a locally trashed/archived copy to its former local position. Imported read/star state is initially copied from the server; later local changes are not pushed back. Sending is an explicit click on Send message, without a second prompt, using SMTP or Graph, with Graph retaining Microsoft's Sent Items copy.
+There is no POP3 transport. IMAP reads Inbox with read-only selection and BODY.PEEK. Microsoft discovery/import uses GET requests. Separately, explicitly authorized Outlook message changes use a durable Graph-write queue, including rules and Not Junk; permission is never silently upgraded. Local changes only opts out for future actions, not jobs already queued. IMAP message management remains local. Imports preserve explicit local filing while server-write jobs reconcile their results. Sending is an explicit click on Send message, without a second prompt, using SMTP or Graph, with Graph retaining Microsoft's Sent Items copy.

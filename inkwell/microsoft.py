@@ -148,14 +148,22 @@ def credentials(token):
     }
 
 
-def has_write_permissions(account):
+def has_mail_write_permissions(account):
+    return has_write_permissions(account, {"Mail.ReadWrite"})
+
+
+def has_calendar_write_permissions(account):
+    return has_write_permissions(account, {"Calendars.ReadWrite"})
+
+
+def has_write_permissions(account, required=REQUIRED_WRITE_SCOPES):
     if account["provider"] != "microsoft":
         return False
     try:
         scopes = json.loads(store.unseal(account["secret"])).get("scope", "")
     except (ValueError, KeyError, TypeError, InvalidToken):
         return False
-    return REQUIRED_WRITE_SCOPES.issubset({part.rsplit("/", 1)[-1] for part in scopes.split()})
+    return required.issubset({part.rsplit("/", 1)[-1] for part in scopes.split()})
 
 
 @router.post("/{flow_id}/poll")

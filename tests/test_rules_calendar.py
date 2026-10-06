@@ -45,6 +45,7 @@ def test_rule_filters_order_and_local_override(client):
 
 
 def test_graph_applies_rules_during_import_and_never_overrides_later_moves(client, monkeypatch):
+    client.put('/api/provider-sync', json={'local_changes_only': True})
     client.post(
         "/api/rules",
         json={

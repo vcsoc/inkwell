@@ -1,4 +1,8 @@
 'use strict';
+window.InkwellProviderChangeNotice = (result) =>
+  result?.provider_queued
+    ? `${result.provider_queued} change${result.provider_queued === 1 ? '' : 's'} queued for server sync. Check the footer for completion or failures.`
+    : 'Local change only. Server mail is unchanged.';
 window.InkwellBackgroundSync = ({
   api,
   refresh,
@@ -26,15 +30,29 @@ window.InkwellBackgroundSync = ({
   const pollProvider = async () => {
     try {
       const status = await api('/provider-sync');
-      providerBadge.hidden = !status.pending && !status.failed && !status.cancelled;
+      const needsAccess = status.authorization_required && !status.explicit_local_only;
+      providerBadge.hidden =
+        !status.pending && !status.failed && !status.cancelled && !needsAccess && !status.completed;
       providerBadge.textContent = status.failed
         ? `${status.failed} provider change${status.failed === 1 ? '' : 's'} failed · review Settings → Mail accounts`
         : status.cancelled
           ? `${status.cancelled} provider change${status.cancelled === 1 ? '' : 's'} cancelled after disconnect`
-          : `${status.pending} provider change${status.pending === 1 ? '' : 's'} queued`;
+          : status.pending
+            ? `${status.pending} server change${status.pending === 1 ? '' : 's'} queued`
+            : needsAccess
+              ? 'Server mail changes need Microsoft write access'
+              : `${status.completed} server change${status.completed === 1 ? '' : 's'} synchronized`;
+      if (needsAccess) {
+        const link = document.createElement('a');
+        link.href = '#/settings/mail';
+        link.textContent = ' · Grant access';
+        providerBadge.append(link);
+      }
       providerBadge.title =
         status.last_error ||
-        'Microsoft Graph changes retry automatically while Inkwell is running.';
+        (needsAccess
+          ? 'Open Mail accounts and approve Grant mail/calendar access. Moves and deletion will not silently change only the local copy.'
+          : 'Microsoft Graph changes retry automatically while Inkwell is running.');
     } catch {
       providerBadge.hidden = true;
     }

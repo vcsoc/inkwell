@@ -91,6 +91,7 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 24000 }, async (t) 
     await window.locator('#doc-create-submit').click();
     await expect(window.locator('#doc-file-name')).toHaveText('Untitled.docx');
     expect(fs.existsSync(path.join(data, 'Documents', 'Untitled.docx'))).toBe(true);
+    if (!(await window.locator('#doc-tree').isVisible())) await window.locator('#menu').click();
     await window.locator('#doc-new-file').click();
     await window.locator('#doc-create-name').fill('Desktop PDF.pdf');
     await window.locator('#doc-create-submit').click();
@@ -128,6 +129,7 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 24000 }, async (t) 
     await expect(window.locator('#doc-top-filename')).toHaveText('Desktop renamed.pdf');
     await expect.poll(() => window.locator('#doc-pdf-image').evaluate((img) => img.complete && img.naturalWidth > 0)).toBe(true);
     expect(fs.existsSync(path.join(data, 'Documents', beforeRename))).toBe(false);
+    if (!(await window.locator('#doc-tree').isVisible())) await window.locator('#menu').click();
     await window.locator('#doc-tree [data-doc-file="Desktop renamed.pdf"]').click({ button: 'right' });
     await window.locator('[data-doc-menu="trash"]').click();
     await window.locator('#doc-trash-submit').click();
@@ -317,7 +319,7 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 24000 }, async (t) 
     await expect(window.getByRole('menuitem', { name: 'Reply', exact: true })).toBeVisible();
     await window.getByRole('menuitem', { name: 'File', exact: true }).click();
     await expect(
-      window.getByRole('menuitem', { name: 'Move local copy…', exact: true }),
+      window.getByRole('menuitem', { name: 'Move email…', exact: true }),
     ).toBeVisible();
     await window.keyboard.press('Escape');
     await window.keyboard.press('Escape');

@@ -160,12 +160,7 @@ test('local menu state and move actions work and preserve originals on cleanup',
     id,
   );
   try {
-    for (const action of [
-      'Mark read (local)',
-      'Mark unread (local)',
-      'Star (local)',
-      'Remove star (local)',
-    ]) {
+    for (const action of ['Mark read', 'Mark unread', 'Star', 'Remove star']) {
       await menu(page, id);
       const patched = page.waitForResponse(
         (response) =>
@@ -178,15 +173,15 @@ test('local menu state and move actions work and preserve originals on cleanup',
         async (id) => (await fetch('/api/messages/' + id)).json(),
         id,
       );
-      if (action === 'Mark read (local)') expect(message.unread).toBe(0);
-      if (action === 'Mark unread (local)') expect(message.unread).toBe(1);
-      if (action === 'Star (local)') expect(message.starred).toBe(1);
-      if (action === 'Remove star (local)') expect(message.starred).toBe(0);
+      if (action === 'Mark read') expect(message.unread).toBe(0);
+      if (action === 'Mark unread') expect(message.unread).toBe(1);
+      if (action === 'Star') expect(message.starred).toBe(1);
+      if (action === 'Remove star') expect(message.starred).toBe(0);
     }
     await menu(page, id);
-    await selectEmailMenuAction(page, 'Move local copy…');
-    await page.getByLabel('Local destination').selectOption('archive');
-    await page.getByRole('button', { name: 'Move local copy', exact: true }).click();
+    await selectEmailMenuAction(page, 'Move email…');
+    await page.getByLabel('Destination', { exact: true }).selectOption('archive');
+    await page.getByRole('button', { name: 'Move email', exact: true }).click();
     await expect(page.locator(`[data-message="${id}"]`)).toHaveCount(0);
   } finally {
     await page.evaluate(

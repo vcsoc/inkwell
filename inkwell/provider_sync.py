@@ -29,33 +29,48 @@ class ProviderDelayed(Exception):
     """Graph's eventual consistency leaves a remote result unconfirmed."""
 
 
-def account_ready(db, account_id):
+def account_ready(db, account_id, calendar=False):
     row = db.execute("SELECT * FROM accounts WHERE id=? AND provider='microsoft'", (account_id,)).fetchone()
-    return bool(row and microsoft.has_write_permissions(row))
+    permission = microsoft.has_calendar_write_permissions if calendar else microsoft.has_mail_write_permissions
+    return bool(row and permission(row))
+
+
+def local_only(db):
+    row = db.execute("SELECT value FROM settings WHERE key='provider_sync_local_only'").fetchone()
+    return bool(row and row[0] == "true")
 
 
 def enabled(db, account_id):
-    row = db.execute("SELECT value FROM settings WHERE key='provider_sync_local_only'").fetchone()
-    return bool(row and row[0] == "false" and account_ready(db, account_id))
+    return not local_only(db) and account_ready(db, account_id)
+
+
+def require_mail_write(db, message):
+    """Never silently file server-backed Outlook mail locally without an explicit opt-out."""
+    if local_only(db) or not message["remote_key"]:
+        return
+    if not message["remote_key"].startswith(f"{message['account_id']}:graph:"):
+        return
+    if not account_ready(db, message["account_id"]):
+        raise HTTPException(409, "Server mail changes require Microsoft write access. Open Settings → Mail accounts → Grant mail/calendar access and approve Microsoft’s prompt, or explicitly enable Local changes only.")
 
 
 def calendar_account(db):
     row = db.execute("SELECT value FROM settings WHERE key='provider_sync_account'").fetchone()
-    return int(row[0]) if row and row[0].isdigit() and enabled(db, int(row[0])) else None
+    return int(row[0]) if row and row[0].isdigit() and not local_only(db) and account_ready(db, int(row[0]), calendar=True) else None
 
 
 def connected(db, account_id):
     """Call only inside a successful OAuth transaction; never reset an explicit opt-out."""
     matches = db.execute("SELECT id FROM accounts WHERE provider='microsoft'").fetchall()
-    if len(matches) != 1 or matches[0]["id"] != account_id:
-        return
-    db.execute("INSERT OR REPLACE INTO settings(key,value) VALUES ('provider_sync_account',?)", (str(account_id),))
+    if len(matches) == 1 and matches[0]["id"] == account_id:
+        db.execute("INSERT OR REPLACE INTO settings(key,value) VALUES ('provider_sync_account',?)", (str(account_id),))
     if not db.execute("SELECT 1 FROM settings WHERE key='provider_sync_local_only'").fetchone():
         db.execute("INSERT INTO settings(key,value) VALUES ('provider_sync_local_only','false')")
 
 
 def ensure_move(db, message, destination):
     """Refuse unsupported destinations before mutating an eligible provider message."""
+    require_mail_write(db, message)
     if not message["remote_key"] or not enabled(db, message["account_id"]):
         return None
     if not message["remote_key"].startswith(f"{message['account_id']}:graph:"):
@@ -71,13 +86,20 @@ def ensure_move(db, message, destination):
 
 
 def enqueue_mail(db, message, kind, payload):
+    if kind == "delete":
+        require_mail_write(db, message)
     if not message["remote_key"] or not enabled(db, message["account_id"]):
-        return
+        return 0
     if not message["remote_key"].startswith(f"{message['account_id']}:graph:"):
-        return
+        return 0
     payload = {**payload, "remote_id": message["remote_key"].split(":graph:", 1)[1]}
     db.execute("""INSERT INTO provider_jobs(account_id,resource_type,resource_id,kind,payload)
         VALUES (?,'mail',?,?,?)""", (message["account_id"], message["id"], kind, json.dumps(payload)))
+    return 1
+
+
+def mail_result(result, queued):
+    return {**result, "provider_queued": queued} if queued else result
 
 
 class Mode(BaseModel):
@@ -88,17 +110,20 @@ class Mode(BaseModel):
 def status():
     with store.db() as db:
         accounts = db.execute("SELECT * FROM accounts ORDER BY id").fetchall()
-        local = db.execute("SELECT value FROM settings WHERE key='provider_sync_local_only'").fetchone()
         account = calendar_account(db)
         counts = {row["state"]: row["n"] for row in db.execute(
             "SELECT state,count(*) n FROM provider_jobs WHERE state!='done' GROUP BY state")}
         failure = db.execute("SELECT error FROM provider_jobs WHERE state='failed' ORDER BY id DESC LIMIT 1").fetchone()
         return {
-            "local_changes_only": not account or not local or local[0] != "false",
+            "local_changes_only": local_only(db) or not any(account_ready(db, row["id"]) for row in accounts),
+            "explicit_local_only": local_only(db),
+            "authorization_required": sum(row["provider"] == "microsoft" and not microsoft.has_mail_write_permissions(row) for row in accounts),
+            "completed": db.execute("SELECT count(*) FROM provider_jobs WHERE state='done'").fetchone()[0],
             "calendar_account_id": account,
             "accounts": [{"id": row["id"], "email": row["email"],
                           "provider": row["provider"],
-                          "ready": microsoft.has_write_permissions(row)} for row in accounts],
+                          "ready": microsoft.has_mail_write_permissions(row),
+                          "calendar_ready": microsoft.has_calendar_write_permissions(row)} for row in accounts],
             "pending": counts.get("pending", 0) + counts.get("running", 0),
             "failed": counts.get("failed", 0),
             "cancelled": counts.get("cancelled", 0),
@@ -112,10 +137,13 @@ def set_mode(data: Mode):
         db.execute("BEGIN IMMEDIATE")
         if not data.local_changes_only:
             accounts = db.execute("SELECT id FROM accounts WHERE provider='microsoft'").fetchall()
-            if len(accounts) != 1 or not account_ready(db, accounts[0]["id"]):
-                raise HTTPException(409, "Reauthorize your Microsoft account for Mail.ReadWrite and Calendars.ReadWrite first. IMAP calendars need a separate provider.")
-            db.execute("INSERT OR REPLACE INTO settings(key,value) VALUES ('provider_sync_account',?)",
-                       (str(accounts[0]["id"]),))
+            ready = [row for row in accounts if account_ready(db, row["id"])]
+            if not ready:
+                raise HTTPException(409, "Reauthorize your Microsoft account for Mail.ReadWrite and Calendars.ReadWrite first. IMAP writes need a separate provider implementation.")
+            calendars = [row for row in accounts if account_ready(db, row['id'], calendar=True)]
+            if len(calendars) == 1:
+                db.execute("INSERT OR REPLACE INTO settings(key,value) VALUES ('provider_sync_account',?)",
+                           (str(calendars[0]["id"]),))
         db.execute("INSERT OR REPLACE INTO settings(key,value) VALUES ('provider_sync_local_only',?)",
                    ("true" if data.local_changes_only else "false",))
     return status()
@@ -191,7 +219,8 @@ def event_remote(db, job):
 def perform(job):
     with store.db() as db:
         account = db.execute("SELECT * FROM accounts WHERE id=? AND provider='microsoft'", (job["account_id"],)).fetchone()
-        if not account or not microsoft.has_write_permissions(account):
+        permission = microsoft.has_calendar_write_permissions if job['resource_type'] == 'event' else microsoft.has_mail_write_permissions
+        if not account or not permission(account):
             raise ValueError("Account disconnected or missing Microsoft write permissions; reauthorize")
         remote = event_remote(db, job) if job["resource_type"] == "event" else None
         alive = db.execute("SELECT 1 FROM events WHERE id=?", (job["resource_id"],)).fetchone() if job["resource_type"] == "event" else None

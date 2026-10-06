@@ -80,6 +80,7 @@ def test_nullable_and_malformed_outlook_headers_do_not_stop_or_truncate_a_page(c
 def test_incremental_headers_update_but_local_choices_and_removed_copies_survive(
     client, monkeypatch
 ):
+    client.put('/api/provider-sync', json={'local_changes_only': True})
     account, folder = account_folder()
     values = [message(1)]
     transport(

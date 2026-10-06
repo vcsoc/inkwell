@@ -131,10 +131,10 @@ def test_not_junk_is_atomic_on_failure(client, monkeypatch):
     second = message(folder="archive")
     real = not_junk.file_copy
 
-    def fail(db, m, configured=None):
+    def fail(db, m, configured=None, explicit=False):
         if m["id"] == second:
             raise RuntimeError("disk failure")
-        return real(db, m, configured)
+        return real(db, m, configured, explicit=explicit)
 
     monkeypatch.setattr(not_junk, "file_copy", fail)
     with pytest.raises(RuntimeError):
@@ -164,6 +164,8 @@ def test_sync_checks_localized_junk_for_trusted_senders_only_and_never_writes_pr
 
     id = message()
     client.post(f"/api/messages/{id}/not-junk")
+    # This test deliberately covers the explicit local-only workflow.
+    client.put('/api/provider-sync', json={'local_changes_only': True})
     store.init()
     with store.db() as db:
         db.execute(

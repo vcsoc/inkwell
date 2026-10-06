@@ -49,14 +49,14 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
     const moving = [...ids],
       generation = state.generation;
     try {
-      await api('/messages/' + (restore ? 'restore' : 'move'), {
+      const result = await api('/messages/' + (restore ? 'restore' : 'move'), {
         method: 'POST',
         body: restore ? { ids: moving } : { ids: moving, folder },
       });
       if (generation === state.generation) ids.clear();
       await refresh({ generation, affected: moving });
       toast(
-        `${moving.length} message${moving.length === 1 ? '' : 's'} ${restore ? 'restored' : 'moved'} locally. Server mail was not changed.`,
+        `${moving.length} message${moving.length === 1 ? '' : 's'} ${restore ? 'restored' : 'moved'}. ${InkwellProviderChangeNotice(result)}`,
       );
     } catch (error) {
       toast(error.message);
@@ -80,11 +80,14 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
     busy = true;
     paint();
     try {
-      await api('/messages/trash-selection', { method: 'POST', body: { ids: chosen, permanent } });
+      const result = await api('/messages/trash-selection', {
+        method: 'POST',
+        body: { ids: chosen, permanent },
+      });
       if (generation === state.generation) ids.clear();
       await refresh({ generation, affected: chosen });
       toast(
-        `${chosen.length} local message${chosen.length === 1 ? '' : 's'} ${permanent ? 'permanently deleted' : 'moved to Trash'}. Server mail was not changed.`,
+        `${chosen.length} message${chosen.length === 1 ? '' : 's'} ${permanent ? 'permanently deleted' : 'moved to Trash'}. ${InkwellProviderChangeNotice(result)}`,
       );
     } catch (error) {
       toast(error.message);

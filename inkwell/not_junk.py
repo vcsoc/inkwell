@@ -1,8 +1,8 @@
-"""Explicit, workspace-wide local Not Junk sender decisions; no provider writes."""
+"""Workspace-wide Not Junk decisions; queue server filing when authorized."""
 
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
-from . import store, message_moves
+from . import store, message_moves, provider_sync
 
 router = APIRouter(prefix="/api")
 
@@ -71,11 +71,19 @@ def blocked_destination(db, value):
     return False
 
 
-def file_copy(db, message, configured=None):
+def file_copy(db, message, configured=None, explicit=False):
     from . import rules
 
-    # Explicit rescue resets previous filing, but keeps provider identity and message contents.
+    try:
+        target = provider_sync.ensure_move(db, message, "inbox")
+    except HTTPException:
+        if explicit:
+            raise
+        return False  # Missing write consent must not interrupt automatic mail import.
+    # Rescue resets previous filing, but keeps provider identity and message contents.
     message_moves.file_message(db, message, "inbox")
+    if target:
+        provider_sync.enqueue_mail(db, message, "move", target)
     rules.apply(db, message["id"], configured=configured, force=True, safe_sender=True)
     return True
 
@@ -86,6 +94,7 @@ def mark(id: int):
 
     with store.db() as db:
         db.execute("BEGIN IMMEDIATE")
+        queued_before = db.execute("SELECT count(*) FROM provider_jobs").fetchone()[0]
         message = db.execute("SELECT * FROM messages WHERE id=?", (id,)).fetchone()
         if not message:
             raise HTTPException(404, "Message no longer exists")
@@ -106,9 +115,10 @@ def mark(id: int):
         for message_id in ids:
             item = db.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
             if incoming(db, item):
-                file_copy(db, item, configured)
+                file_copy(db, item, configured, explicit=True)
                 count += 1
-    return {"sender": key, "updated_messages": count}
+        queued = db.execute("SELECT count(*) FROM provider_jobs").fetchone()[0] - queued_before
+    return provider_sync.mail_result({"sender": key, "updated_messages": count}, queued)
 
 
 @router.get("/not-junk-senders")

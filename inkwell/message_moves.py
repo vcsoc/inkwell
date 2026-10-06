@@ -1,4 +1,4 @@
-"""Atomic local filing and Trash restore. Never calls a mail provider."""
+"""Atomic local filing and Trash restore, with durable authorized provider writes."""
 
 from typing import Annotated
 from fastapi import APIRouter, HTTPException
@@ -73,11 +73,12 @@ def move(data: Move):
         if folder != "trash" and any(m["folder"] == "drafts" for m in rows):
             raise HTTPException(422, "Drafts can only be moved to Trash")
         moves = [provider_sync.ensure_move(db, row, data.folder) for row in rows]
+        queued = 0
         for row, target in zip(rows, moves):
             file_message(db, row, folder, remote)
             if target:
-                provider_sync.enqueue_mail(db, row, "move", target)
-    return {"moved": len(rows)}
+                queued += provider_sync.enqueue_mail(db, row, "move", target)
+    return provider_sync.mail_result({"moved": len(rows)}, queued)
 
 
 @router.post("/trash-selection")
@@ -87,6 +88,7 @@ def trash_selection(data: Trash):
         if any(identifier <= 0 or identifier >= 2**63 for identifier in data.ids):
             raise HTTPException(422, "Invalid message selection")
         rows = selected(db, data.ids)
+        queued = 0
         if data.permanent:
             if any(row["folder"] != "trash" for row in rows):
                 raise HTTPException(
@@ -95,15 +97,15 @@ def trash_selection(data: Trash):
                 )
             for row in rows:
                 db.execute("DELETE FROM messages WHERE id=?", (row["id"],))
-                provider_sync.enqueue_mail(db, row, "delete", {})
+                queued += provider_sync.enqueue_mail(db, row, "delete", {})
         else:
             targets = [provider_sync.ensure_move(db, row, "trash") if row["folder"] != "trash" else None for row in rows]
             for row, target in zip(rows, targets):
                 if row["folder"] != "trash":
                     file_message(db, row, "trash")
                     if target:
-                        provider_sync.enqueue_mail(db, row, "move", target)
-    return {"deleted" if data.permanent else "trashed": len(rows)}
+                        queued += provider_sync.enqueue_mail(db, row, "move", target)
+    return provider_sync.mail_result({"deleted" if data.permanent else "trashed": len(rows)}, queued)
 
 
 @router.post("/restore")
@@ -113,6 +115,7 @@ def restore(data: Selection):
         rows = selected(db, data.ids)
         if any(m["folder"] != "trash" for m in rows):
             raise HTTPException(422, "Select only messages in Trash")
+        queued = 0
         for row in rows:
             folder, remote = row["restore_folder"], row["restore_destination_id"]
             if (
@@ -139,5 +142,5 @@ def restore(data: Selection):
             target = provider_sync.ensure_move(db, row, f"remote:{remote}" if remote else folder)
             file_message(db, row, folder, remote)
             if target:
-                provider_sync.enqueue_mail(db, row, "move", target)
-    return {"restored": len(rows)}
+                queued += provider_sync.enqueue_mail(db, row, "move", target)
+    return provider_sync.mail_result({"restored": len(rows)}, queued)

@@ -178,3 +178,151 @@ def test_no_write_without_consent_or_wrong_account(ready):
     provider_sync.run_job(provider_sync.claim())
     assert jobs()[0]["state"] == "failed"
     assert "reauthorize" in jobs()[0]["error"]
+
+
+def outlook_message(account, remote="mail-id", folder="inbox"):
+    with store.db() as db:
+        return db.execute("""INSERT INTO messages
+            (account_id,remote_key,folder,sender,recipient,subject,body,date,sender_key,domain_key)
+            VALUES (?,?,?,'friend@example.com','user@example.com','Hello','body',?,'friend@example.com','example.com')""",
+            (account, f"{account}:graph:{remote}", folder, datetime.now(timezone.utc).isoformat())).lastrowid
+
+
+def test_readonly_moves_and_deletion_are_blocked_until_consent_or_explicit_local_only(ready):
+    message = outlook_message(ready)
+    trashed = outlook_message(ready, "already-trashed", "trash")
+    with store.db() as db:
+        row = db.execute("SELECT * FROM accounts WHERE id=?", (ready,)).fetchone()
+        token = json.loads(store.unseal(row["secret"]))
+        token["scope"] = microsoft.READ_SCOPES
+        db.execute("UPDATE accounts SET secret=? WHERE id=?", (store.seal(json.dumps(token)), ready))
+        db.execute("DELETE FROM settings WHERE key='provider_sync_local_only'")
+    with pytest.raises(HTTPException, match="write access"):
+        message_moves.move(message_moves.Move(ids=[message], folder="trash"))
+    with pytest.raises(HTTPException, match="write access"):
+        message_moves.trash_selection(message_moves.Trash(ids=[trashed], permanent=True))
+    with store.db() as db:
+        assert db.execute("SELECT folder FROM messages WHERE id=?", (message,)).fetchone()[0] == "inbox"
+        assert db.execute("SELECT 1 FROM messages WHERE id=?", (trashed,)).fetchone()
+    assert not jobs()
+    assert provider_sync.status()["authorization_required"] == 1
+    provider_sync.set_mode(provider_sync.Mode(local_changes_only=True))
+    assert message_moves.move(message_moves.Move(ids=[message], folder="trash")) == {"moved": 1}
+    assert message_moves.trash_selection(message_moves.Trash(ids=[trashed], permanent=True)) == {"deleted": 1}
+    assert not jobs()
+
+
+def test_remote_folder_trash_restore_and_permanent_delete_run_on_same_server(ready, monkeypatch):
+    message = outlook_message(ready, "stable-mail")
+    with store.db() as db:
+        remote = db.execute("INSERT INTO remote_folders(account_id,remote_id,name,path) VALUES (?,'project-folder','Project','Project')", (ready,)).lastrowid
+    result = message_moves.move(message_moves.Move(ids=[message], folder=f"remote:{remote}"))
+    assert result["provider_queued"] == 1
+    assert message_moves.trash_selection(message_moves.Trash(ids=[message]))["provider_queued"] == 1
+    assert message_moves.restore(message_moves.Selection(ids=[message]))["provider_queued"] == 1
+    assert message_moves.trash_selection(message_moves.Trash(ids=[message]))["provider_queued"] == 1
+    assert message_moves.trash_selection(message_moves.Trash(ids=[message], permanent=True))["provider_queued"] == 1
+    calls = []
+    current = {"parent": "inbox"}
+
+    def graph(account, method, path, *, payload=None, missing_ok=False):
+        assert account["id"] == ready
+        calls.append((method, path, payload))
+        if path.startswith("mailFolders/"):
+            return {"id": path.split("/", 1)[1].split("?", 1)[0]}
+        if method == "GET":
+            return {"id": "stable-mail", "parentFolderId": current["parent"]}
+        if path.endswith("/move"):
+            current["parent"] = payload["destinationId"]
+            return {"id": "stable-mail"}
+        assert path.endswith("/permanentDelete")
+        return None
+
+    monkeypatch.setattr(provider_sync, "graph", graph)
+    while job := provider_sync.claim():
+        provider_sync.run_job(job)
+    assert all(job["state"] == "done" for job in jobs())
+    assert [payload["destinationId"] for method, path, payload in calls if path.endswith("/move")] == [
+        "project-folder", "deleteditems", "project-folder", "deleteditems"]
+    assert calls[-1][1].endswith("/permanentDelete")
+    assert provider_sync.status()["completed"] == 5
+
+
+def test_rules_and_not_junk_enqueue_server_changes_in_same_transaction(ready):
+    from inkwell import not_junk, rules
+    message = outlook_message(ready)
+    rules.create(rules.Rule(name='File on server',
+        conditions=[{'field': 'sender', 'operator': 'contains', 'value': 'friend@'}],
+        actions=[{'type': 'move', 'value': 'archive'}, {'type': 'mark_read'}, {'type': 'star'}]))
+    with store.db() as db:
+        assert rules.apply(db, message, force=True)
+    assert [job["kind"] for job in jobs()] == ["move", "patch"]
+    assert json.loads(jobs()[0]["payload"])["destination"] == "archive"
+    assert json.loads(jobs()[1]["payload"])["fields"] == {"isRead": True, "flag": {"flagStatus": "flagged"}}
+    with store.db() as db:
+        db.execute("DELETE FROM mail_rules")
+    not_junk.mark(message)
+    assert json.loads(jobs()[-1]["payload"])["destination"] == "inbox"
+
+
+def test_mail_sync_does_not_require_a_single_calendar_account(ready):
+    with store.db() as db:
+        original = db.execute("SELECT * FROM accounts WHERE id=?", (ready,)).fetchone()
+        other = db.execute("""INSERT INTO accounts(name,email,imap_host,imap_port,smtp_host,smtp_port,username,secret,smtp_security,provider,client_id)
+            VALUES ('Second','second@example.com','',993,'',587,'second@example.com',?,'starttls','microsoft',?)""",
+            (original["secret"], original["client_id"])).lastrowid
+        db.execute("DELETE FROM settings WHERE key IN ('provider_sync_local_only','provider_sync_account')")
+        provider_sync.connected(db, other)
+    assert provider_sync.status()["local_changes_only"] is False
+    assert provider_sync.status()["calendar_account_id"] is None
+    one = outlook_message(ready, "first-mail")
+    two = outlook_message(other, "second-mail")
+    assert message_moves.move(message_moves.Move(ids=[one, two], folder="trash"))["provider_queued"] == 2
+    provider_sync.set_mode(provider_sync.Mode(local_changes_only=True))
+    provider_sync.set_mode(provider_sync.Mode(local_changes_only=False))
+    assert provider_sync.status()["local_changes_only"] is False
+
+
+def test_readonly_not_junk_preserves_import_and_explicit_action_is_atomic(ready):
+    from inkwell import not_junk
+    message = outlook_message(ready)
+    with store.db() as db:
+        db.execute('UPDATE accounts SET secret=? WHERE id=?', (store.seal(json.dumps({'scope': microsoft.READ_SCOPES})), ready))
+        db.execute("UPDATE messages SET folder='remote' WHERE id=?", (message,))
+        item = db.execute('SELECT * FROM messages WHERE id=?', (message,)).fetchone()
+        assert not_junk.file_copy(db, item) is False
+    with pytest.raises(HTTPException) as error:
+        not_junk.mark(message)
+    assert error.value.status_code == 409
+    assert not jobs()
+    with store.db() as db:
+        assert db.execute('SELECT folder,local_folder_override FROM messages WHERE id=?', (message,)).fetchone()[:] == ('remote', 0)
+        assert db.execute('SELECT count(*) FROM not_junk_senders').fetchone()[0] == 0
+
+
+def test_mail_write_scope_works_without_calendar_scope(ready):
+    with store.db() as db:
+        original = db.execute('SELECT * FROM accounts WHERE id=?', (ready,)).fetchone()
+        token = json.loads(store.unseal(original['secret']))
+        token['scope'] = microsoft.READ_SCOPES + ' https://graph.microsoft.com/Mail.ReadWrite'
+        db.execute('UPDATE accounts SET secret=? WHERE id=?', (store.seal(json.dumps(token)), ready))
+    status = provider_sync.status()
+    assert status['local_changes_only'] is False and status['calendar_account_id'] is None
+    assert status['accounts'][0]['ready'] is True and status['accounts'][0]['calendar_ready'] is False
+    message = outlook_message(ready)
+    assert message_moves.move(message_moves.Move(ids=[message], folder='trash'))['provider_queued'] == 1
+
+
+def test_wrong_account_remote_folder_does_not_partially_move_a_batch(ready):
+    one = outlook_message(ready)
+    with store.db() as db:
+        original = db.execute('SELECT * FROM accounts WHERE id=?', (ready,)).fetchone()
+        other = db.execute("""INSERT INTO accounts(name,email,imap_host,imap_port,smtp_host,smtp_port,username,secret,smtp_security,provider)
+            VALUES ('Other','other@example.com','',993,'',587,'other@example.com',?,'starttls','microsoft')""", (original['secret'],)).lastrowid
+        remote = db.execute("INSERT INTO remote_folders(account_id,remote_id,name,path) VALUES (?,'private','Private','Private')", (ready,)).lastrowid
+    two = outlook_message(other)
+    with pytest.raises(HTTPException):
+        message_moves.move(message_moves.Move(ids=[one, two], folder=f'remote:{remote}'))
+    assert not jobs()
+    with store.db() as db:
+        assert [row[0] for row in db.execute('SELECT folder FROM messages ORDER BY id')] == ['inbox', 'inbox']

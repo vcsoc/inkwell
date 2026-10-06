@@ -1,4 +1,4 @@
-"""Multi-condition, multi-action rules for local imported copies only."""
+"""Multi-condition rules with local metadata and authorized provider mail changes."""
 
 import json
 import re
@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from . import store, message_moves, tag_store, folder_tree
+from . import store, message_moves, tag_store, folder_tree, provider_sync
 from .message_keys import sender_key, domain_key
 
 router = APIRouter(prefix="/api")
@@ -528,9 +528,11 @@ def apply(db, message_id, now=None, configured=None, force=False, safe_sender=Fa
             unread = m["unread"]
             starred = m["starred"]
             destination = None
+            provider_target = None
             for action in rule.actions:
                 if action.type == "move":
                     destination = message_moves.destination(db, action.value)
+                    provider_target = provider_sync.ensure_move(db, m, action.value)
                 elif action.type == "mark_read":
                     unread = 0
                 elif action.type == "mark_unread":
@@ -551,6 +553,15 @@ def apply(db, message_id, now=None, configured=None, force=False, safe_sender=Fa
             continue
         if destination:
             message_moves.file_message(db, m, *destination)
+            if provider_target:
+                provider_sync.enqueue_mail(db, m, "move", provider_target)
+        mail_fields = {}
+        if unread != m["unread"]:
+            mail_fields["isRead"] = not unread
+        if starred != m["starred"]:
+            mail_fields["flag"] = {"flagStatus": "flagged" if starred or m["flagged"] else "notFlagged"}
+        if mail_fields:
+            provider_sync.enqueue_mail(db, m, "patch", {"fields": mail_fields})
         db.execute(
             "UPDATE messages SET tags=?,unread=?,starred=?,local_destination_id=CASE WHEN local_folder_override=0 THEN remote_folder_id ELSE local_destination_id END,local_folder_override=1 WHERE id=?",
             (json.dumps(tags), unread, starred, message_id),

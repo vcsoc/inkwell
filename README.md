@@ -4,11 +4,11 @@
 
 A desktop/mobile-first email, calendar, contacts and AI workspace. The desktop app runs a private Python backend in a sandboxed Electron window. The mobile experience is an installable, responsive PWA connected to your private backend.
 
-> **Status: working early test build, not a complete or production-audited Outlook replacement.** Native standalone iOS/Android apps, Exchange/EWS, attachment sending, IMAP/CalDAV calendar sync and signed installers are not implemented. Microsoft provider writes require renewed consent and are queued, not guaranteed immediately. Microsoft OAuth/Graph mail uses the bundled public application registration. Please read the limitations before connecting important accounts.
+> **Status: working early test build, not a complete or production-audited Outlook replacement.** Native standalone iOS/Android apps, Exchange/EWS, attachment sending, IMAP/CalDAV calendar sync and signed installers are not implemented. Outlook changes sync back after Microsoft write consent and are queued, not guaranteed immediately; read-only moves/deletion require consent or an explicit local-only opt-out. See [Server changes](docs/PROVIDER-SYNC.md). Microsoft OAuth/Graph mail uses the bundled public application registration. Please read the limitations before connecting important accounts.
 
 ## Install on this Linux machine
 
-Build a bundled installer with `npm run build:linux`, then run `sh dist/inkwell-0.1.18-linux-x64.run`. The installed app appears as **inkwell** in your launcher and includes its Python backend—no development tools are required to run it. This is an unsigned Linux x86_64 user installer. See [Installing](docs/INSTALLING.md).
+Build a bundled installer with `npm run build:linux`, then run `sh dist/inkwell-0.1.19-linux-x64.run`. The installed app appears as **inkwell** in your launcher and includes its Python backend—no development tools are required to run it. This is an unsigned Linux x86_64 user installer. See [Installing](docs/INSTALLING.md).
 
 ## Start testing from source
 

@@ -358,7 +358,7 @@ test('Reader toolbar uses compact SVG controls with working star, move and sende
     .first()
     .evaluate((b) => parseFloat(getComputedStyle(b).fontSize));
   expect(size).toBeLessThan(16);
-  await readerAction(page, 'Star message', 'Star (local)');
+  await readerAction(page, 'Star message', 'Star');
   await expect(page.locator('#reader-star')).toHaveAttribute('aria-pressed', 'true');
   expect((await request(page, '/messages/' + id)).starred).toBe(1);
   await readerAction(page, 'Copy sender address', 'Copy sender address…');
@@ -378,7 +378,7 @@ test('Reader toolbar uses compact SVG controls with working star, move and sende
     path: 'test-results/' + info.project.name + '-reader-toolbar.png',
     fullPage: true,
   });
-  await readerAction(page, 'Move local copy', 'Move local copy…');
+  await readerAction(page, 'Move email', 'Move email…');
   await page.locator('#move-local-form select').selectOption('archive');
   await page.locator('#move-local-form button[type=submit]').click();
   await expect.poll(async () => (await request(page, '/messages/' + id)).folder).toBe('archive');

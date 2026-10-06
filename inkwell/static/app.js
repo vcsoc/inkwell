@@ -881,7 +881,8 @@ async function navigate(route, { historyMode = 'push' } = {}) {
     sent: 'Your words, out in the world.',
     drafts: 'Good thoughts, still in progress.',
     archive: 'Out of the way. Never out of reach.',
-    trash: 'Local trash. Your server mailbox is unchanged.',
+    trash:
+      'Trash. Connected Outlook mail moves to server Deleted Items when server changes are enabled.',
     collection: state.collection?.label || 'Associated messages across your workspace.',
     remote: state.remoteFolder
       ? `${state.remoteFolder.path} · ${state.remoteFolder.total_count} server items · available mail downloads in the background`
@@ -1293,7 +1294,8 @@ async function messageAction(action, id) {
       result.updated_messages +
         ' incoming copies from ' +
         result.sender +
-        ' filed locally. Future imports use rules or Inbox.',
+        ' filed. Future imports use rules or Inbox. ' +
+        InkwellProviderChangeNotice(result),
     );
     return;
   }
@@ -1306,8 +1308,9 @@ async function messageAction(action, id) {
     }
   };
   const patch = async (changes) => {
-    await api('/messages/' + id, { method: 'PATCH', body: changes });
+    const result = await api('/messages/' + id, { method: 'PATCH', body: changes });
     await refresh();
+    return result;
   };
   if (action === 'reply')
     return compose({
@@ -1365,38 +1368,40 @@ async function messageAction(action, id) {
   }
   if (action === 'move') {
     modal(
-      'Move local copy',
-      `<form id="move-local-form"><p>The Outlook server copy will not be moved or removed.</p><label class="field">Local destination<select name="folder"><option value="inbox">Inbox</option><option value="archive">Archive</option><option value="trash">Trash</option>${folders
+      'Move email',
+      `<form id="move-local-form"><p>Connected Outlook messages move on the server too after write authorization. Choose a folder in the same account. Local-only folders require Local changes only in Settings.</p><label class="field">Destination<select name="folder" aria-label="Destination"><option value="inbox">Inbox</option><option value="archive">Archive</option><option value="trash">Trash</option>${folders
         .filter((f) => f[0].startsWith('local-'))
         .map((f) => `<option value="${f[0]}">${esc(f[2])}</option>`)
         .join(
           '',
-        )}${state.remoteFolders.map((f) => `<option value="remote:${f.id}">${esc(f.path)}</option>`).join('')}</select></label><button class="primary" type="submit">Move local copy</button></form>`,
+        )}${state.remoteFolders.map((f) => `<option value="remote:${f.id}">${esc(f.path)}</option>`).join('')}</select></label><button class="primary" type="submit">Move email</button></form>`,
     );
     on($('#move-local-form'), 'submit', async (event) => {
       event.preventDefault();
       const folder = event.currentTarget.elements.folder.value;
-      await api('/messages/move', { method: 'POST', body: { ids: [id], folder } });
+      const result = await api('/messages/move', { method: 'POST', body: { ids: [id], folder } });
       $('#modal').close();
       await refresh();
+      toast(InkwellProviderChangeNotice(result));
     });
     return;
   }
   if (action === 'restore') {
-    await api('/messages/restore', { method: 'POST', body: { ids: [id] } });
+    const result = await api('/messages/restore', { method: 'POST', body: { ids: [id] } });
     await refresh();
-    toast('Restored locally. Server mail is unchanged.');
+    toast(InkwellProviderChangeNotice(result));
     return;
   }
   if (action === 'delete') {
     if (!['trash', 'drafts'].includes(m.folder)) {
       toast(
-        'Move the local copy to Trash before permanently deleting it. The server copy is preserved.',
+        'Move the message to Trash before permanently deleting it. Authorized server deletion is permanent too.',
       );
       return;
     }
-    await api('/messages/' + id, { method: 'DELETE' });
+    const result = await api('/messages/' + id, { method: 'DELETE' });
     await refresh();
+    toast(InkwellProviderChangeNotice(result));
     return;
   }
   const changes = {
@@ -1408,8 +1413,8 @@ async function messageAction(action, id) {
     trash: { folder: 'trash' },
   }[action];
   if (changes) {
-    await patch(changes);
-    toast('Local copy updated. Server mail is unchanged.');
+    const result = await patch(changes);
+    toast(InkwellProviderChangeNotice(result));
   }
 }
 async function loadDemo() {
@@ -1606,26 +1611,29 @@ function renderReader() {
     await renderMail();
   });
   const change = async (data) => {
-    await api('/messages/' + m.id, { method: 'PATCH', body: data });
+    const result = await api('/messages/' + m.id, { method: 'PATCH', body: data });
     state.selected = null;
     await refreshCounts();
     await renderMail();
+    toast(InkwellProviderChangeNotice(result));
   };
   on($('#archive-message'), 'click', async () => {
     if (m.folder === 'trash') {
-      await api('/messages/restore', { method: 'POST', body: { ids: [m.id] } });
+      const result = await api('/messages/restore', { method: 'POST', body: { ids: [m.id] } });
       state.selected = null;
       await refreshCounts();
       await renderMail();
+      toast(InkwellProviderChangeNotice(result));
     } else await change({ folder: m.folder === 'archive' ? 'inbox' : 'archive' });
   });
   on($('#unread-message'), 'click', () => change({ unread: true }));
   on($('#trash-message'), 'click', async () => {
     if (m.folder === 'trash') {
-      await api('/messages/' + m.id, { method: 'DELETE' });
+      const result = await api('/messages/' + m.id, { method: 'DELETE' });
       state.selected = null;
       await refreshCounts();
       await renderMail();
+      toast(InkwellProviderChangeNotice(result));
     } else await change({ folder: 'trash' });
   });
   on($('#reply'), 'click', () =>
@@ -1869,7 +1877,7 @@ async function renderSettings() {
     },
   });
 }
-function accountForm(reconnectAccount = null) {
+function accountForm(reconnectAccount = null, enableServerChanges = false) {
   if (!Number.isInteger(reconnectAccount?.id)) reconnectAccount = null;
   modal(
     'Bring your email along',
@@ -1983,6 +1991,8 @@ function accountForm(reconnectAccount = null) {
       const result = await api('/microsoft/' + id + '/poll', { method: 'POST' });
       if (!alive || flowId !== id) return;
       if (result.status === 'complete') {
+        if (enableServerChanges)
+          await api('/provider-sync', { method: 'PUT', body: { local_changes_only: false } });
         cancelFlow();
         $('#modal').close();
         await refreshCounts();

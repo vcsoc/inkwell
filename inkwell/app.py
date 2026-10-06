@@ -268,7 +268,7 @@ def delete_account(account_id: int):
         selected = conn.execute("SELECT value FROM settings WHERE key='provider_sync_account'").fetchone()
         if selected and selected[0] == str(account_id):
             conn.execute("DELETE FROM settings WHERE key='provider_sync_account'")
-            conn.execute("INSERT OR REPLACE INTO settings(key,value) VALUES ('provider_sync_local_only','true')")
+            # Disconnecting the calendar account must not disable other mailboxes' writes.
         conn.execute(
             "UPDATE messages SET folder=CASE WHEN folder='remote' THEN 'inbox' ELSE folder END,local_destination_id=NULL WHERE local_destination_id IN (SELECT id FROM remote_folders WHERE account_id=?)",
             (account_id,),
@@ -565,6 +565,7 @@ class MessagePatch(BaseModel):
 
 @app.patch("/api/messages/{message_id}")
 def patch_message(message_id: int, data: MessagePatch):
+    queued = 0
     fields = data.model_dump(exclude_none=True)
     if "folder" in fields:
         fields["local_folder_override"] = 1
@@ -596,7 +597,7 @@ def patch_message(message_id: int, data: MessagePatch):
                 )
             )
             if target:
-                provider_sync.enqueue_mail(conn, row, "move", target)
+                queued += provider_sync.enqueue_mail(conn, row, "move", target)
             mail_fields = {}
             if "unread" in fields:
                 mail_fields["isRead"] = not fields["unread"]
@@ -604,8 +605,8 @@ def patch_message(message_id: int, data: MessagePatch):
                 updated = conn.execute("SELECT starred,flagged FROM messages WHERE id=?", (message_id,)).fetchone()
                 mail_fields["flag"] = {"flagStatus": "flagged" if updated["starred"] or updated["flagged"] else "notFlagged"}
             if mail_fields:
-                provider_sync.enqueue_mail(conn, row, "patch", {"fields": mail_fields})
-    return {"ok": True}
+                queued += provider_sync.enqueue_mail(conn, row, "patch", {"fields": mail_fields})
+    return provider_sync.mail_result({"ok": True}, queued)
 
 
 @app.delete("/api/messages/{message_id}")
@@ -616,8 +617,8 @@ def delete_message(message_id: int):
         if not row:
             raise HTTPException(404, "Message not found in Trash or Drafts")
         require_change(conn.execute("DELETE FROM messages WHERE id=?", (message_id,)))
-        provider_sync.enqueue_mail(conn, row, "delete", {})
-    return {"ok": True}
+        queued = provider_sync.enqueue_mail(conn, row, "delete", {})
+    return provider_sync.mail_result({"ok": True}, queued)
 
 
 class Compose(BaseModel):

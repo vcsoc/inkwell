@@ -40,6 +40,7 @@ test.beforeEach(async ({ page }) => {
     ids.push(m.id);
     await api(page, '/messages/' + m.id, 'PATCH', { folder: 'inbox' });
     const db = new DatabaseSync(path.join(process.env.INKWELL_UI_DATA, 'inkwell.db'));
+    db.exec('PRAGMA busy_timeout = 5000');
     db.prepare('UPDATE messages SET date=?,html_body=? WHERE id=?').run(
       `2090-05-0${i}T12:00:00Z`,
       '<p>Private preview</p>',
@@ -101,7 +102,7 @@ test('Flagging highlights the entire row, survives reload and remains separate f
   await page.locator('#global-search').fill(prefix);
   await expect(row).toHaveClass(/flagged-message/);
   await row.locator('.message-more').click();
-  await selectEmailMenuAction(page, 'Unflag message (local)');
+  await selectEmailMenuAction(page, 'Unflag message');
   await expect(row).not.toHaveClass(/flagged-message/);
   expect((await api(page, '/messages/' + ids[0])).starred).toBe(1);
 });
