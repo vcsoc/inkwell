@@ -1,0 +1,155 @@
+.translation-menu,
+.translation-editor,
+.translation-setup,
+.translation-pill {
+  --text: var(--ink, #26372b);
+  --border: var(--line, #8a9b8d);
+}
+.translation-menu {
+  position: fixed;
+  z-index: 10000;
+  width: 264px;
+  max-width: calc(100vw - 16px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 28px #0003;
+  padding: 6px;
+}
+.translation-menu button {
+  display: block;
+  width: 100%;
+  min-height: 38px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+  padding: 7px 12px;
+}
+.translation-menu button:hover,
+.translation-menu button:focus-visible {
+  background: var(--accent-soft, #dce8df);
+  outline: 2px solid var(--accent, #4c7458);
+}
+.translation-languages {
+  max-height: min(300px, 55vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--border);
+}
+.translation-languages[hidden] {
+  display: none;
+}
+.translation-text {
+  white-space: pre-wrap;
+}
+.translation-pill {
+  display: inline-block;
+  vertical-align: baseline;
+  border: 1px solid var(--border, #8a9b8d);
+  border-radius: 999px;
+  padding: 1px 6px;
+  margin: 0 3px;
+  font:
+    11px/1.5 system-ui,
+    sans-serif;
+  background: var(--surface, #fff);
+  color: var(--text, #26372b);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.translation-editor {
+  display: block;
+  width: 100%;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: auto;
+  cursor: text;
+}
+.translation-editor[hidden] {
+  display: none;
+}
+.translation-code-editor {
+  flex: 1;
+  min-width: 0;
+  min-height: 70vh !important;
+  border: 0;
+  border-radius: 0;
+  font-family: monospace;
+}
+.translation-setup {
+  max-width: min(520px, calc(100vw - 32px));
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+.translation-setup::backdrop {
+  background: #0006;
+}
+#translation-status {
+  font-size: 12px;
+}
+.doc-pdf-text-layer {
+  container-type: inline-size;
+  position: absolute;
+  inset: 0;
+  user-select: text;
+}
+.doc-pdf-text-layer span {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  line-height: 1;
+  transform-origin: left top;
+  cursor: text;
+}
+.doc-pdf-text-layer ::selection {
+  background: #589eff66;
+}
+.doc-pdf-overlay.pdf-editing .translation-pdf-overlay {
+  display: none;
+}
+.doc-pdf-overlay.pdf-editing .doc-pdf-text-layer {
+  pointer-events: none;
+  user-select: none;
+}
+.translation-pdf-overlay {
+  position: absolute;
+  z-index: 3;
+  background: #fff;
+  color: #202731;
+  font:
+    14px/1.5 system-ui,
+    sans-serif;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 2px;
+  box-shadow: 0 0 0 2px #fff;
+}
+.translation-pdf-overlay.showing-original {
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+.translation-pdf-overlay.showing-original .translation-pill {
+  pointer-events: auto;
+}
+@media (max-width: 720px) {
+  .translation-menu button {
+    min-height: 44px;
+  }
+}
+@media print {
+  .translation-pill {
+    display: none !important;
+  }
+}

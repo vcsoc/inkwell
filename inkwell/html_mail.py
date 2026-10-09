@@ -7,6 +7,8 @@ import io
 import ipaddress
 import json
 import re
+import secrets
+from pathlib import Path
 from functools import lru_cache
 from urllib.parse import parse_qs, urlsplit, urlunsplit
 
@@ -372,6 +374,7 @@ def preview(
     links: bool = False,
     inline: bool = False,
     q: str = Query(default="", max_length=200),
+    translation: str = Query(default="", pattern=r"^(?:[a-f0-9]{32})?$"),
 ):
     row = message(message_id)
     if len(allow) > 50:
@@ -410,10 +413,20 @@ def preview(
 
     body = highlight(body, q)
     colors += "body mark[data-search-hit],body a[href] mark[data-search-hit]{background-color:#ffdf68!important;color:#17212b!important;border-radius:2px}"
+    bridge = ''
+    nonce = secrets.token_urlsafe(24) if translation else ''
+    if translation:
+        static = Path(__file__).with_name('static')
+        code = (static / 'translation-core.js').read_text() + '\n' + (static / 'translation-frame.js').read_text()
+        bridge = f'<script nonce="{nonce}" data-translation-token="{translation}">{code}</script>'
+        body = '<div id="inkwell-mail-body">' + body + '</div>'
+        colors += (static / 'translation.css').read_text()
+    script_policy = f"'nonce-{nonce}'" if translation else "'none'"
     policy = (
-        "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src "
+        f"default-src 'none'; script-src {script_policy}; style-src 'unsafe-inline'; img-src "
         + (" ".join([*allow, *(["data:"] if images else [])]) if allow or images else "'none'")
         + "; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox"
+        + (" allow-scripts" if translation else "")
         + (" allow-popups allow-popups-to-escape-sandbox" if links else "")
     )
     return HTMLResponse(
@@ -421,6 +434,7 @@ def preview(
         + colors
         + "</style></head><body>"
         + body
+        + bridge
         + "</body></html>",
         headers={
             "Content-Security-Policy": policy,

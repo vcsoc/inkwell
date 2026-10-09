@@ -8,7 +8,7 @@ A desktop/mobile-first email, calendar, contacts and AI workspace. The desktop a
 
 ## Install on this Linux machine
 
-Build a bundled installer with `npm run build:linux`, then run `sh dist/inkwell-0.1.19-linux-x64.run`. The installed app appears as **inkwell** in your launcher and includes its Python backend—no development tools are required to run it. This is an unsigned Linux x86_64 user installer. See [Installing](docs/INSTALLING.md).
+Build a bundled installer with `npm run build:linux`, then run `sh dist/inkwell-0.1.20-linux-x64.run`. The installed app appears as **inkwell** in your launcher and includes its Python backend—no development tools are required to run it. This is an unsigned Linux x86_64 user installer. See [Installing](docs/INSTALLING.md).
 
 ## Start testing from source
 
@@ -51,6 +51,7 @@ For a phone, see [Mobile setup](docs/MOBILE.md). `localhost` on a phone refers t
 | Mail rules | Compact Rule Manager with list-left/editor-right layout, [scoped manual execution, drag priority and per-rule Stop](docs/RULE-EXECUTION.md), context-menu creation/application, sender/domain/TLD/subject conditions, multiple local actions, and [Not Junk](docs/NOT-JUNK.md) sender memory with local Inbox/rule filing |
 | People | Create/edit/delete contacts, compose from contact, recipient suggestions |
 | AI | OpenAI, OpenRouter, Anthropic, Gemini and compatible APIs; official Codex CLI subscription bridge; Ollama, LM Studio, llama.cpp and served Unsloth models; explicit context sharing and draft suggestions |
+| Local translation | Select text → right-click Translate → language, with inline Original toggle in received mail, drafts and Documents; bundled CPU runtime and one-time 2.5 GB model download, no cloud fallback; [scope and setup](docs/TRANSLATION.md) |
 | Appearance | Saved popup/internal forms; responsive calendar side editor; 16px defaults, separate sidebar font/size, adjustable spacing, compact in-app color-picker dropdowns and hex fields, four palettes, contrast guidance and YAML/JSON theme import/export |
 | Privacy | No telemetry or remote fonts, no remote email resources, TLS-only mail transport, encrypted stored credentials, CSP, origin checks, strict HttpOnly sessions, host allowlist |
 

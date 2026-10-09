@@ -58,6 +58,8 @@ Inkwell does not give Codex mail/calendar API credentials or write tools and doe
 
 ## Local models
 
+These adapters configure **Ask Inkwell**. The separate built-in **right-click → Translate** feature includes its own CPU runtime, model setup and inline Original toggle; it does not use your cloud/provider configuration. See [Local inline translation](TRANSLATION.md).
+
 ### Ollama
 
 ```sh

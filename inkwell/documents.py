@@ -704,6 +704,39 @@ def pdf_page(path: str, page: int = 0, width: int = Query(900, ge=100, le=1800))
         raise HTTPException(422, "Invalid PDF") from None
 
 
+@router.get('/pdf-selection')
+def pdf_selection(path: str, page: int = 0):
+    """Read-only selectable text layer for PDF translation; no OCR or PDF mutation."""
+    file = check_file(path)
+    if file.suffix.lower() != '.pdf':
+        raise HTTPException(415, 'Text selection requires a PDF')
+    try:
+        with pymupdf.open(file) as document:
+            unlock_pdf(document, file)
+            if page < 0 or page >= len(document):
+                raise HTTPException(422, 'Invalid PDF page')
+            target = document[page]
+            words = target.get_text('words', sort=True)
+            if target.rect.width <= 0 or target.rect.height <= 0:
+                raise HTTPException(422, 'Invalid PDF page dimensions')
+            if len(words) > 20000 or sum(len(word[4]) for word in words) > 200000:
+                raise HTTPException(413, 'PDF text layer is too large')
+            lines = {}
+            for x0, y0, x1, y1, text, block, line, _ in words:
+                key = (block, line)
+                entry = lines.setdefault(key, {'rect': [x0, y0, x1, y1], 'words': []})
+                entry['words'].append(text)
+                bounds = entry['rect']
+                entry['rect'] = [min(bounds[0], x0), min(bounds[1], y0), max(bounds[2], x1), max(bounds[3], y1)]
+            result = []
+            for entry in lines.values():
+                rect = pymupdf.Rect(entry['rect']) * target.rotation_matrix
+                result.append({'rect': list(rect), 'text': ' '.join(entry['words']) + '\n'})
+            return {'width': target.rect.width, 'height': target.rect.height, 'lines': result}
+    except (pymupdf.FileDataError, pymupdf.EmptyFileError):
+        raise HTTPException(422, 'Invalid PDF') from None
+
+
 class NewItem(BaseModel):
     path: str = ""
     name: str = Field(max_length=160)

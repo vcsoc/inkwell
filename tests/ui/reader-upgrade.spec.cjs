@@ -81,8 +81,9 @@ test('HTML is sandboxed, remote content is explicit and saved per message', asyn
   await page.locator(`[data-message="${id}"]`).click();
   const frame = page.frameLocator('.html-message');
   await expect(frame.getByRole('heading', { name: 'Safe HTML fixture' })).toBeVisible();
-  await expect(page.locator('.html-message')).toHaveAttribute('sandbox', '');
-  await expect(frame.locator('script,iframe,form,[href],[src]')).toHaveCount(0);
+  await expect(page.locator('.html-message')).toHaveAttribute('sandbox', 'allow-scripts');
+  await expect(frame.locator('#inkwell-mail-body script,iframe,form,[href],[src]')).toHaveCount(0);
+  await expect(frame.locator('script[nonce][data-translation-token]')).toHaveCount(1);
   expect(requests).toEqual([]);
   expect(await page.evaluate(() => window.compromised)).toBeUndefined();
   await page.getByLabel('Remote content options').selectOption('all');
@@ -153,7 +154,7 @@ test('Enabling reader links opens an isolated browser tab without loading tracki
     'href',
     'https://evil.example/link',
   );
-  await expect(frame.locator('script,img[src],iframe')).toHaveCount(0);
+  await expect(frame.locator('#inkwell-mail-body script,img[src],iframe')).toHaveCount(0);
   const link = frame.getByRole('link', { name: 'Disabled navigation' });
   await expect(link).toHaveCSS('text-decoration-line', 'underline');
   await expect(link).toHaveCSS('text-decoration-thickness', '2px');
@@ -180,7 +181,7 @@ test('Enabling reader links opens an isolated browser tab without loading tracki
   await popup.close();
   await page.getByLabel('Enable text links', { exact: true }).uncheck();
   await expect(frame.locator('a[href]')).toHaveCount(0);
-  await expect(page.locator('.html-message')).toHaveAttribute('sandbox', '');
+  await expect(page.locator('.html-message')).toHaveAttribute('sandbox', 'allow-scripts');
   expect(await page.evaluate(() => window.compromised)).toBeUndefined();
 });
 
@@ -192,7 +193,7 @@ test('Search highlights are safe in HTML and text, and reader tools share the se
   await page.locator(`[data-message="${id}"]`).click();
   const frame = page.frameLocator('.html-message');
   await expect(frame.locator('mark[data-search-hit]')).toHaveText('Safe');
-  await expect(frame.locator('script,img[src]')).toHaveCount(0);
+  await expect(frame.locator('#inkwell-mail-body script,img[src]')).toHaveCount(0);
   await expect(page.locator('#selection-tools .reader-actions')).toBeVisible();
   const geometry = await page.evaluate(() => {
     const a = document.querySelector('.reader-actions').getBoundingClientRect(),

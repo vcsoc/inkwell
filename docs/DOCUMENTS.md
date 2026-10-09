@@ -2,6 +2,8 @@
 
 **Documents is available in the Linux x86_64 app.** Search, moves, renaming, OS Trash, export, printing and the compact toolbar are included. Open **Documents** from the desktop icon rail or mobile tab. On mobile, use the ☰ menu to open the folder tree; tap the pages icon to open the thumbnail drawer.
 
+Select text and right-click **Translate → language** for local inline translation and an Original toggle in Word/rich and text editors. Selectable PDFs use a reversible view overlay; PDF originals are not rewritten. Save keeps the currently displayed document wording, without pill labels or hidden originals. See [Local translation](TRANSLATION.md).
+
 ## Supported files
 
 | Format | Available actions | Caveats |

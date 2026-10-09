@@ -161,6 +161,7 @@ async function api(path, options = {}) {
     activity();
   }
 }
+InkwellTranslation.initialize({ api, toast });
 function on(target, event, handler) {
   target.addEventListener(event, async (e) => {
     try {

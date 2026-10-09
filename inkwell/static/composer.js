@@ -68,7 +68,7 @@ window.InkwellComposer = (
   form.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && event.target.tagName === 'INPUT' && !event.defaultPrevented) {
       event.preventDefault();
-      if (event.target.name === 'subject') form.elements.body.focus();
+      if (event.target.name === 'subject') InkwellTranslation.focus(form.elements.body);
       else form.elements.subject.focus();
     }
   });

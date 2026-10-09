@@ -590,7 +590,29 @@ window.InkwellDocuments = (() => {
       const editor = $('#doc-editor-viewport');
       editor.innerHTML = `<div class="doc-pdf-paper" id="doc-pdf-paper"><img id="doc-pdf-image" src="${url(doc.path, page, 1100)}" alt="PDF page ${page + 1}"><div class="doc-pdf-overlay" id="doc-pdf-overlay" aria-label="Select an area on the PDF page"></div></div>`;
       editor.scrollTop = 0;
-      $('#doc-pdf-overlay').classList.toggle('selecting', !!current.pdfTool);
+      const overlay = $('#doc-pdf-overlay');
+      overlay.classList.toggle('selecting', !!current.pdfTool);
+      overlay.classList.toggle('pdf-editing', !!current.pdfTool);
+      api('/documents/pdf-selection?path=' + query(doc.path) + '&page=' + page)
+        .then((result) => {
+          if (!live() || !overlay.isConnected || current.document !== doc || current.page !== page)
+            return;
+          const layer = document.createElement('div');
+          layer.className = 'doc-pdf-text-layer';
+          layer.setAttribute('aria-label', 'Selectable PDF text');
+          for (const line of result.lines) {
+            const span = document.createElement('span');
+            const [x0, y0, x1, y1] = line.rect;
+            span.textContent = line.text + '\n';
+            span.style.left = (x0 / result.width) * 100 + '%';
+            span.style.top = (y0 / result.height) * 100 + '%';
+            span.style.width = ((x1 - x0) / result.width) * 100 + '%';
+            span.style.fontSize = `clamp(6px, ${((y1 - y0) / result.width) * 85}cqw, 72px)`;
+            layer.append(span);
+          }
+          overlay.append(layer);
+        })
+        .catch(() => {}); // Image preview still works for scanned/unsupported PDFs.
       status(
         `${doc.pages.length} page${doc.pages.length === 1 ? '' : 's'} · PDF edits save as new copies`,
       );
@@ -693,7 +715,9 @@ window.InkwellDocuments = (() => {
       const doc = current.document;
       if (!doc || doc.mode === 'pdf' || !current.dirty) return;
       const content =
-        doc.mode === 'rich' ? $('#doc-rich-editor').innerHTML : $('#doc-code-editor').value;
+        doc.mode === 'rich'
+          ? InkwellTranslation.html($('#doc-rich-editor'))
+          : $('#doc-code-editor').value;
       const result = await api('/documents/content', {
         method: 'PUT',
         body: { path: doc.path, revision: doc.revision, content },
@@ -951,6 +975,7 @@ window.InkwellDocuments = (() => {
               : 'Select a PDF tool',
       );
       $('#doc-pdf-overlay')?.classList.toggle('selecting', !!mode);
+      $('#doc-pdf-overlay')?.classList.toggle('pdf-editing', !!mode);
       $('#doc-pdf-overlay')?.querySelector('.doc-selection')?.remove();
       if (current.selection) renderSelection();
     }
@@ -1801,7 +1826,8 @@ window.InkwellDocuments = (() => {
       editor.selectionStart =
         start + (outdent ? -(lines[0].length - mapped.split('\n')[0].length) : 1);
       editor.selectionEnd = first + mapped.length;
-      editor.focus();
+      InkwellTranslation.syncFromSource(editor);
+      InkwellTranslation.focus(editor);
       markDirty();
       refreshLines();
     }

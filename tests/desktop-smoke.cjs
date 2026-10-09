@@ -236,7 +236,8 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 24000 }, async (t) 
     await window.locator('.message-row').first().click();
     const email = window.frameLocator('.html-message');
     await expect(email.getByRole('heading', { name: 'Packaged HTML preview' })).toBeVisible();
-    await expect(email.locator('[src],script')).toHaveCount(0);
+    await expect(email.locator('[src],#inkwell-mail-body script')).toHaveCount(0);
+    await expect(email.locator('script[nonce][data-translation-token]')).toHaveCount(1);
     await app.evaluate(({ shell }) => {
       global.savedOpenExternal = shell.openExternal;
       shell.openExternal = async (url) => {

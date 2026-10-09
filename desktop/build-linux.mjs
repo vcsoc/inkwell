@@ -6,6 +6,7 @@ import * as fs from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
+import { prepareLocalLlm } from './local-llm.mjs';
 
 if (process.platform !== 'linux' || process.arch !== 'x64')
   throw Error('This build target requires Linux x86_64.');
@@ -45,6 +46,7 @@ if (!oauth.microsoft_client_id)
   console.warn(
     'Microsoft publisher registration is not configured; this build requires advanced manual registration.',
   );
+const localLlm = await prepareLocalLlm();
 run(process.env.INKWELL_UV || 'uv', [
   'run',
   '--frozen',
@@ -74,11 +76,17 @@ run(process.env.INKWELL_UV || 'uv', [
   '--add-data',
   `${path.join(root, 'inkwell/static')}:inkwell/static`,
   '--add-data',
+  `${localLlm}:inkwell/local-llm`,
+  '--add-data',
   `${path.join(build, 'oauth.json')}:inkwell`,
   '--add-data',
   `${path.join(build, 'build-info.json')}:inkwell`,
   'desktop/backend.py',
 ]);
+await fs.chmod(
+  path.join(build, 'frozen/inkwell-server/_internal/inkwell/local-llm/llama-completion'),
+  0o755,
+);
 await fs.rm(source, { recursive: true, force: true });
 await fs.mkdir(path.join(source, 'desktop'), { recursive: true });
 await fs.mkdir(path.join(source, 'inkwell', 'static'), { recursive: true });
@@ -98,11 +106,24 @@ await fs.writeFile(
   ),
 );
 await fs.copyFile(path.join(root, 'desktop/main.cjs'), path.join(source, 'desktop/main.cjs'));
-await fs.copyFile(path.join(root, 'desktop/email-links.cjs'), path.join(source, 'desktop/email-links.cjs'));
-await fs.copyFile(path.join(root, 'desktop/calendar-reminders.cjs'), path.join(source, 'desktop/calendar-reminders.cjs'));
-await fs.copyFile(path.join(root, 'desktop/calendar-files.cjs'), path.join(source, 'desktop/calendar-files.cjs'));
-await fs.copyFile(path.join(root, 'desktop/os-shortcut.cjs'), path.join(source, 'desktop/os-shortcut.cjs'));
-for (const file of ['preload.cjs','file-export.cjs','attachment-open.cjs','updates.cjs']) await fs.copyFile(path.join(root,'desktop',file),path.join(source,'desktop',file));
+await fs.copyFile(
+  path.join(root, 'desktop/email-links.cjs'),
+  path.join(source, 'desktop/email-links.cjs'),
+);
+await fs.copyFile(
+  path.join(root, 'desktop/calendar-reminders.cjs'),
+  path.join(source, 'desktop/calendar-reminders.cjs'),
+);
+await fs.copyFile(
+  path.join(root, 'desktop/calendar-files.cjs'),
+  path.join(source, 'desktop/calendar-files.cjs'),
+);
+await fs.copyFile(
+  path.join(root, 'desktop/os-shortcut.cjs'),
+  path.join(source, 'desktop/os-shortcut.cjs'),
+);
+for (const file of ['preload.cjs', 'file-export.cjs', 'attachment-open.cjs', 'updates.cjs'])
+  await fs.copyFile(path.join(root, 'desktop', file), path.join(source, 'desktop', file));
 await fs.copyFile(
   path.join(root, 'inkwell/static/icon-512.png'),
   path.join(source, 'inkwell/static/icon-512.png'),
@@ -111,7 +132,19 @@ for (const filename of ['LICENSE', 'README.md', 'SECURITY.md', 'pyproject.toml',
   await fs.copyFile(path.join(root, filename), path.join(source, filename));
 }
 await fs.cp(path.join(root, 'docs'), path.join(source, 'docs'), { recursive: true });
-run(process.env.INKWELL_UV || 'uv', ['run', '--frozen', '--group', 'build', 'python', 'desktop/collect-notices.py', path.join(source, 'third-party-notices')]);
+run(process.env.INKWELL_UV || 'uv', [
+  'run',
+  '--frozen',
+  '--group',
+  'build',
+  'python',
+  'desktop/collect-notices.py',
+  path.join(source, 'third-party-notices'),
+]);
+await fs.copyFile(
+  path.join(localLlm, 'LICENSE'),
+  path.join(source, 'third-party-notices/llama.cpp-LICENSE'),
+);
 const electronVersion = JSON.parse(
   await fs.readFile(path.join(root, 'node_modules/electron/package.json'), 'utf8'),
 ).version;

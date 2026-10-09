@@ -46,6 +46,7 @@ from . import (
     attachments,
     documents,
     provider_sync,
+    translation,
 )
 
 STATIC = Path(__file__).parent / "static"
@@ -77,6 +78,7 @@ async def lifespan(app):
 app = FastAPI(title="inkwell", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.include_router(preferences.router)
 app.include_router(provider_sync.router)
+app.include_router(translation.router)
 app.include_router(app_info.router)
 app.include_router(mail_notifications.router)
 app.include_router(documents.router)
