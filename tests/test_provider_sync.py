@@ -48,13 +48,15 @@ def test_calendar_create_edit_delete_persist_order_and_local_only(ready):
     assert json.loads(history[1]["payload"])["title"] == "New name"
     assert provider_sync.claim()["id"] == history[0]["id"]
     assert provider_sync.claim() is None  # Same resource cannot overtake a running write.
-    provider_sync.set_mode(provider_sync.Mode(local_changes_only=True))
-    add_event(sample_event("Private"))
-    assert len(jobs()) == 3
+    with pytest.raises(HTTPException, match='always enabled'):
+        provider_sync.set_mode(provider_sync.Mode(local_changes_only=True))
+    add_event(sample_event("Synchronized"))
+    assert len(jobs()) == 4
 
 
 def test_old_calendar_event_adopted_only_after_authorized_edit(ready):
-    provider_sync.set_mode(provider_sync.Mode(local_changes_only=True))
+    with store.db() as db:
+        db.execute("DELETE FROM settings WHERE key='provider_sync_account'")
     event = add_event(sample_event())["id"]
     assert not jobs()
     provider_sync.set_mode(provider_sync.Mode(local_changes_only=False))
@@ -73,13 +75,13 @@ def test_outlook_mail_changes_enqueue_immutable_ids_and_local_only_folders_rejec
         db.execute("INSERT INTO local_folders(name) VALUES ('Private')")
         local_id = db.execute("SELECT id FROM local_folders").fetchone()[0]
     patch_message(message, MessagePatch(unread=False, starred=True))
-    with pytest.raises(HTTPException, match="local-only folder"):
-        message_moves.move(message_moves.Move(ids=[message], folder=f"local-{local_id}"))
-    assert [j["kind"] for j in jobs()] == ["patch"]
+    message_moves.move(message_moves.Move(ids=[message], folder=f"local-{local_id}"))
+    assert [j["kind"] for j in jobs()] == ["patch", "move"]
+    assert json.loads(jobs()[1]['payload'])['folder_path']['segments'] == [{'id': local_id, 'name': 'Private'}]
     message_moves.move(message_moves.Move(ids=[message], folder="trash"))
     message_moves.trash_selection(message_moves.Trash(ids=[message], permanent=True))
     history = jobs()
-    assert [j["kind"] for j in history] == ["patch", "move", "delete"]
+    assert [j["kind"] for j in history] == ["patch", "move", "move", "delete"]
     assert json.loads(history[0]["payload"])["fields"] == {
         "isRead": True, "flag": {"flagStatus": "flagged"}}
     assert all(json.loads(j["payload"])["remote_id"] == "immutable-id" for j in history)
@@ -146,7 +148,7 @@ def test_disconnect_cancels_unsent_jobs_without_removing_local_data(ready):
     with store.db() as db:
         row = db.execute('SELECT provider_account_id FROM events WHERE id=?', (event,)).fetchone()
         assert row and row[0] is None
-    assert provider_sync.status()['local_changes_only'] is True
+    assert provider_sync.status()['local_changes_only'] is False
 
 
 def test_disconnect_cannot_resurrect_a_running_job(ready, monkeypatch):
@@ -173,7 +175,8 @@ def test_no_write_without_consent_or_wrong_account(ready):
         provider_sync.set_mode(provider_sync.Mode(local_changes_only=False))
     assert error.value.status_code == 409
     event = add_event(sample_event())["id"]
-    assert event and provider_sync.status()["local_changes_only"] is True
+    assert event and provider_sync.status()["local_changes_only"] is False
+    assert provider_sync.status()['authorization_required'] == 1
     # A grant revoked between requests cannot send changes silently.
     provider_sync.run_job(provider_sync.claim())
     assert jobs()[0]["state"] == "failed"
@@ -206,9 +209,10 @@ def test_readonly_moves_and_deletion_are_blocked_until_consent_or_explicit_local
         assert db.execute("SELECT 1 FROM messages WHERE id=?", (trashed,)).fetchone()
     assert not jobs()
     assert provider_sync.status()["authorization_required"] == 1
-    provider_sync.set_mode(provider_sync.Mode(local_changes_only=True))
-    assert message_moves.move(message_moves.Move(ids=[message], folder="trash")) == {"moved": 1}
-    assert message_moves.trash_selection(message_moves.Trash(ids=[trashed], permanent=True)) == {"deleted": 1}
+    with pytest.raises(HTTPException, match='always enabled'):
+        provider_sync.set_mode(provider_sync.Mode(local_changes_only=True))
+    with pytest.raises(HTTPException, match='write access'):
+        patch_message(message, MessagePatch(unread=False))
     assert not jobs()
 
 
@@ -278,7 +282,8 @@ def test_mail_sync_does_not_require_a_single_calendar_account(ready):
     one = outlook_message(ready, "first-mail")
     two = outlook_message(other, "second-mail")
     assert message_moves.move(message_moves.Move(ids=[one, two], folder="trash"))["provider_queued"] == 2
-    provider_sync.set_mode(provider_sync.Mode(local_changes_only=True))
+    with pytest.raises(HTTPException, match='always enabled'):
+        provider_sync.set_mode(provider_sync.Mode(local_changes_only=True))
     provider_sync.set_mode(provider_sync.Mode(local_changes_only=False))
     assert provider_sync.status()["local_changes_only"] is False
 

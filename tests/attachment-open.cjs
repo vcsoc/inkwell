@@ -27,12 +27,13 @@ test('attachment bridge only opens passive copies automatically and requires a n
   const valid = { sender: window.webContents, senderFrame: frame };
   const token = 'a'.repeat(64);
   const fetchOriginal = global.fetch;
+  let cookie = 'session';
   global.fetch = async (url, options) => {
-    assert.match(options.headers.Cookie, /^inkwell_session=/);
+    assert.equal(options.headers.Cookie, 'inkwell_session=' + cookie);
     if (url.endsWith('/safe-open')) return new Response('%PDF-passive', { headers: { 'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename="inkwell-safe-copy.pdf"' } });
     return new Response('%PDF-original', { headers: { 'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename="receipt.pdf"' } });
   };
-  const cleanup = bridge(window, { origin: 'http://127.0.0.1:8877', cookie: 'session' });
+  const cleanup = bridge(window, { origin: 'http://127.0.0.1:8877', cookie: () => cookie });
   try {
     await assert.rejects(handlers.get('inkwell-attachment-open-safe')({ sender: {}, senderFrame: frame }, 1, token), /Untrusted/);
     await assert.rejects(handlers.get('inkwell-attachment-open-safe')(valid, 1, '../../test'), /Untrusted/);
@@ -43,6 +44,7 @@ test('attachment bridge only opens passive copies automatically and requires a n
     assert.equal((await handlers.get('inkwell-attachment-open-original')(valid, 1, token)).opened, false);
     assert.equal(opened.length, 1);
     decision = 1;
+    cookie = 'renewed-session';
     await handlers.get('inkwell-attachment-open-original')(valid, 1, token);
     assert.equal(opened[1].content, '%PDF-original');
   } finally {

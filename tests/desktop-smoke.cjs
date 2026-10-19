@@ -64,6 +64,10 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 24000 }, async (t) 
     window.setDefaultTimeout(3000);
     window.setDefaultNavigationTimeout(5000);
     await expect(window.locator('#page-title')).toHaveText('your inbox.');
+    expect(await window.evaluate(async () => (await fetch('/api/provider-sync', {
+      method: 'PUT', headers: { 'X-Inkwell': '1', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ local_changes_only: true }),
+    })).status)).toBe(422);
     expect(await window.evaluate(() => window.inkwellUpdates.status())).toEqual({
       supported: Boolean(process.env.INKWELL_TEST_EXECUTABLE?.includes('/.local/opt/inkwell/current/inkwell')),
     });
@@ -265,13 +269,17 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 24000 }, async (t) 
     await expect(email.locator('a[href]')).toHaveCount(0);
     await email.getByRole('heading', { name: 'Packaged HTML preview' }).click();
     // CDP keyboard injection bypasses Electron's before-input-event; use native input.
-    const zoomKey = (key) =>
-      app.evaluate(({ BrowserWindow }, keyCode) => {
+    const zoomKey = (key, modifiers = ['control']) =>
+      app.evaluate(({ BrowserWindow }, { keyCode, modifiers }) => {
         const wc = BrowserWindow.getAllWindows()[0].webContents;
-        wc.sendInputEvent({ type: 'keyDown', keyCode, modifiers: ['control', 'shift'] });
-        wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers: ['control', 'shift'] });
-      }, key);
+        wc.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
+        wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
+      }, { keyCode: key, modifiers });
     await zoomKey('=');
+    await expect(window.locator('html')).toHaveCSS('zoom', '1.1');
+    await zoomKey('-');
+    await expect(window.locator('html')).toHaveCSS('zoom', '1');
+    await zoomKey('=', ['control', 'shift']);
     await expect(window.locator('html')).toHaveCSS('zoom', '1.1');
     await zoomKey('0');
     await expect(window.locator('html')).toHaveCSS('zoom', '1');
@@ -541,10 +549,8 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 24000 }, async (t) 
     await window.locator('#global-search').fill('');
     await expect(window.locator('.message-row')).toHaveCount(5);
     await window.locator('#quick-view-button').click();
-    await window.locator('#quick-view').selectOption('table');
     await expect(window.locator('.message-table-header')).toBeVisible();
     await window.locator('#quick-view-button').click();
-    await window.locator('#quick-view').selectOption('cards');
     await window.locator('#heading-compose').click();
     await window.locator('[name=subject]').fill('Desktop close autosave');
     await window.locator('#toggle-cc').click();

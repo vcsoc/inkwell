@@ -28,7 +28,7 @@ window.InkwellMailFilters = (() => {
       toolbar.insertAdjacentHTML(
         'beforeend',
         `<div class="quick-toolbar-actions" aria-label="Mail filters and display options">${button('quick-filter-toggle', 'Filter and display options', '<path d="M3 5h18l-7 8v6l-4 2v-8z"/>', 'aria-expanded="false" aria-controls="quick-filter"')}
-        <div class="quick-action-buttons" ${enabled ? '' : 'hidden'}>${button('quick-starred', 'Starred messages', '<path d="m12 3 2.8 6 6.7.8-4.9 4.7 1.2 6.5-5.8-3.1L6.2 21l1.2-6.5-4.9-4.7L9.2 9z"/>', `aria-pressed="${!!state.quick?.starred}"`)}${button('quick-tags-button', 'Filter by tag', '<path d="M3 4h9l9 9-8 8-10-10z"/><circle cx="8" cy="8" r="1"/>', 'aria-expanded="false" aria-controls="quick-filter"')}${button('quick-sort-button', 'Sort and order messages', '<path d="M4 6h13M4 12h10M4 18h7M19 12v8m-3-3 3 3 3-3"/>', 'aria-expanded="false" aria-controls="quick-filter"')}${button('quick-view-button', 'Card or table view', '<rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M9 10v10"/>', 'aria-expanded="false" aria-controls="quick-filter"')}${button('group-by-date', 'Group messages by date', '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18M8 14h3M8 18h3"/>', `aria-pressed="${!!preferences.group_messages_by_date}"`)}${button('quick-pin', 'Keep filters when switching folders', '<path d="M9 3h6l-1 6 4 4v2H6v-2l4-4zM12 15v7"/>', `aria-pressed="${!!preferences.quick_filter_pinned}"`)}${button('clear-quick-filter', 'Clear filters', '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/>')}</div><span class="sr-only" id="quick-active-note"></span></div>
+        <div class="quick-action-buttons" ${enabled ? '' : 'hidden'}>${button('quick-starred', 'Starred messages', '<path d="m12 3 2.8 6 6.7.8-4.9 4.7 1.2 6.5-5.8-3.1L6.2 21l1.2-6.5-4.9-4.7L9.2 9z"/>', `aria-pressed="${!!state.quick?.starred}"`)}${button('quick-tags-button', 'Filter by tag', '<path d="M3 4h9l9 9-8 8-10-10z"/><circle cx="8" cy="8" r="1"/>', 'aria-expanded="false" aria-controls="quick-filter"')}${button('quick-sort-button', 'Sort and order messages', '<path d="M4 6h13M4 12h10M4 18h7M19 12v8m-3-3 3 3 3-3"/>', 'aria-expanded="false" aria-controls="quick-filter"')}${button('quick-view-button', 'Card or table view', '<rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M9 10v10"/>', `aria-pressed="${preferences.mail_view === 'table'}"`)}${button('group-by-date', 'Group messages by date', '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18M8 14h3M8 18h3"/>', `aria-pressed="${!!preferences.group_messages_by_date}"`)}${button('quick-pin', 'Keep filters when switching folders', '<path d="M9 3h6l-1 6 4 4v2H6v-2l4-4zM12 15v7"/>', `aria-pressed="${!!preferences.quick_filter_pinned}"`)}${button('clear-quick-filter', 'Clear filters', '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/>')}</div><span class="sr-only" id="quick-active-note"></span></div>
         <div id="quick-filter" class="quick-filter" role="group" aria-label="Filter and display options" hidden><section data-quick-pane="tags"><label>Tags<select id="quick-tag-state"><option value="all">Any</option><option value="tagged">Tagged</option><option value="untagged">Untagged</option></select></label><label>Tag<select id="quick-tag"><option value="">Any tag</option>${(state.tagCatalog || []).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></label></section><section data-quick-pane="sort"><label>Sort by<select id="quick-sort">${Object.entries(
           {
             date: 'Date',
@@ -44,17 +44,11 @@ window.InkwellMailFilters = (() => {
           .map(([value, label]) => `<option value="${value}">${label}</option>`)
           .join(
             '',
-          )}</select></label><label>Order<select id="quick-order"><option value="desc">Descending</option><option value="asc">Ascending</option></select></label></section><section data-quick-pane="view"><label>View<select id="quick-view"><option value="cards">Cards</option><option value="table">Table</option></select></label></section></div>`,
+          )}</select></label><label>Order<select id="quick-order"><option value="desc">Descending</option><option value="asc">Ascending</option></select></label></section></div>`,
       );
       const actions = toolbar.querySelector('.quick-action-buttons');
       const root = toolbar.querySelector('#quick-filter');
       const trigger = toolbar.querySelector('#quick-filter-toggle');
-      const menus = [
-        'quick-filter-toggle',
-        'quick-tags-button',
-        'quick-sort-button',
-        'quick-view-button',
-      ];
       const close = () => {
         root.hidden = true;
         toolbar
@@ -82,7 +76,13 @@ window.InkwellMailFilters = (() => {
         : preferences.mail_sort || 'date';
       root.querySelector('#quick-sort').disabled = !!preferences.group_messages_by_date;
       root.querySelector('#quick-order').value = preferences.mail_order || 'desc';
-      root.querySelector('#quick-view').value = preferences.mail_view || 'cards';
+      const viewButton = toolbar.querySelector('#quick-view-button');
+      viewButton.title = preferences.mail_view === 'table' ? 'Switch to cards' : 'Switch to table';
+      viewButton.onclick = () => {
+        close();
+        saveWorkspace({ mail_view: preferences.mail_view === 'table' ? 'cards' : 'table' });
+        void refresh();
+      };
       const active = [
         state.filter === 'unread' ? 'Unread' : '',
         state.quick?.starred ? 'Starred' : '',
@@ -101,7 +101,6 @@ window.InkwellMailFilters = (() => {
         ['quick-filter-toggle', 'all'],
         ['quick-tags-button', 'tags'],
         ['quick-sort-button', 'sort'],
-        ['quick-view-button', 'view'],
       ])
         toolbar.querySelector('#' + id).onclick = () => {
           if (id === 'quick-filter-toggle' && !root.hidden && root.dataset.pane === 'all') {
@@ -131,7 +130,6 @@ window.InkwellMailFilters = (() => {
       for (const [id, key] of [
         ['quick-sort', 'mail_sort'],
         ['quick-order', 'mail_order'],
-        ['quick-view', 'mail_view'],
       ])
         root.querySelector('#' + id).onchange = (event) => {
           saveWorkspace({ [key]: event.target.value });

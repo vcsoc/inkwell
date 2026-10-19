@@ -74,7 +74,11 @@ module.exports = (window, { origin, cookie }) => {
       throw Error('Untrusted attachment open request');
     const url = `${origin}/api/messages/${id}/attachments/${token}/${safe ? 'safe-open' : 'download'}`;
     const response = await fetch(url, {
-      headers: { Cookie: `inkwell_session=${cookie}`, Origin: origin, 'X-Inkwell': '1' },
+      headers: {
+        Cookie: `inkwell_session=${typeof cookie === 'function' ? cookie() : cookie}`,
+        Origin: origin,
+        'X-Inkwell': '1',
+      },
       signal: AbortSignal.timeout(30000),
     });
     if (!response.ok)

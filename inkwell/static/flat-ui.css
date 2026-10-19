@@ -1,0 +1,200 @@
+/* Flat application chrome; document contents and keyboard outlines stay intact. */
+:root {
+  --control-height: 30px;
+  --soft-separator: color-mix(in srgb, var(--ink) 9%, transparent);
+}
+body :is(button, .primary, .secondary, .icon-button, input, select, textarea) {
+  border-width: 0 !important;
+  box-shadow: none;
+}
+body :is(.primary, .secondary, .assistant-toggle) {
+  min-height: var(--control-height);
+  padding: 4px 9px;
+  gap: 5px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+body :is(.icon-button, .quick-icon, .reader-actions button) {
+  min-height: 28px;
+  min-width: 28px;
+  padding: 4px;
+  border-radius: 4px;
+}
+body
+  :is(.field input, .field select, .field textarea, .global-search input, .global-search select) {
+  padding: 6px 8px;
+  min-height: var(--control-height);
+}
+body
+  :is(
+    .card,
+    .mail-shell,
+    .profile,
+    .rail-profile,
+    dialog,
+    fieldset,
+    .internal-form,
+    .internal-form-header,
+    .message-menu,
+    .sidebar,
+    .topbar,
+    .app-rail,
+    .app-footer,
+    .mail-toolbar,
+    .message-list,
+    .reader,
+    .selection-tools,
+    .settings-nav,
+    .rule-entry,
+    .rule-list-footer,
+    .rule-condition,
+    .rule-action,
+    .privacy-banner,
+    .html-message,
+    .attachment-card,
+    .quick-filter,
+    .calendar-header,
+    .calendar-agenda,
+    .collection-banner
+  ) {
+  border-width: 0 !important;
+  box-shadow: none;
+}
+body :is(#message-attachments, #rule-advanced, #rule-resource-tools, #rule-run-scope) {
+  border-width: 0;
+  box-shadow: none;
+}
+html body .message-list .message-row {
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--soft-separator);
+  border-radius: 0;
+  box-shadow: none;
+  padding-top: 7px;
+  padding-bottom: 7px;
+  min-height: 0;
+}
+html body .message-row .subject {
+  margin-top: 3px;
+}
+html body #reader {
+  padding: 12px 18px;
+}
+.reader-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 6px;
+}
+html body .reader-title-row h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+html body .reader-title-row .reader-tags {
+  flex: 0 1 auto;
+  justify-content: flex-end;
+  margin: 0;
+  gap: 3px;
+  max-width: 45%;
+}
+html body :is(.mail-pill, .tag-pill) {
+  border-width: 0;
+  padding: 1px 5px;
+  font-size: 10px;
+  line-height: 1.3;
+}
+html body #reader .reader-meta {
+  margin-bottom: 6px;
+  gap: 8px;
+}
+html body #message-attachments {
+  margin: 4px 0 6px;
+  padding: 4px 0;
+  background: transparent;
+}
+html body .privacy-banner {
+  padding: 5px 8px;
+  margin: 0 0 6px;
+  gap: 6px;
+  border-radius: 4px;
+}
+html body .privacy-banner select {
+  padding: 4px 6px;
+}
+html body .html-message {
+  border: 0;
+  border-radius: 0;
+}
+html body .rule-entry-tools {
+  display: flex;
+  padding: 0 6px 5px;
+  gap: 3px;
+  flex-wrap: nowrap;
+}
+html body .rule-manager .rule-entry-tools .rule-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px;
+}
+html body .rule-choice {
+  padding: 7px 8px 4px;
+}
+html body .rule-manager .rule-builder-row {
+  padding: 6px;
+}
+html body #rule-form button,
+html body .rule-manager .rule-builder-row :is(input, select) {
+  min-height: var(--control-height);
+  padding: 4px 7px;
+}
+html body .reader-actions .reader-tool {
+  min-height: 28px;
+  min-width: 28px;
+  padding: 4px;
+}
+html body .reader-links-toggle {
+  min-height: 28px;
+}
+html[data-layout] body .mail-toolbar {
+  gap: 16px;
+}
+html body .quick-toolbar-actions {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+html body .rule-entry-tools [data-delete-rule] {
+  color: var(--danger, #ac4c45);
+}
+@media (pointer: coarse) {
+  :root {
+    --control-height: 36px;
+  }
+  body :is(button, .primary, .secondary, .icon-button, .quick-icon, .reader-actions button),
+  html body .rule-manager .rule-entry-tools .rule-tool {
+    min-height: 36px;
+    min-width: 36px;
+  }
+  html body .reader-actions .reader-tool,
+  html body .reader-links-toggle {
+    min-height: 36px;
+    min-width: 36px;
+  }
+}
+@media (max-width: 600px) {
+  .reader-title-row {
+    flex-wrap: wrap;
+  }
+  html body .reader-title-row .reader-tags {
+    max-width: 100%;
+    margin-left: auto;
+  }
+  html body #reader {
+    padding: 10px 12px;
+  }
+}

@@ -122,7 +122,7 @@ await fs.copyFile(
   path.join(root, 'desktop/os-shortcut.cjs'),
   path.join(source, 'desktop/os-shortcut.cjs'),
 );
-for (const file of ['preload.cjs', 'file-export.cjs', 'attachment-open.cjs', 'updates.cjs'])
+for (const file of ['preload.cjs', 'file-export.cjs', 'attachment-open.cjs', 'updates.cjs', 'backend-supervisor.cjs', 'diagnostics.cjs'])
   await fs.copyFile(path.join(root, 'desktop', file), path.join(source, 'desktop', file));
 await fs.copyFile(
   path.join(root, 'inkwell/static/icon-512.png'),

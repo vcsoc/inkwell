@@ -40,7 +40,10 @@ module.exports = (window, { origin, cookie, directory, iconPath }) => {
       let size = 0;
       for (const id of new Set(ids)) {
         const response = await fetch(origin + '/api/messages/' + id + '/eml', {
-          headers: { Cookie: 'inkwell_session=' + cookie, Origin: origin },
+          headers: {
+            Cookie: 'inkwell_session=' + (typeof cookie === 'function' ? cookie() : cookie),
+            Origin: origin,
+          },
           signal: AbortSignal.timeout(5000),
         });
         if (!response.ok) throw Error('Could not export a selected message');

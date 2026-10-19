@@ -85,10 +85,12 @@ window.InkwellDraftAutosave = ({ form, data, api, toast, onSaved }) => {
   };
   const blur = () => flush().catch((error) => toast(error.message));
   window.addEventListener('blur', blur);
+  window.addEventListener('InkwellBackendReady', blur);
   window.addEventListener('pagehide', leaving);
   const stop = () => {
     done = true;
     window.removeEventListener('blur', blur);
+    window.removeEventListener('InkwellBackendReady', blur);
     clearTimeout(timer);
     window.removeEventListener('pagehide', leaving);
     form.removeEventListener('input', changed);

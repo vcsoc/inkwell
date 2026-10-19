@@ -1,12 +1,34 @@
 'use strict';
 // Source and installed desktop launcher. Backend stays loopback-only and dies with the app.
 const { app, BrowserWindow, dialog, session, shell, ipcMain, Notification } = require('electron');
-const { spawn } = require('node:child_process');
+const backendSupervisor = require('./backend-supervisor.cjs');
 const { randomBytes } = require('node:crypto');
 const net = require('node:net');
 const path = require('node:path');
 app.setName('inkwell');
 if (process.platform === 'linux') app.setDesktopName('inkwell.desktop');
+const log = require('./diagnostics.cjs')(path.join(app.getPath('userData'), 'logs'));
+log('desktop-start', {
+  version: app.getVersion(),
+  electron: process.versions.electron,
+  pid: process.pid,
+});
+process.on('uncaughtExceptionMonitor', (error) =>
+  log('main-exception', {
+    type: error.name,
+    frames: String(error.stack || '')
+      .split('\n')
+      .filter((line) => /^\s+at /.test(line))
+      .slice(0, 12),
+  }),
+);
+app.on('child-process-gone', (_event, details) =>
+  log('child-process-gone', {
+    type: details.type,
+    reason: details.reason,
+    exitCode: details.exitCode,
+  }),
+);
 let backend;
 let quitting = false;
 const primaryInstance = app.requestSingleInstanceLock();
@@ -43,60 +65,51 @@ async function launch() {
   const args = app.isPackaged
     ? ['--port', String(port)]
     : ['run', '--frozen', 'python', '-m', 'inkwell', '--port', String(port)];
-  backend = spawn(executable, args, {
-    cwd: app.isPackaged ? app.getPath('home') : root,
-    env: { ...process.env, INKWELL_ACCESS_KEY: key, INKWELL_HOSTS: '' },
-    stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true,
-  });
-  let logs = '';
-  backend.stdout.on('data', (d) => {
-    logs = (logs + d).slice(-4000);
-  });
-  backend.stderr.on('data', (d) => {
-    logs = (logs + d).slice(-4000);
-  });
-  let failure;
-  backend.on('error', (e) => {
-    failure = e;
-  });
-  backend.on('exit', (code) => {
-    if (!quitting) failure = new Error(`Backend stopped (${code}). ${logs}`);
-  });
-  let ready = false;
-  const startupDeadline = Date.now() + 60000;
-  while (Date.now() < startupDeadline) {
-    if (failure) throw failure;
-    try {
-      const response = await fetch(origin, { signal: AbortSignal.timeout(1000) });
-      if (response.ok) {
-        ready = true;
-        break;
+  let cookie;
+  let window;
+  let backendState = 'starting';
+  backend = backendSupervisor({
+    command: executable,
+    args,
+    options: {
+      cwd: app.isPackaged ? app.getPath('home') : root,
+      env: { ...process.env, INKWELL_ACCESS_KEY: key, INKWELL_HOSTS: '' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    },
+    probe: async () => (await fetch(origin, { signal: AbortSignal.timeout(1000) })).ok,
+    authenticate: async () => {
+      const response = await fetch(origin + '/api/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: origin, 'X-Inkwell': '1' },
+        body: JSON.stringify({ key }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) throw new Error('Could not unlock local backend');
+      const value = response.headers.get('set-cookie')?.match(/inkwell_session=([^;]+)/)?.[1];
+      if (!value) throw new Error('Missing local session');
+      await session.defaultSession.cookies.set({
+        url: origin,
+        name: 'inkwell_session',
+        value,
+        httpOnly: true,
+        sameSite: 'strict',
+      });
+      cookie = value;
+    },
+    onState: (value) => {
+      backendState = value;
+      if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) {
+        try {
+          window.webContents.send('inkwell-backend-state', value);
+        } catch (error) {
+          log('backend-status-error', { type: error.name });
+        }
       }
-    } catch {}
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  if (!ready)
-    throw new Error(
-      (app.isPackaged
-        ? 'Bundled backend did not start. Reinstall inkwell or check your system libraries. '
-        : 'Backend did not start. Install uv and run uv sync first. ') + logs,
-    );
-  const response = await fetch(origin + '/api/unlock', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Origin: origin, 'X-Inkwell': '1' },
-    body: JSON.stringify({ key }),
+    },
+    log,
   });
-  if (!response.ok) throw new Error('Could not unlock local backend');
-  const cookie = response.headers.get('set-cookie')?.match(/inkwell_session=([^;]+)/)?.[1];
-  if (!cookie) throw new Error('Missing local session');
-  await session.defaultSession.cookies.set({
-    url: origin,
-    name: 'inkwell_session',
-    value: cookie,
-    httpOnly: true,
-    sameSite: 'strict',
-  });
+  await backend.start();
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) =>
     callback(false),
   );
@@ -107,7 +120,7 @@ async function launch() {
   if (!themeResponse.ok) throw new Error('Could not load your saved appearance');
   const theme = (await themeResponse.json()).theme;
   if (!/^#[0-9a-f]{6}$/i.test(theme?.background)) throw new Error('Invalid saved background color');
-  const window = new BrowserWindow({
+  window = new BrowserWindow({
     width: 1360,
     height: 900,
     minWidth: 380,
@@ -126,9 +139,58 @@ async function launch() {
       backgroundThrottling: false,
     },
   });
+  ipcMain.handle('inkwell-backend', (event, action) => {
+    if (
+      event.sender !== window.webContents ||
+      event.senderFrame !== window.webContents.mainFrame ||
+      new URL(event.senderFrame?.url || 'about:blank').origin !== origin
+    )
+      throw Error('Untrusted backend request');
+    if (action === 'status') return backendState;
+    if (action === 'retry') {
+      void backend.retry();
+      return;
+    }
+    throw Error('Unknown backend action');
+  });
+  window.once('closed', () => ipcMain.removeHandler('inkwell-backend'));
+  window.webContents.on('did-finish-load', () =>
+    log('renderer-ready', { pid: window.webContents.getOSProcessId() }),
+  );
+  let rendererFailures = [];
+  const recoverRenderer = async (details) => {
+    log('renderer-gone', { reason: details.reason, exitCode: details.exitCode });
+    if (quitting || window.isDestroyed() || details.reason === 'clean-exit') return;
+    const now = Date.now();
+    rendererFailures = rendererFailures.filter((at) => now - at < 300000);
+    rendererFailures.push(now);
+    if (rendererFailures.length > 3) {
+      const { response } = await dialog.showMessageBox(window, {
+        type: 'error',
+        title: 'Inkwell display stopped',
+        message:
+          'The display has stopped repeatedly. Reload to try again. Saved mail and drafts are kept.',
+        buttons: ['Reload', 'Close'],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      if (quitting || window.isDestroyed()) return;
+      if (response === 1) {
+        window.close();
+        return;
+      }
+      rendererFailures = [];
+    }
+    if (!quitting && !window.isDestroyed()) window.webContents.reload();
+  };
+  window.webContents.on('render-process-gone', (_event, details) => {
+    void recoverRenderer(details).catch((error) =>
+      log('renderer-recovery-error', { type: error.name }),
+    );
+  });
   const cleanupExports = require('./file-export.cjs')(window, {
     origin,
-    cookie,
+    cookie: () => cookie,
     directory: path.join(
       process.env.INKWELL_DATA_DIR || path.join(app.getPath('home'), '.inkwell'),
       '.email-export-cache',
@@ -136,7 +198,10 @@ async function launch() {
     iconPath: path.join(root, 'inkwell/static/icon-512.png'),
   });
   app.once('will-quit', cleanupExports);
-  const cleanupAttachmentOpens = require('./attachment-open.cjs')(window, { origin, cookie });
+  const cleanupAttachmentOpens = require('./attachment-open.cjs')(window, {
+    origin,
+    cookie: () => cookie,
+  });
   app.once('will-quit', cleanupAttachmentOpens);
   require('./calendar-reminders.cjs')(window, origin, { Notification });
   calendarFiles.attach(window, origin, ipcMain);
@@ -271,17 +336,18 @@ async function launch() {
     const key = String(input.key).slice(0, 40),
       plus = key === '+';
     if (
+      !capturingShortcut &&
       (input.control || input.meta) &&
-      !input.shift &&
       !input.alt &&
-      ['+', '=', '-', '_'].includes(key)
+      (['+', '='].includes(key) || (!input.shift && ['-', '0'].includes(key)))
     ) {
       event.preventDefault();
-      window.webContents
-        .executeJavaScript(
-          `window.InkwellDocuments?.zoom(${key === '-' || key === '_' ? -10 : 10})`,
-        )
-        .catch(() => {});
+      if (!input.isAutoRepeat)
+        window.webContents
+          .executeJavaScript(
+            `window.InkwellAdjustZoom?.(${key === '-' ? -10 : key === '0' ? 0 : 10})`,
+          )
+          .catch(() => {});
       return;
     }
     const combo = [
@@ -361,19 +427,13 @@ async function launch() {
     throw new Error('Could not apply your saved appearance');
   window.setBackgroundColor(paintedBackground);
   window.show();
-  const monitor = setInterval(() => {
-    if (failure && !quitting) {
-      clearInterval(monitor);
-      dialog.showErrorBox('inkwell server stopped', failure.message);
-      app.quit();
-    }
-  }, 1500);
 }
 if (primaryInstance) {
   app
     .whenReady()
     .then(launch)
     .catch((error) => {
+      log('startup-error', { type: error.name });
       dialog.showErrorBox('Unable to start inkwell', error.message);
       app.quit();
     });
@@ -382,8 +442,10 @@ app.on('window-all-closed', () => app.quit());
 app.on('before-quit', () => {
   quitting = true;
 });
+app.on('quit', (_event, exitCode) => log('desktop-exit', { exitCode }));
 app.on('will-quit', () => {
-  backend?.kill();
+  log('desktop-quit');
+  void backend?.stop();
 });
 app.on('second-instance', (_event, argv, cwd) => {
   calendarFiles.argumentsFrom(argv, cwd);

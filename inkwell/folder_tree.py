@@ -108,6 +108,9 @@ def move(data: MoveFolder):
         for index, identifier in enumerate(siblings):
             db.execute("UPDATE local_folders SET position=? WHERE id=?", (index, identifier))
         if old_parent != parent:
+            from . import provider_folders
+
+            provider_folders.enqueue(db, data.id)
             old = [
                 r["id"]
                 for r in entries

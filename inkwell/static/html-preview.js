@@ -105,7 +105,7 @@ window.InkwellHtmlPreview = async (root, message, options) => {
     return;
   }
   content.innerHTML =
-    '<div class="privacy-banner" role="note"><span>To protect your privacy, inkwell has blocked remote content in this message.</span><label>Options<select aria-label="Remote content options"><option value="block">Keep remote content blocked</option><option value="all">Load remote content</option><option value="text">Use text preview for this view</option><option value="settings">Preview settings…</option></select></label></div><p class="html-safety-note">Sender scripts, forms, external styles/fonts remain disabled. Loading images shares your IP and may report that you opened this message.</p><iframe class="html-message" title="Email HTML preview" sandbox="" referrerpolicy="no-referrer"></iframe>';
+    '<div class="privacy-banner" role="note" tabindex="0" title="Sender scripts, forms, external styles/fonts remain disabled. Loading images shares your IP and may report that you opened this message."><span>To protect your privacy, inkwell has blocked remote content in this message.</span><label>Options<select aria-label="Remote content options"><option value="block">Keep remote content blocked</option><option value="all">Load remote content</option><option value="text">Use text preview for this view</option><option value="settings">Preview settings…</option></select></label></div><iframe class="html-message" title="Email HTML preview" sandbox="" referrerpolicy="no-referrer"></iframe>';
   frame = content.querySelector('iframe');
   frame.style.backgroundColor = getComputedStyle(root).getPropertyValue('--surface');
   updateFrame();

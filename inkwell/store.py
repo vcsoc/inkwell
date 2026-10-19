@@ -276,6 +276,8 @@ def init():
                     json_object('remote_id',OLD.provider_event_id));
                 END""")
             conn.execute("PRAGMA user_version=19")
+        # Retire the old opt-out without replaying historical edits automatically.
+        conn.execute("INSERT OR REPLACE INTO settings(key,value) VALUES ('provider_sync_local_only','false')")
         # Repair derived keys from old unquoted Graph display names, without changing
         # message contents, filing, or sender decisions. Idempotent; no schema change.
         conn.execute("""UPDATE messages SET sender_key=inkwell_sender_key(sender),

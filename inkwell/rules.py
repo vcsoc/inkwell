@@ -66,12 +66,12 @@ def add_folder(data: Folder):
             (data.name, parent),
         ).fetchone():
             raise HTTPException(409, "A folder in this location already has that name")
-        return {
-            "id": db.execute(
-                "INSERT INTO local_folders(name,parent,position) VALUES (?,?,(SELECT COALESCE(MAX(position),-1)+1 FROM local_folders))",
-                (data.name, parent),
-            ).lastrowid
-        }
+        id = db.execute(
+            "INSERT INTO local_folders(name,parent,position) VALUES (?,?,(SELECT COALESCE(MAX(position),-1)+1 FROM local_folders))",
+            (data.name, parent),
+        ).lastrowid
+        queued = provider_sync.provider_folders.enqueue(db, id)
+        return provider_sync.mail_result({'id': id}, queued)
 
 
 @router.delete("/local-folders/{id}")
@@ -89,6 +89,7 @@ def delete_folder(id: int):
             raise HTTPException(
                 409, "Folder is not empty or is used by a rule; nothing was deleted"
             )
+        provider_sync.provider_folders.enqueue(db, id, 'delete')
         db.execute("DELETE FROM local_folders WHERE id=?", (id,))
     return {"ok": True}
 
@@ -370,7 +371,9 @@ def run_rules(data: RunRules):
                 continue
             eligible += 1
             matched += apply(
-                db, m["id"], now, configured, force=True, safe_sender=not_junk.remembered(db, m)
+                db, m["id"], now, configured, force=True,
+                safe_sender=data.rule_id is None and not_junk.remembered(db, m),
+                strict=True,
             )
     return {
         "matched": matched,
@@ -438,6 +441,7 @@ def apply_message(id: int, data: ApplyMessage):
         if not row:
             raise HTTPException(404, "Rule not found")
         rule = Rule.model_validate_json(row["config"])
+        rule.enabled = True
         validate_rule(rule, db)
         m = db.execute("SELECT * FROM messages WHERE id=?", (data.message_id,)).fetchone()
         if not m:
@@ -446,7 +450,7 @@ def apply_message(id: int, data: ApplyMessage):
             raise HTTPException(422, "Rules cannot be applied to drafts or sent copies")
         return {
             "applied": apply(
-                db, m["id"], configured=[rule], force=True, safe_sender=not_junk.remembered(db, m)
+                db, m["id"], configured=[rule], force=True
             )
         }
 
@@ -486,7 +490,7 @@ def matches(condition, m, now, db, cache):
     }[op]()
 
 
-def apply(db, message_id, now=None, configured=None, force=False, safe_sender=False):
+def apply(db, message_id, now=None, configured=None, force=False, safe_sender=False, strict=False):
     from . import not_junk
 
     m = db.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
@@ -524,6 +528,7 @@ def apply(db, message_id, now=None, configured=None, force=False, safe_sender=Fa
             if not (all(results) if rule.mode == "all" else any(results)):
                 continue
             # Plan all actions first: missing resources or tag overflow cannot cause partial filing.
+            provider_sync.require_mail_write(db, m)
             tags = json.loads(m["tags"])
             unread = m["unread"]
             starred = m["starred"]
@@ -548,9 +553,14 @@ def apply(db, message_id, now=None, configured=None, force=False, safe_sender=Fa
                     elif not any(t.casefold() == tag["key"] for t in tags):
                         tags.append(tag["name"])
             if len(tags) > 12:
+                if strict:
+                    raise HTTPException(422, "Rule would exceed the 12-tag limit; no messages changed")
                 continue
         except HTTPException:
+            if strict:
+                raise
             continue
+        provider_sync.enqueue_tags(db, m, tags)
         if destination:
             message_moves.file_message(db, m, *destination)
             if provider_target:

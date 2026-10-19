@@ -89,6 +89,23 @@ const selection = InkwellMessageSelection({
 function closeMessageMenu() {
   messageMenu.close();
 }
+function messageLocation(message) {
+  if (message.folder.startsWith('local-')) {
+    const folder = state.localFolders.find((f) => 'local-' + f.id === message.folder);
+    return folder?.path || folder?.name || 'Mail folder';
+  }
+  if (['inbox', 'remote'].includes(message.folder)) {
+    const id = message.local_folder_override
+      ? message.local_destination_id
+      : message.remote_folder_id;
+    const folder = state.remoteFolders.find((f) => f.id === id);
+    if (folder) {
+      const account = state.accounts.find((a) => a.id === folder.account_id);
+      return [account?.email, folder.path || folder.name].filter(Boolean).join(' / ');
+    }
+  }
+  return folders.find(([key]) => key === message.folder)?.[2] || message.folder;
+}
 function canMarkNotJunk(message) {
   if (
     !message ||
@@ -312,7 +329,7 @@ function localChildren(parent, seen = new Set()) {
       const next = new Set(seen);
       next.add(f.id);
       const key = 'local-' + f.id;
-      const button = `<button class="nav-item ${state.view === key ? 'active' : ''}" data-view="${key}" aria-label="${esc(f.path || f.name)}" title="${esc(f.path || f.name)} · Local folder"><span>${folderIcon()}</span><span class="folder-name">${esc(f.name)}</span></button>`;
+      const button = `<button class="nav-item ${state.view === key ? 'active' : ''}" data-view="${key}" aria-label="${esc(f.path || f.name)}" title="${esc(f.path || f.name)} · Mail folder"><span>${folderIcon()}</span><span class="folder-name">${esc(f.name)}</span></button>`;
       return localBranch(key, button, localChildren(key, next));
     })
     .join('');
@@ -577,7 +594,7 @@ async function applyFolderMove(data) {
       document.title = title + ' — inkwell';
     }
   }
-  toast('Local folder moved. Mail and rules were preserved.');
+  toast('Folder moved. Mailbox changes are queued for synchronization.');
 }
 const folderDrag = InkwellFolderDrag($('#navigation'), {
   folders: () => state.localFolders || [],
@@ -600,7 +617,7 @@ async function moveFolderForm(selected) {
   }
   modal(
     'Move folder',
-    `<form id="folder-move-form"><p>${esc(source.path || source.name)}</p><p class="fine-print">Local folders only. Mail stays in the same folder; server folders are unchanged.</p><label class="field">Placement<select name="placement" aria-label="Placement"><option value="inside">Inside folder</option><option value="before">Before folder</option><option value="after">After folder</option></select></label><label class="field">Target folder<select name="target" aria-label="Target folder"></select></label><p id="folder-move-preview" class="notice" aria-live="polite"></p><div class="form-actions"><button class="primary">Move folder</button></div></form>`,
+    `<form id="folder-move-form"><p>${esc(source.path || source.name)}</p><p class="fine-print">Mailbox folder placement changes synchronize to connected accounts. Mail stays in the same folder.</p><label class="field">Placement<select name="placement" aria-label="Placement"><option value="inside">Inside folder</option><option value="before">Before folder</option><option value="after">After folder</option></select></label><label class="field">Target folder<select name="target" aria-label="Target folder"></select></label><p id="folder-move-preview" class="notice" aria-live="polite"></p><div class="form-actions"><button class="primary">Move folder</button></div></form>`,
   );
   const form = $('#folder-move-form');
   const update = () => {
@@ -775,6 +792,7 @@ async function navigate(route, { historyMode = 'push' } = {}) {
       subject: state.selected?.subject || '',
     };
   }
+  if (route === 'settings/rules') route = 'rules';
   const [requestedView, requestedPage] = route.split('/');
   const allowedViews = [
     ...folders.map((folder) => folder[0]),
@@ -876,7 +894,7 @@ async function navigate(route, { historyMode = 'push' } = {}) {
     contacts: 'Keep your favorite connections close.',
     documents: 'Your documents and PDF tools, stored in your Documents folder.',
     tags: 'Organize, recolor and manage local message tags.',
-    rules: 'Build conditions and actions for your local email copies.',
+    rules: 'Build conditions and actions for your connected mailboxes.',
     settings: settingsPage?.description || 'Choose a category to make inkwell yours.',
     starred: 'The conversations worth keeping close.',
     sent: 'Your words, out in the world.',
@@ -1017,7 +1035,7 @@ async function renderMail({ listOnly = false } = {}) {
   }
   const persistentReader = ['classic', 'stacked'].includes(preferences.layout);
   $('#workspace').innerHTML =
-    `<div class="mail-shell ${state.selected ? 'has-selection' : ''}"><div id="mail-activity" class="mail-activity" role="progressbar" aria-label="Background activity" aria-hidden="${pendingWork === 0}"><span></span></div>${collection ? `<section class="collection-banner" aria-label="Grouped collection"><div><strong>${esc(state.collection.label)}</strong><p>${collection.total} messages · all local folders and accounts, including Trash</p><div>${collection.folders.map((f) => `<span class="folder-badge">${esc(f.folder)} · ${f.total}</span>`).join('')}</div></div><button class="secondary" id="exit-collection">Back to inbox</button></section>` : ''}<div class="mail-toolbar"><div class="filter-tabs"><button class="filter-tab ${state.filter === 'all' ? 'active' : ''}" data-filter="all">All mail</button><button class="filter-tab ${state.filter === 'unread' ? 'active' : ''}" data-filter="unread">Unread</button></div></div><div class="mail-columns"><div class="message-list" id="message-list"></div><div id="message-resizer" class="pane-resizer" role="separator" aria-label="Resize message list" aria-orientation="vertical" tabindex="0"></div><article class="reader ${state.selected || persistentReader ? '' : 'hidden'}" id="reader"><div class="empty-state reader-placeholder"><div class="empty-icon">▤</div><h2>Select a conversation</h2><p>Your message will appear here. Remote content stays blocked.</p></div></article></div></div><div class="quiet-note"><span>♧</span> A little less noise. A little more room to think.</div>`;
+    `<div class="mail-shell ${state.selected ? 'has-selection' : ''}"><div id="mail-activity" class="mail-activity" role="progressbar" aria-label="Background activity" aria-hidden="${pendingWork === 0}"><span></span></div>${collection ? `<section class="collection-banner" aria-label="Grouped collection"><div><strong>${esc(state.collection.label)}</strong><p>${collection.total} messages · all downloaded folders and accounts, including Trash</p><div>${collection.folders.map((f) => `<span class="folder-badge">${esc(f.folder)} · ${f.total}</span>`).join('')}</div></div><button class="secondary" id="exit-collection">Back to inbox</button></section>` : ''}<div class="mail-toolbar"><div class="filter-tabs"><button class="filter-tab ${state.filter === 'all' ? 'active' : ''}" data-filter="all">All mail</button><button class="filter-tab ${state.filter === 'unread' ? 'active' : ''}" data-filter="unread">Unread</button></div></div><div class="mail-columns"><div class="message-list" id="message-list"></div><div id="message-resizer" class="pane-resizer" role="separator" aria-label="Resize message list" aria-orientation="vertical" tabindex="0"></div><article class="reader ${state.selected || persistentReader ? '' : 'hidden'}" id="reader"><div class="empty-state reader-placeholder"><div class="empty-icon">▤</div><h2>Select a conversation</h2><p>Your message will appear here. Remote content stays blocked.</p></div></article></div></div><div class="quiet-note"><span>♧</span> A little less noise. A little more room to think.</div>`;
   if ($('#exit-collection')) on($('#exit-collection'), 'click', () => navigate('inbox'));
   renderMessageList();
   bindWorkspaceControls();
@@ -1095,7 +1113,7 @@ function renderMessageList() {
     ? messages
         .map(
           (m) =>
-            `${groupHeading(m)}<div class="message-row ${m.unread ? 'unread' : ''} ${state.selected?.id === m.id ? 'selected' : ''}" data-message="${m.id}" role="button" tabindex="0" aria-label="${esc(m.subject)}">${m.unread ? '<span class="unread-dot"></span>' : ''}<div class="avatar">${esc(initials(m.sender))}</div><div class="message-content"><div class="message-top"><span class="sender-wrap"><span class="sender">${esc(displayName(['sent', 'drafts'].includes(state.view) ? m.recipient || 'New draft' : m.sender))}</span>${m.sender_key && m.sender_key.includes('@') && !['sent', 'drafts'].includes(state.view) ? `<button type="button" class="sender-bell" data-sender-key="${esc(m.sender_key)}" aria-pressed="${notifications.senders.includes(m.sender_key)}" aria-label="${notifications.senders.includes(m.sender_key) ? 'Stop notifying for this sender' : 'Notify for this sender'}" title="${notifications.senders.includes(m.sender_key) ? 'Stop notifying for this sender' : 'Notify for this sender'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 8-3 9h18c0-1-3-2-3-9ZM10 21h4"/></svg></button>` : ''}</span><time class="message-date">${esc(timeLabel(m.date))}</time></div><div class="subject">${state.view === 'collection' || state.searchScope !== 'folder' ? `<span class="folder-badge">${esc(['inbox', 'remote'].includes(m.folder) ? state.remoteFolders.find((f) => f.id === (m.local_folder_override ? m.local_destination_id : m.remote_folder_id))?.path || m.folder : m.folder)}</span>` : ''}${esc(m.subject || '(No subject)')}</div><div class="message-pills">${m.unread ? '<span class="mail-pill unread-pill">Unread</span>' : ''}${tagPills(m)}</div><div class="preview">${esc(m.preview)}</div></div><button class="star-button ${m.starred ? 'on' : ''}" data-star="${m.id}" aria-label="${m.starred ? 'Unstar' : 'Star'} message" aria-pressed="${!!m.starred}">${m.starred ? '★' : '☆'}</button><button class="message-more" data-more="${m.id}" aria-label="More email actions" aria-haspopup="menu" aria-expanded="false">⋯</button></div>`,
+            `${groupHeading(m)}<div class="message-row ${m.unread ? 'unread' : ''} ${state.selected?.id === m.id ? 'selected' : ''}" data-message="${m.id}" role="button" tabindex="0" aria-label="${esc(m.subject)}">${m.unread ? '<span class="unread-dot"></span>' : ''}<div class="avatar">${esc(initials(m.sender))}</div><div class="message-content"><div class="message-top"><span class="sender-wrap"><span class="sender">${esc(displayName(['sent', 'drafts'].includes(state.view) ? m.recipient || 'New draft' : m.sender))}</span>${m.sender_key && m.sender_key.includes('@') && !['sent', 'drafts'].includes(state.view) ? `<button type="button" class="sender-bell" data-sender-key="${esc(m.sender_key)}" aria-pressed="${notifications.senders.includes(m.sender_key)}" aria-label="${notifications.senders.includes(m.sender_key) ? 'Stop notifying for this sender' : 'Notify for this sender'}" title="${notifications.senders.includes(m.sender_key) ? 'Stop notifying for this sender' : 'Notify for this sender'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 8-3 9h18c0-1-3-2-3-9ZM10 21h4"/></svg></button>` : ''}</span><time class="message-date">${esc(timeLabel(m.date))}</time></div><div class="subject">${esc(m.subject || '(No subject)')}</div><div class="message-pills">${state.view === 'collection' || state.searchScope !== 'folder' || state.query ? `<span class="mail-pill location-pill" title="${esc(messageLocation(m))}">${esc(messageLocation(m))}</span>` : ''}${m.unread ? '<span class="mail-pill unread-pill">Unread</span>' : ''}${tagPills(m)}</div><div class="preview">${esc(m.preview)}</div></div><button class="star-button ${m.starred ? 'on' : ''}" data-star="${m.id}" aria-label="${m.starred ? 'Unstar' : 'Star'} message" aria-pressed="${!!m.starred}">${m.starred ? '★' : '☆'}</button><button class="message-more" data-more="${m.id}" aria-label="More email actions" aria-haspopup="menu" aria-expanded="false">⋯</button></div>`,
         )
         .join('')
     : `<div class="empty-state"><div class="empty-icon">▤</div><h2>${state.query ? 'Nothing found.' : 'A little breathing room.'}</h2><p>${state.query ? 'Try a sender, subject, phrase or tag name. Use tag:Work to search only tags. Folder scope and quick filters still apply.' : state.accounts.length ? 'There are no messages here. Sync your account or start a new conversation.' : 'Connect your email to get started, or explore a sample workspace first.'}</p><div class="empty-actions">${!state.accounts.length && !state.query ? '<button class="primary" id="connect-empty">Connect email</button><button class="secondary" id="demo-empty">Explore demo</button>' : ''}</div></div>`;
@@ -1370,7 +1388,7 @@ async function messageAction(action, id) {
   if (action === 'move') {
     modal(
       'Move email',
-      `<form id="move-local-form"><p>Connected Outlook messages move on the server too after write authorization. Choose a folder in the same account. Local-only folders require Local changes only in Settings.</p><label class="field">Destination<select name="folder" aria-label="Destination"><option value="inbox">Inbox</option><option value="archive">Archive</option><option value="trash">Trash</option>${folders
+      `<form id="move-local-form"><p>Outlook messages move in the connected mailbox. Folder destinations are created on the server automatically. Microsoft mail write access is required.</p><label class="field">Destination<select name="folder" aria-label="Destination"><option value="inbox">Inbox</option><option value="archive">Archive</option><option value="trash">Trash</option>${folders
         .filter((f) => f[0].startsWith('local-'))
         .map((f) => `<option value="${f[0]}">${esc(f[2])}</option>`)
         .join(
@@ -1551,7 +1569,7 @@ function renderReader() {
   }
   $('.reader-tools-dock')?.replaceChildren();
   $('#reader').innerHTML =
-    `${InkwellReaderToolbar(m, dark, canMarkNotJunk(m))}<h2>${esc(m.subject || '(No subject)')}</h2><div class="reader-tags">${tagPills(m)}</div><div class="reader-meta"><div class="avatar">${esc(initials(m.sender))}</div><div><strong>${esc(m.sender)}</strong>${m.demo ? '<span class="badge">SAMPLE</span>' : ''}<small>To ${esc(m.recipient)}</small>${m.cc ? `<small>Cc ${esc(m.cc)}</small>` : ''}${m.bcc ? `<small>Bcc ${esc(m.bcc)}</small>` : ''}<small>${esc(new Date(m.date).toLocaleString())}</small></div></div><section id="message-attachments" aria-label="Email attachments"></section><div id="message-preview"></div>`;
+    `${InkwellReaderToolbar(m, dark, canMarkNotJunk(m))}<div class="reader-title-row"><h2>${esc(m.subject || '(No subject)')}</h2><div class="reader-tags">${tagPills(m)}</div></div><div class="reader-meta"><div class="avatar">${esc(initials(m.sender))}</div><div><strong>${esc(m.sender)}</strong>${m.demo ? '<span class="badge">SAMPLE</span>' : ''}<small>To ${esc(m.recipient)}</small>${m.cc ? `<small>Cc ${esc(m.cc)}</small>` : ''}${m.bcc ? `<small>Bcc ${esc(m.bcc)}</small>` : ''}<small>${esc(new Date(m.date).toLocaleString())}</small></div></div><section id="message-attachments" aria-label="Email attachments"></section><div id="message-preview"></div>`;
   const flagStatus = document.createElement('span');
   flagStatus.id = 'reader-flag-status';
   flagStatus.className = 'mail-pill flagged-pill';
@@ -2490,7 +2508,10 @@ async function searchMail() {
     toast('Save or close the open form before searching.');
     return;
   }
-  if (['settings', 'calendar', 'contacts', 'tags', 'rules'].includes(state.view))
+  if (
+    ['settings', 'calendar', 'contacts', 'tags', 'rules'].includes(state.view) ||
+    (state.view === 'collection' && scope === 'all')
+  )
     await navigate('inbox');
   if (sequence !== searchSequence) return;
   state.dateFrom = from;

@@ -53,7 +53,7 @@ test('read-only Microsoft access is visible and Enable server changes opens same
   await expect(page.locator('#provider-sync-settings')).toContainText(
     'blocked until authorization',
   );
-  await page.getByRole('button', { name: 'Enable server changes', exact: true }).click();
+  await page.getByRole('button', { name: 'Grant server access', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Reauthorize Microsoft', exact: true }),
   ).toBeVisible();

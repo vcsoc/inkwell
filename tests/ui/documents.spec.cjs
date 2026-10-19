@@ -125,7 +125,7 @@ test('Document zoom keys, wheel and controls stay scoped; title follows the open
   await page.locator('#doc-zoom-in').click();
   await expect(page.locator('#doc-zoom-label')).toHaveText('110%');
   expect((await paper.boundingBox()).width).toBeGreaterThan(before.width);
-  await page.keyboard.press('ControlOrMeta+-');
+  await page.keyboard.press('ControlOrMeta+Alt+-');
   await expect(page.locator('#doc-zoom-label')).toHaveText('100%');
   await page.locator('#doc-editor-viewport').hover();
   await page.keyboard.down('ControlOrMeta');
@@ -133,9 +133,9 @@ test('Document zoom keys, wheel and controls stay scoped; title follows the open
   await page.keyboard.up('ControlOrMeta');
   await expect(page.locator('#doc-zoom-label')).toHaveText('110%');
   expect(await page.locator('html').evaluate((element) => element.style.zoom)).toBe(appZoom);
-  await page.keyboard.press('ControlOrMeta+Shift+-');
+  await page.keyboard.press('ControlOrMeta+-');
   expect(await page.locator('html').evaluate((element) => element.style.zoom)).not.toBe(appZoom);
-  await page.keyboard.press('ControlOrMeta+Shift+0');
+  await page.keyboard.press('ControlOrMeta+0');
 });
 
 test('Multiple selection and context-menu copy/paste preserve originals', async ({
@@ -488,7 +488,7 @@ test('PDF export, scoped zoom, print options and password retry dialog', async (
   await page.locator('#doc-zoom-in').click();
   expect((await page.locator('#doc-pdf-paper').boundingBox()).width).toBeGreaterThan(originalWidth);
   await expect(page.locator('#doc-zoom-label')).toHaveText('110%');
-  await page.keyboard.press('ControlOrMeta+-');
+  await page.keyboard.press('ControlOrMeta+Alt+-');
   await expect(page.locator('#doc-zoom-label')).toHaveText('100%');
   await expect(page.locator('#doc-editor-viewport')).toHaveCSS('zoom', '1');
   await expect(page.locator('#doc-ribbon-tools')).toBeAttached();

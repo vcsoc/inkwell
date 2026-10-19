@@ -280,6 +280,7 @@ def delete_account(account_id: int):
             (account_id,),
         )
         conn.execute("DELETE FROM remote_folders WHERE account_id=?", (account_id,))
+        conn.execute("DELETE FROM settings WHERE key LIKE ?", (f'provider_folder:{account_id}:%',))
     return {"ok": True}
 
 
@@ -586,7 +587,9 @@ def patch_message(message_id: int, data: MessagePatch):
                 raise HTTPException(404, "Message not found")
             target = provider_sync.ensure_move(conn, row, fields["folder"]) if "folder" in fields else None
             if "tags" in fields:
-                fields["tags"] = json.dumps(tag_store.canonical(conn, fields["tags"]))
+                tags = tag_store.canonical(conn, fields["tags"])
+                queued += provider_sync.enqueue_tags(conn, row, tags)
+                fields["tags"] = json.dumps(tags)
             if "folder" in fields:
                 if fields["folder"] == "trash" and row["folder"] != "trash":
                     fields["restore_folder"] = row["folder"]

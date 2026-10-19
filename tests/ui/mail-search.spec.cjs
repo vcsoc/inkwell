@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { DatabaseSync } = require('node:sqlite');
+const { selectEmailMenuAction } = require('./helpers.cjs');
 const os = require('node:os'),
   path = require('node:path');
 let original, ids, folder, prefix, tagName;
@@ -78,9 +79,9 @@ test('Default global search includes Junk and Sent; narrower scope and clearing 
   await expect(page.locator('#search-scope')).toHaveValue('all');
   await page.locator('#global-search').fill(prefix);
   await expect(page.locator('.message-row')).toHaveCount(3);
-  await expect(page.locator(`[data-message="${ids[1]}"] .folder-badge`)).toContainText(
-    'Junk Email',
-  );
+  await expect(
+    page.locator(`[data-message="${ids[1]}"] .message-pills .location-pill`),
+  ).toContainText('Junk Email');
   await page.locator('#search-scope').selectOption('folder');
   await expect(page.locator('.message-row')).toHaveCount(1);
   await expect(page.locator(`[data-message="${ids[0]}"]`)).toBeVisible();
@@ -91,6 +92,22 @@ test('Default global search includes Junk and Sent; narrower scope and clearing 
   await expect(page.locator(`[data-message="${ids[2]}"]`)).toHaveCount(0);
   await expect(page.locator('#search-scope')).toHaveValue('all');
 });
+test('All folders search leaves a grouped collection and shows Junk location pills', async ({
+  page,
+}) => {
+  await page.locator(`[data-more="${ids[0]}"]`).click();
+  await selectEmailMenuAction(page, 'Find all by subject');
+  await expect(page.locator('.collection-banner')).toBeVisible();
+  await page.locator('#search-scope').selectOption('all');
+  await page.locator('#global-search').fill(prefix);
+  await expect(page.locator('.collection-banner')).toHaveCount(0);
+  await expect(page.locator('.message-row')).toHaveCount(3);
+  await expect(page.locator(`[data-message="${ids[1]}"] .message-pills .location-pill`)).toHaveText(
+    'Junk Email',
+  );
+  await expect(page.locator(`[data-message="${ids[2]}"] .location-pill`)).toHaveText('Sent');
+});
+
 test('Plain Unicode tags and tag-only searches find tagged mail outside Inbox', async ({
   page,
 }, info) => {

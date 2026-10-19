@@ -47,6 +47,7 @@ for (const [kind, label] of [
       await expect(page.locator('.collection-banner')).toContainText('example.com');
     if (kind === 'subject')
       await expect(page.locator('.collection-banner')).toContainText('drafts');
+    await page.locator('#search-scope').selectOption('folder');
     await page.locator('#global-search').fill('no-match-unique-713bb');
     await expect(page.locator('.message-row')).toHaveCount(0);
     await page.getByRole('button', { name: 'Back to inbox', exact: true }).click();

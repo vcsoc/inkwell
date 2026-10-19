@@ -122,6 +122,9 @@ test('a failed autosave keeps the editor and its content until saving succeeds',
   await expect(page.locator('#draft-status')).toContainText('Storage unavailable');
   await expect(page.locator('[name=body]')).toHaveValue('Do not lose this');
   await page.unroute('**/api/drafts');
+  await page.evaluate(() => window.dispatchEvent(new Event('InkwellBackendReady')));
+  await expect(page.locator('#draft-status')).toContainText('saved automatically');
+  await expect(page.locator('[name=body]')).toHaveValue('Do not lose this');
   await page.locator('#close-modal').click();
   await expect(page.locator('#modal')).not.toBeVisible();
   expect(await api(page, '/messages?folder=drafts&q=' + encodeURIComponent(prefix))).toHaveLength(

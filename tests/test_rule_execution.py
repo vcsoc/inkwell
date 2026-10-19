@@ -28,6 +28,37 @@ def rule(client, name, actions, stop=True, conditions=None):
     return response.json()["id"]
 
 
+def test_selected_manual_rule_overrides_not_junk_even_when_disabled(client):
+    id = message()
+    with store.db() as db:
+        db.execute("INSERT INTO not_junk_senders(sender_key,created_at) VALUES ('a@example.com','2026-09-14')")
+        db.execute("UPDATE messages SET sender_key='a@example.com' WHERE id=?", (id,))
+    chosen = rule(client, "Explicit trash", [{"type": "move", "value": "trash"}])
+    config = next(r for r in client.get('/api/rules').json() if r['id'] == chosen)
+    config.pop('id')
+    config.pop('problem')
+    config['enabled'] = False
+    assert client.put(f'/api/rules/{chosen}', json=config).status_code == 200
+    response = client.post('/api/rules/run', json={'rule_id': chosen, 'scope': 'all'})
+    assert response.status_code == 200, response.text
+    assert response.json()['matched'] == 1
+    assert get(id)['folder'] == 'trash'
+    assert not client.get('/api/rules').json()[0]['enabled']
+    assert client.get('/api/not-junk-senders').json()
+
+
+def test_selected_manual_rule_reports_action_failure_and_rolls_back_whole_run(client):
+    first = message()
+    second = message(tags=json.dumps([f'Tag{i}' for i in range(12)]))
+    tag = client.post('/api/tags', json={'name': 'Extra'}).json()['id']
+    chosen = rule(client, 'Overflow', [{'type': 'star'}, {'type': 'add_tag', 'value': str(tag)}])
+    response = client.post('/api/rules/run', json={'rule_id': chosen, 'scope': 'all'})
+    assert response.status_code == 422
+    assert '12-tag limit' in response.json()['detail']
+    assert not get(first)['starred'] and not get(second)['starred']
+    assert json.loads(get(first)['tags']) == []
+
+
 def get(id):
     with store.db() as db:
         return dict(db.execute("SELECT * FROM messages WHERE id=?", (id,)).fetchone())

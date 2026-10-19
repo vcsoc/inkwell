@@ -97,7 +97,7 @@ test('Apply Rule starts from the message, not an existing rule; saved rules requ
   await expect(page.getByLabel('Rule name', { exact: true })).toHaveValue(prefix + ' saved');
   await expect(page.getByRole('button', { name: 'Run saved rule', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Run saved rule', exact: true }).click();
-  await expect(page.locator('#toast')).toContainText('1 local copies matched');
+  await expect(page.locator('#toast')).toContainText('1 messages matched');
   expect((await api(page, '/messages/' + ids[0])).starred).toBe(1);
   expect((await api(page, '/messages/' + ids[1])).starred).toBe(0);
   const stored = (await api(page, '/rules')).filter((r) => r.id === rule);
@@ -200,7 +200,7 @@ test('Retrying a failed selected-message application does not create duplicate r
   expect((await api(page, '/messages/' + ids[0])).starred).toBe(1);
 });
 
-test('Opening Rule Manager remembers the reader message and its current folder', async ({
+test('Opening Mail rules defaults to all folders and retains the current folder as a choice', async ({
   page,
 }) => {
   const folder = (await api(page, '/local-folders', 'POST', { name: prefix + ' current' })).id;
@@ -210,7 +210,7 @@ test('Opening Rule Manager remembers the reader message and its current folder',
   await page.locator(`[data-message="${ids[0]}"] .subject`).click();
   await expect(page.locator('#reader')).toContainText(subject);
   await sidebarClick(page, '#rule-manager-link');
-  await expect(page.getByLabel('Rule run scope')).toHaveValue('message');
+  await expect(page.getByLabel('Rule run scope')).toHaveValue('all');
   await page.getByLabel('Rule run scope').selectOption('folder');
   await expect(page.getByLabel('Folder to process')).toHaveValue('local-' + folder);
   await page.locator('#create-rule').click();
@@ -218,7 +218,7 @@ test('Opening Rule Manager remembers the reader message and its current folder',
   await page.getByLabel('Condition 1 value', { exact: true }).fill(prefix);
   await page.getByLabel('Action 1 type', { exact: true }).selectOption('star');
   await page.getByRole('button', { name: 'Save and run', exact: true }).click();
-  await expect(page.locator('#rule-run-status')).toContainText('1 local copies matched');
+  await expect(page.locator('#rule-run-status')).toContainText('1 messages matched');
   expect((await api(page, '/messages/' + ids[0])).starred).toBe(1);
   expect((await api(page, '/messages/' + ids[1])).starred).toBe(0);
 });
@@ -237,19 +237,50 @@ test('Save and run supports a chosen folder, all folders, and rerunning a saved 
   await page.getByLabel('Rule run scope').selectOption('folder');
   await page.getByLabel('Folder to process').selectOption('inbox');
   await page.getByRole('button', { name: 'Save and run', exact: true }).click();
-  await expect(page.locator('#rule-run-status')).toContainText('1 local copies matched');
+  await expect(page.locator('#rule-run-status')).toContainText('1 messages matched');
   expect((await api(page, '/messages/' + ids[0])).starred).toBe(1);
   expect((await api(page, '/messages/' + ids[1])).starred).toBe(0);
   await page.getByLabel('Rule run scope').selectOption('all');
   await page.getByRole('button', { name: 'Save and run', exact: true }).click();
-  await expect(page.locator('#rule-run-status')).toContainText('2 local copies matched');
+  await expect(page.locator('#rule-run-status')).toContainText('2 messages matched');
   expect((await api(page, '/messages/' + ids[1])).starred).toBe(1);
   await api(page, '/messages/' + ids[1], 'PATCH', { starred: false });
   await page.getByLabel('Rule name', { exact: true }).fill(prefix + ' unsaved');
   await page.getByRole('button', { name: 'Run saved rule', exact: true }).click();
-  await expect(page.locator('#toast')).toContainText('2 local copies matched');
+  await expect(page.locator('#toast')).toContainText('2 messages matched');
   await expect(page.getByLabel('Rule name', { exact: true })).toHaveValue(prefix + ' unsaved');
   expect((await api(page, '/messages/' + ids[1])).starred).toBe(1);
+});
+
+test('Each rule has tooltip icon tools and Run executes only that saved rule without losing editor changes', async ({
+  page,
+}) => {
+  const first = await api(page, '/rules', 'POST', {
+    name: prefix + ' row run',
+    enabled: false,
+    conditions: [{ field: 'subject', operator: 'contains', value: prefix }],
+    actions: [{ type: 'star' }],
+  });
+  const second = await api(page, '/rules', 'POST', {
+    name: prefix + ' other rule',
+    conditions: [{ field: 'subject', operator: 'contains', value: prefix }],
+    actions: [{ type: 'move', value: 'trash' }],
+  });
+  await page.goto('/#/rules');
+  await page.locator(`[data-edit-rule="${second.id}"]`).click();
+  await page.getByLabel('Rule name', { exact: true }).fill(prefix + ' unsaved');
+  const tools = page.locator(`[data-rule-entry="${first.id}"] .rule-entry-tools`);
+  await expect(tools).toBeVisible();
+  for (const button of await tools.getByRole('button').all()) {
+    await expect(button).toHaveAttribute('title', /.+/);
+    await expect(button.locator('svg')).toHaveCount(1);
+    await expect(button).toHaveText('');
+  }
+  await tools.getByRole('button', { name: 'Run rule ' + prefix + ' row run', exact: true }).click();
+  await expect(page.locator('#rule-run-status')).toContainText('2 messages matched');
+  await expect(page.getByLabel('Rule name', { exact: true })).toHaveValue(prefix + ' unsaved');
+  expect((await api(page, '/messages/' + ids[0])).starred).toBe(1);
+  expect((await api(page, '/messages/' + ids[0])).folder).toBe('inbox');
 });
 
 test('Rule priorities move without losing editor changes, with drag previews and keyboard alternatives', async ({
@@ -271,7 +302,7 @@ test('Rule priorities move without losing editor changes, with drag previews and
   await page.getByLabel('Rule name', { exact: true }).fill(prefix + ' unsaved');
   const control = page.locator(`[data-rule-down="${created[0]}"]`);
   expect((await control.boundingBox()).height).toBeGreaterThanOrEqual(
-    test.info().project.name === 'mobile' ? 44 : 32,
+    test.info().project.name === 'mobile' ? 36 : 28,
   );
   await control.click();
   await expect(page.locator(`[data-edit-rule="${created[0]}"] strong`)).toContainText('2.');
@@ -317,7 +348,7 @@ test('Stop processing is saved and all-rule runs honor it', async ({ page }) => 
   await page.locator(`[data-edit-rule="${first}"]`).click();
   await page.getByLabel('Rule run scope').selectOption('all');
   await page.locator('#apply-rules').click();
-  await expect(page.locator('#rule-run-status')).toContainText('2 local copies matched');
+  await expect(page.locator('#rule-run-status')).toContainText('2 messages matched');
   expect((await api(page, '/messages/' + ids[0])).starred).toBe(1);
   await page
     .getByRole('checkbox', { name: 'Stop processing further rules after this rule matches' })

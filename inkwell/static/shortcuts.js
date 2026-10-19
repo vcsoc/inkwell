@@ -48,9 +48,21 @@ window.InkwellHotkeys = {
   install({ getPreferences, actions, isModal, toast }) {
     const handle = (e, preview = false) => {
       if (e.defaultPrevented || e.isComposing || e.getModifierState?.('AltGraph')) return false;
-      const action = Object.entries(getPreferences().shortcuts || this.defaults).find(
-        ([, key]) => key && key === this.key(e),
-      )?.[0];
+      const appZoom =
+        (e.ctrlKey || e.metaKey) &&
+        !e.altKey &&
+        (['+', '='].includes(e.key)
+          ? 'zoom_in'
+          : e.key === '-' && !e.shiftKey
+            ? 'zoom_out'
+            : e.key === '0' && !e.shiftKey
+              ? 'zoom_reset'
+              : null);
+      const action =
+        appZoom ||
+        Object.entries(getPreferences().shortcuts || this.defaults).find(
+          ([, key]) => key && key === this.key(e),
+        )?.[0];
       if (!action) {
         if (
           (e.ctrlKey || e.metaKey) &&
@@ -102,7 +114,7 @@ window.InkwellHotkeys = {
   },
   mount(root, { preferences, savePreferences, toast, esc }) {
     const values = { ...this.defaults, ...preferences.shortcuts };
-    root.innerHTML = `<section class="card"><h2>Shortcuts</h2><p>Focus a field and press the shortcut you want. Ctrl also means Command on macOS. Clear a binding to disable it. Editing, menus and date pickers retain their normal keys; operating-system shortcuts may take precedence.</p><form id="shortcut-form">${Object.entries(
+    root.innerHTML = `<section class="card"><h2>Shortcuts</h2><p>Focus a field and press the shortcut you want. Ctrl also means Command on macOS. Clear a binding to disable it. Ctrl+Plus / Ctrl+Minus always zoom the application; Ctrl+0 resets it. The bindings below are additional shortcuts. Editing, menus and date pickers retain their normal keys; operating-system shortcuts may take precedence.</p><form id="shortcut-form">${Object.entries(
       this.labels,
     )
       .map(

@@ -105,7 +105,6 @@ test('date grouping persists across folders/reload, supports tables and keeps th
     'Older',
   ]);
   await page.locator('#quick-view-button').click();
-  await page.locator('#quick-view').selectOption('table');
   await expect(page.locator('.message-table-header')).toBeVisible();
   await expect(page.locator('.mail-date-heading')).toHaveText([
     'Today',

@@ -79,7 +79,8 @@ def test_imap_readonly_peek_and_idempotency(account, monkeypatch):
         messages = db.execute("SELECT * FROM messages").fetchall()
     assert len(messages) == 2
     assert messages[0]["unread"] == 0
-    assert all(m["folder"] == "archive" and m["local_folder_override"] == 1 for m in messages)
+    # IMAP writes are unsupported: automatic filing must not diverge from the server.
+    assert all(m["folder"] == "inbox" and m["local_folder_override"] == 0 for m in messages)
     assert messages[0]["remote_key"] == "1:INBOX:123:1"
     assert all(command in ("fetch", "search") for command, _ in calls)
 

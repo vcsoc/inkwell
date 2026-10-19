@@ -176,12 +176,12 @@ test('quick filters combine and clear, sorting and table view persist', async ({
   await page.locator('#quick-order').selectOption('asc');
   await expect(page.locator('.message-row .subject').first()).toContainText(prefix + 'Alpha');
   await page.locator('#quick-view-button').click();
-  await page.locator('#quick-view').selectOption('table');
   await expect(page.locator('.message-table-header')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
   await expect.poll(async () => (await api(page, '/preferences')).mail_view).toBe('table');
   await page.reload();
-  await expect(page.locator('#quick-view')).toHaveValue('table');
+  await expect(page.locator('#quick-view-button')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#quick-view')).toHaveCount(0);
   await expect(page.locator('#quick-sort')).toHaveValue('subject');
 });
 test('bulk tag assignment displays colored pills and can remove them again', async ({ page }) => {

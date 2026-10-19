@@ -168,7 +168,9 @@ window.InkwellMessageSelection = ({ state, api, esc, toast, refresh }) => {
         try {
           await api('/tags/assign', { method: 'POST', body: { ids: tagged, tag_id, add } });
           await refresh({ generation, affected: tagged });
-          toast(add ? 'Tag added locally.' : 'Tag removed locally.');
+          toast(
+            add ? 'Tag added; mailbox changes queued.' : 'Tag removed; mailbox changes queued.',
+          );
         } catch (error) {
           toast(error.message);
         } finally {

@@ -164,8 +164,8 @@ def test_sync_checks_localized_junk_for_trusted_senders_only_and_never_writes_pr
 
     id = message()
     client.post(f"/api/messages/{id}/not-junk")
-    # This test deliberately covers the explicit local-only workflow.
-    client.put('/api/provider-sync', json={'local_changes_only': True})
+    # Provider writes are queued; import itself never performs a mail mutation.
+    monkeypatch.setattr(microsoft, 'has_mail_write_permissions', lambda account: True)
     store.init()
     with store.db() as db:
         db.execute(

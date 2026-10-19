@@ -72,7 +72,7 @@ window.InkwellRules = async (
           `<option value="${esc(id)}" ${String(id) === String(value) ? 'selected' : ''}>${esc(label)}</option>`,
       )
       .join('');
-  root.innerHTML = `<div class="rule-manager"><div class="rule-manager-shell"><aside class="rule-list-pane card" aria-label="Saved rules"><div class="rule-list-heading"><h2>Rules</h2><span id="rule-count"></span></div><div class="rule-create-actions"><button class="primary" id="create-rule">Create rule</button><button class="secondary" id="auto-tag-rule" aria-label="Create auto-tag rule" title="Create auto-tag rule">Auto-tag</button></div><label class="field rule-search-label">Find rules<input type="search" id="rules-search" placeholder="Find a rule…"></label><div id="rules-list"></div><div class="rule-list-footer"><button class="secondary" id="apply-rules" title="Run all enabled rules in the chosen scope">Run all enabled rules</button><details id="rule-help"><summary>How rules work</summary><p>Enabled rules run top to bottom. A matching rule stops the chain only when its Stop option is enabled. Rules match newly imported local copies; authorized Outlook move, Trash, read and star actions are queued to the server too. Tags remain local. Without write consent, rules that move Outlook mail are skipped unless Local changes only is explicitly enabled. Match all conditions (AND) or any (OR).</p><p>Manual runs include already filed incoming copies. Drafts and known sent copies are protected. Missing resources or more than 12 final tags skip the rule without partial actions.</p><p>Auto-tag: Sender domain is @example.com → Add tag example. Exact domains exclude subdomains. TLD is the last label: example.co.uk has TLD .uk. Sender conditions do not verify identity. Age conditions are not a scheduler.</p></details><details id="rule-sender-tools"><summary>Not Junk senders</summary></details></div></aside><div class="rule-editor-pane"><section class="card" id="rule-editor"></section><details class="card" id="rule-resource-tools"><summary>Tags and folders</summary><div class="rule-resource-forms"><form id="rule-tag-form">${field('New rule tag', 'name', '', 'text', 'required maxlength="32"')}<button class="secondary">Create tag</button></form><form id="local-folder-form">${field('New local folder', 'name', '', 'text', 'required maxlength="80"')}<button class="secondary">Create local folder</button></form></div><p class="fine-print">Create a destination or tag without losing your edits. Tag colors are in Tag Manager.</p></details></div></div></div>`;
+  root.innerHTML = `<div class="rule-manager"><div class="rule-manager-shell"><aside class="rule-list-pane card" aria-label="Saved rules"><div class="rule-list-heading"><h2>Rules</h2><span id="rule-count"></span></div><div class="rule-create-actions"><button class="primary" id="create-rule">Create rule</button><button class="secondary" id="auto-tag-rule" aria-label="Create auto-tag rule" title="Create auto-tag rule">Auto-tag</button></div><label class="field rule-search-label">Find rules<input type="search" id="rules-search" placeholder="Find a rule…"></label><div id="rules-list"></div><div class="rule-list-footer"><button class="secondary" id="apply-rules" title="Run all enabled rules in the chosen scope">Run all enabled rules</button><details id="rule-help"><summary>How rules work</summary><p>Enabled rules run top to bottom. A matching rule stops the chain only when its Stop option is enabled. Rules match downloaded mail. Outlook moves, Trash, read/star actions and tags (as Outlook categories) synchronize to the server. Folder destinations are created in the same mailbox automatically. Microsoft write access is required; there is no device-only mode. Match all conditions (AND) or any (OR).</p><p>Manual runs include already filed incoming copies. Selected-rule runs override remembered Not Junk filing, without forgetting the sender. Drafts and known sent copies are protected. Selected-rule action failures are reported without partial changes.</p><p>Auto-tag: Sender domain is @example.com → Add tag example. Exact domains exclude subdomains. TLD is the last label: example.co.uk has TLD .uk. Sender conditions do not verify identity. Age conditions are not a scheduler.</p></details><details id="rule-sender-tools"><summary>Not Junk senders</summary></details></div></aside><div class="rule-editor-pane"><section class="card" id="rule-editor"></section><details class="card" id="rule-resource-tools"><summary>Tags and folders</summary><div class="rule-resource-forms"><form id="rule-tag-form">${field('New rule tag', 'name', '', 'text', 'required maxlength="32"')}<button class="secondary">Create tag</button></form><form id="local-folder-form">${field('New folder', 'name', '', 'text', 'required maxlength="80"')}<button class="secondary">Create folder</button></form></div><p class="fine-print">Create a destination or tag without losing your edits. Tag colors are in Tag Manager.</p></details></div></div></div>`;
   const currentMessage = sourceMessage?.message_id || executionContext.message_id || null;
   const folderChoices = [
     ['inbox', 'Inbox'],
@@ -90,7 +90,7 @@ window.InkwellRules = async (
     );
   const runPanel = root.querySelector('.rule-run-panel');
   const scopeSelect = root.querySelector('#rule-run-scope');
-  scopeSelect.value = currentMessage ? 'message' : executionContext.folder ? 'folder' : 'all';
+  scopeSelect.value = sourceMessage ? 'message' : 'all';
   const scopePayload = () => ({
     scope: scopeSelect.value,
     folder: root.querySelector('#rule-run-folder').value,
@@ -116,7 +116,7 @@ window.InkwellRules = async (
       await foldersChanged();
       if (isCurrent() && root.isConnected)
         root.querySelector('#rule-run-status').textContent =
-          `${result.matched} local copies matched · ${result.eligible} eligible · ${result.skipped} protected copies skipped.`;
+          `${result.matched} messages matched · ${result.eligible} eligible · ${result.skipped} protected copies skipped.`;
       return result;
     } finally {
       running = false;
@@ -148,6 +148,8 @@ window.InkwellRules = async (
     const { id, problem, ...data } = r;
     return data;
   };
+  const tool = (attribute, label, path, disabled = false) =>
+    `<button type="button" class="icon-button rule-tool" ${attribute} aria-label="${esc(label)}" title="${esc(label)}" ${disabled ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg></button>`;
   const renderList = () => {
     const q = root.querySelector('#rules-search').value.toLowerCase();
     const visible = rules.filter((r) => r.name.toLowerCase().includes(q));
@@ -182,7 +184,7 @@ window.InkwellRules = async (
                       : ''),
               )
               .join(' → ');
-          return `<div class="rule-entry ${r.id === editingId ? 'active' : ''}" data-rule-entry="${r.id}"><button class="rule-choice" draggable="true" data-edit-rule="${r.id}" aria-label="Edit ${esc(r.name)}" aria-current="${r.id === editingId ? 'true' : 'false'}" title="${esc(r.name + ' — ' + description)}"><strong>${rules.indexOf(r) + 1}. ${esc(r.name)}</strong><small>${r.enabled ? 'Enabled' : 'Disabled'} · ${r.mode === 'any' ? 'ANY' : 'ALL'} of ${r.conditions.length} ${r.conditions.length === 1 ? 'condition' : 'conditions'} · ${r.actions.length} ${r.actions.length === 1 ? 'action' : 'actions'}</small></button>${r.problem ? `<p class="danger rule-problem">${esc(r.problem)}</p>` : ''}<div class="rule-entry-tools"><button class="secondary" data-rule-up="${r.id}" aria-label="Move rule up" ${rules.indexOf(r) === 0 ? 'disabled' : ''}>↑</button><button class="secondary" data-rule-down="${r.id}" aria-label="Move rule down" ${rules.indexOf(r) === rules.length - 1 ? 'disabled' : ''}>↓</button><button class="secondary" data-toggle-rule="${r.id}">${r.enabled ? 'Disable' : 'Enable'}</button><button class="secondary" data-copy-rule="${r.id}">Duplicate</button><button class="secondary danger" data-delete-rule="${r.id}">Delete</button></div></div>`;
+          return `<div class="rule-entry ${r.id === editingId ? 'active' : ''}" data-rule-entry="${r.id}"><button class="rule-choice" draggable="true" data-edit-rule="${r.id}" aria-label="Edit ${esc(r.name)}" aria-current="${r.id === editingId ? 'true' : 'false'}" title="${esc(r.name + ' — ' + description)}"><strong>${rules.indexOf(r) + 1}. ${esc(r.name)}</strong><small>${r.enabled ? 'Enabled' : 'Disabled'} · ${r.mode === 'any' ? 'ANY' : 'ALL'} of ${r.conditions.length} ${r.conditions.length === 1 ? 'condition' : 'conditions'} · ${r.actions.length} ${r.actions.length === 1 ? 'action' : 'actions'}</small></button>${r.problem ? `<p class="danger rule-problem">${esc(r.problem)}</p>` : ''}<div class="rule-entry-tools">${tool(`data-rule-up="${r.id}"`, 'Move rule up', '<path d="m6 14 6-6 6 6"/>', rules.indexOf(r) === 0)}${tool(`data-rule-down="${r.id}"`, 'Move rule down', '<path d="m6 10 6 6 6-6"/>', rules.indexOf(r) === rules.length - 1)}${tool(`data-toggle-rule="${r.id}"`, r.enabled ? 'Disable' : 'Enable', r.enabled ? '<path d="M9 5v14M15 5v14"/>' : '<path d="m8 5 11 7-11 7z"/>')}${tool(`data-copy-rule="${r.id}"`, 'Duplicate', '<rect x="8" y="8" width="12" height="12" rx="1"/><path d="M16 8V4H4v12h4"/>')}${tool(`data-delete-rule="${r.id}"`, 'Delete', '<path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/>')}${tool(`data-run-rule="${r.id}"`, 'Run rule ' + r.name, '<path d="m8 5 11 7-11 7z"/>')}</div></div>`;
         })
         .join('') || '<p class="rule-empty">No matching rules.</p>';
   };
@@ -244,7 +246,7 @@ window.InkwellRules = async (
       try {
         const result = await execute(savedId);
         toast(
-          `${result.matched} local copies matched.${result.matched ? '' : ' Check conditions and exclusions; protected copies are skipped.'}`,
+          `${result.matched} messages matched.${result.matched ? '' : ' Check conditions and exclusions; protected copies are skipped.'}`,
         );
       } catch (error) {
         toast(error.message);
@@ -485,8 +487,8 @@ window.InkwellRules = async (
           applied === null
             ? 'Rule saved. Enabled rules run on future imports.'
             : applied
-              ? `Rule saved and applied. ${applied} local copies matched.`
-              : 'Rule saved; no eligible messages matched, or action limits / Not Junk protection prevented applying it.',
+              ? `Rule saved and applied. ${applied} messages matched.`
+              : 'Rule saved and run. No incoming messages in the chosen scope matched its conditions (including age and unread exclusions).',
         );
       } catch (error) {
         toast(error.message);
@@ -533,6 +535,15 @@ window.InkwellRules = async (
     const b = event.target.closest('button');
     if (!b) return;
     try {
+      if (b.dataset.runRule) {
+        b.disabled = true;
+        try {
+          const result = await execute(Number(b.dataset.runRule));
+          toast(result.matched + ' messages matched.');
+        } finally {
+          b.disabled = false;
+        }
+      }
       if (b.dataset.editRule) editor(rules.find((r) => r.id === Number(b.dataset.editRule)));
       if (b.dataset.copyRule) {
         const r = clean(rules.find((r) => r.id === Number(b.dataset.copyRule)));
@@ -591,7 +602,7 @@ window.InkwellRules = async (
         event.target.reset();
         await foldersChanged();
       }
-      toast('Local folder created.');
+      toast('Folder created; connected mailbox changes are queued for synchronization.');
     } catch (error) {
       toast(error.message);
     }
@@ -601,7 +612,7 @@ window.InkwellRules = async (
     b.disabled = true;
     try {
       const result = await execute();
-      toast(result.matched + ' local copies matched.');
+      toast(result.matched + ' messages matched.');
       if (isCurrent() && root.isConnected) {
         await reloadList();
       }

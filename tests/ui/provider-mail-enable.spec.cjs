@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-test('Enable server changes turns off an explicit local-only choice only after Microsoft consent', async ({
+test('Grant server access requests Microsoft consent without offering a device-only mode', async ({
   page,
 }) => {
   let enabled = false;
@@ -52,8 +52,8 @@ test('Enable server changes turns off an explicit local-only choice only after M
   await page.route('**/api/microsoft/consent', (route) => route.fulfill({ json: { ok: true } }));
   await page.route('**/api/sync', (route) => route.fulfill({ json: [] }));
   await page.goto('/#/settings/mail');
-  await expect(page.getByRole('checkbox', { name: /Local changes only/ })).toBeChecked();
-  await page.getByRole('button', { name: 'Enable server changes', exact: true }).click();
+  await expect(page.locator('#local-changes-only')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Grant server access', exact: true }).click();
   expect(enabled).toBe(false);
   await page.getByRole('button', { name: 'Reauthorize Microsoft', exact: true }).click();
   await expect.poll(() => enabled).toBe(true);

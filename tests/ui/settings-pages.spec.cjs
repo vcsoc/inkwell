@@ -2,7 +2,6 @@ const { test, expect } = require('@playwright/test');
 const { settingsSection } = require('./helpers.cjs');
 const pages = [
   ['shortcuts', 'Shortcuts', '#shortcut-form'],
-  ['rules', 'Mail rules', '#rule-form'],
   ['layout', 'Layout', '#layout-settings'],
   ['forms', 'Forms', '#form-mode-settings'],
   ['theme', 'Theme studio', '#theme-editor'],
@@ -57,15 +56,35 @@ for (const [id, name, selector] of pages) {
   });
 }
 
-test('provider writes cannot be enabled without Microsoft consent', async ({ page }) => {
+test('mail rules has its own destination outside preferences, including legacy links', async ({
+  page,
+}) => {
+  await page.goto('/#/settings');
+  await expect(page.locator('.settings-category[data-category="rules"]')).toHaveCount(0);
+  await page.goto('/#/settings/rules');
+  await expect(page).toHaveURL(/#\/rules$/);
+  await expect(page.locator('#rule-form')).toBeVisible();
+  await expect(page.locator('.settings-shell')).toHaveCount(0);
+  await expect(page.getByLabel('Rule run scope')).toHaveValue('all');
+});
+
+test('server synchronization cannot be disabled and has no local-only switch', async ({ page }) => {
   await page.goto('/#/settings/mail');
-  const local = page.getByRole('checkbox', { name: /Local changes only/ });
-  await expect(local.locator('..')).toHaveAttribute('title', /When checked/);
-  if (!(await local.isChecked())) await local.check();
-  await expect(local).toBeChecked();
-  await local.uncheck();
-  await expect(local).toBeChecked();
-  await expect(page.locator('#provider-sync-progress')).toContainText('0 queued');
+  await expect(page.locator('#local-changes-only')).toHaveCount(0);
+  await expect(page.locator('#provider-sync-settings')).toContainText(
+    'Server synchronization is always enabled',
+  );
+  const status = await page.evaluate(
+    async () =>
+      (
+        await fetch('/api/provider-sync', {
+          method: 'PUT',
+          headers: { 'X-Inkwell': '1', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ local_changes_only: true }),
+        })
+      ).status,
+  );
+  expect(status).toBe(422);
 });
 
 test('settings back and forward restore the right page, not a scroll position', async ({

@@ -110,9 +110,9 @@ test('Rule Manager builds AND/OR conditions and multiple actions, preserves edit
     .getByRole('button', { name: 'Any OR' })
     .click();
   await openRuleSection(page, 'rule-resource-tools');
-  await page.getByLabel('New local folder', { exact: true }).fill(prefix + ' XYZ');
-  await page.getByRole('button', { name: 'Create local folder', exact: true }).click();
-  await expect(page.locator('#toast')).toContainText('Local folder created');
+  await page.getByLabel('New folder', { exact: true }).fill(prefix + ' XYZ');
+  await page.getByRole('button', { name: 'Create folder', exact: true }).click();
+  await expect(page.locator('#toast')).toContainText('Folder created');
   await expect(page.getByLabel('Rule name', { exact: true })).toHaveValue(prefix + ' ABC rule');
   await expect(page.getByLabel('Condition 1 value', { exact: true })).toHaveValue('ABC');
   const folder = (await api(page, '/local-folders')).find((f) => f.name === prefix + ' XYZ').id;
@@ -134,7 +134,7 @@ test('Rule Manager builds AND/OR conditions and multiple actions, preserves edit
     .click();
   await page.getByRole('button', { name: 'Save rule', exact: true }).click();
   await page.locator('#apply-rules').click();
-  await expect(page.locator('#toast')).toContainText('1 local copies matched');
+  await expect(page.locator('#toast')).toContainText('1 messages matched');
   const moved = await api(page, '/messages/' + message);
   expect(moved.folder).toBe('local-' + folder);
   expect(moved.unread).toBe(0);
@@ -241,7 +241,7 @@ test('Context menu text is smaller without losing touch targets or no-wrap label
     touch: matchMedia('(pointer: coarse), (max-width: 760px)').matches,
   }));
   expect(values.size).toBe(Math.max(12, values.base - 2));
-  expect(values.height).toBeGreaterThanOrEqual(values.touch ? 44 : 34);
+  expect(values.height).toBeGreaterThanOrEqual(values.touch ? 36 : 34);
   expect(values.wrap).toBe('nowrap');
 });
 

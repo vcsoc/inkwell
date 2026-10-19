@@ -106,8 +106,14 @@ def seed_remote():
     return account, origin, target, child, message
 
 
-def test_filing_to_remote_tree_is_local_and_searches_descendants(client):
-    _, origin, target, child, id = seed_remote()
+def test_filing_to_remote_tree_is_queued_and_searches_descendants(client, monkeypatch):
+    from inkwell import microsoft
+
+    account, origin, target, child, id = seed_remote()
+    monkeypatch.setattr(microsoft, 'has_mail_write_permissions', lambda account: True)
+    with store.db() as db:
+        db.execute("UPDATE accounts SET provider='microsoft' WHERE id=?", (account,))
+        db.execute('UPDATE messages SET remote_key=? WHERE id=?', (f'{account}:graph:immutable-key', id))
     assert (
         client.post(
             "/api/messages/move", json={"ids": [id], "folder": f"remote:{child}"}
@@ -115,7 +121,7 @@ def test_filing_to_remote_tree_is_local_and_searches_descendants(client):
         == 200
     )
     saved = client.get(f"/api/messages/{id}").json()
-    assert saved["remote_folder_id"] == origin and saved["remote_key"] == "immutable-key"
+    assert saved["remote_folder_id"] == origin and saved["remote_key"] == f'{account}:graph:immutable-key'
     assert saved["local_destination_id"] == child and saved["local_folder_override"] == 1
     assert not client.get(f"/api/messages?folder=remote&remote_folder_id={origin}").json()
     assert client.get(f"/api/messages?folder=remote&remote_folder_id={child}").json()[0]["id"] == id

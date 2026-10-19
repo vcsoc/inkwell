@@ -73,9 +73,9 @@ test('rule editor creates local destinations and saves sender exclusions', async
   const name = 'Rules folder ' + Date.now();
   await page.locator('#create-rule').click();
   await openRuleSection(page, 'rule-resource-tools');
-  await page.getByLabel('New local folder').fill(name);
-  await page.getByRole('button', { name: 'Create local folder', exact: true }).click();
-  await expect(page.locator('#toast')).toContainText('Local folder created');
+  await page.getByLabel('New folder').fill(name);
+  await page.getByRole('button', { name: 'Create folder', exact: true }).click();
+  await expect(page.locator('#toast')).toContainText('Folder created');
   folderId = (await api(page, '/local-folders')).find((f) => f.name === name).id;
   await page.getByLabel('Rule name', { exact: true }).fill('Older read sender mail');
   await page.getByLabel('Condition 1 field', { exact: true }).selectOption('domain');

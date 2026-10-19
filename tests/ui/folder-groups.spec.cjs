@@ -111,7 +111,7 @@ test('Deep Outlook folders fit the sidebar and classic app shortcuts sit above S
     expect(geometry[1].left).toBeGreaterThan(geometry[0].left);
     if (info.project.name === 'desktop') {
       const rail = page.locator('.app-rail');
-      const rules = rail.getByRole('button', { name: 'Rule Manager', exact: true }),
+      const rules = rail.getByRole('button', { name: 'Mail rules', exact: true }),
         tags = rail.getByRole('button', { name: 'Tag Manager', exact: true }),
         settings = rail.getByRole('button', { name: 'Settings', exact: true });
       expect((await rules.boundingBox()).y).toBeLessThan((await tags.boundingBox()).y);

@@ -98,8 +98,10 @@ def selected(db, ids):
 
 
 def rewrite(db, keys, replacement=None):
+    from . import provider_sync
+
     changed = 0
-    for row in db.execute("SELECT id,tags FROM messages WHERE tags!='[]'").fetchall():
+    for row in db.execute("SELECT * FROM messages WHERE tags!='[]'").fetchall():
         previous = json.loads(row["tags"])
         if not any(tag.casefold() in keys for tag in previous):
             continue
@@ -110,7 +112,9 @@ def rewrite(db, keys, replacement=None):
                     values.append(replacement)
             else:
                 values.append(tag)
-        db.execute("UPDATE messages SET tags=? WHERE id=?", (json.dumps(names(values)), row["id"]))
+        values = names(values)
+        provider_sync.enqueue_tags(db, row, values)
+        db.execute("UPDATE messages SET tags=? WHERE id=?", (json.dumps(values), row["id"]))
         changed += 1
     return changed
 
@@ -210,12 +214,14 @@ class Assignment(BaseModel):
 
 @router.post("/assign")
 def assign(data: Assignment):
+    from . import provider_sync
+
     with store.db() as db:
         db.execute("BEGIN IMMEDIATE")
         tag = selected(db, [data.tag_id])[0]
         changed = 0
         for id in dict.fromkeys(data.ids):
-            row = db.execute("SELECT tags FROM messages WHERE id=?", (id,)).fetchone()
+            row = db.execute("SELECT * FROM messages WHERE id=?", (id,)).fetchone()
             if not row:
                 raise HTTPException(404, "A selected message no longer exists; nothing changed")
             old = json.loads(row["tags"])
@@ -228,6 +234,7 @@ def assign(data: Assignment):
             if len(values) > 12:
                 raise HTTPException(409, "A selected message already has 12 tags; nothing changed")
             if values != old:
+                provider_sync.enqueue_tags(db, row, values)
                 db.execute("UPDATE messages SET tags=? WHERE id=?", (json.dumps(values), id))
                 changed += 1
     return {"updated_messages": changed}

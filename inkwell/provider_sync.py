@@ -1,8 +1,8 @@
-"""Opt-in Graph writes: durable, per-resource ordered jobs with bounded parallel retries.
+"""Always-on Graph writes with durable per-account ordering and bounded retries.
 
-Only explicitly reauthorized Microsoft accounts are eligible. IMAP, local folders,
-local-only messages and historical local calendar entries are never represented as
-provider-synced. Jobs are persisted in the same transaction as the local change.
+Only authorized Microsoft accounts can write. Unsupported providers are rejected;
+workspace folder destinations are provisioned in the same mailbox. Jobs persist
+in the same transaction as each cached change.
 """
 
 import json
@@ -18,7 +18,8 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from . import calendar_tools, microsoft, store
+from . import calendar_tools, microsoft, store, provider_folders
+from .provider_folders import plan as folder_plan
 
 router = APIRouter(prefix="/api/provider-sync")
 WORKERS = 4
@@ -36,8 +37,8 @@ def account_ready(db, account_id, calendar=False):
 
 
 def local_only(db):
-    row = db.execute("SELECT value FROM settings WHERE key='provider_sync_local_only'").fetchone()
-    return bool(row and row[0] == "true")
+    # Compatibility for older callers; server synchronization can no longer be disabled.
+    return False
 
 
 def enabled(db, account_id):
@@ -45,13 +46,13 @@ def enabled(db, account_id):
 
 
 def require_mail_write(db, message):
-    """Never silently file server-backed Outlook mail locally without an explicit opt-out."""
-    if local_only(db) or not message["remote_key"]:
+    """Never silently accept an unsynchronized server-mail mutation."""
+    if not message["remote_key"] or message["account_id"] is None:
         return
     if not message["remote_key"].startswith(f"{message['account_id']}:graph:"):
-        return
+        raise HTTPException(409, "Server writes for this mail provider are not supported yet; no mailbox change was made. Use the provider's mail app.")
     if not account_ready(db, message["account_id"]):
-        raise HTTPException(409, "Server mail changes require Microsoft write access. Open Settings → Mail accounts → Grant mail/calendar access and approve Microsoft’s prompt, or explicitly enable Local changes only.")
+        raise HTTPException(409, "Server mail changes require Microsoft write access. Open Settings → Mail accounts → Grant mail/calendar access and approve Microsoft’s prompt. No mailbox change was made.")
 
 
 def calendar_account(db):
@@ -60,12 +61,11 @@ def calendar_account(db):
 
 
 def connected(db, account_id):
-    """Call only inside a successful OAuth transaction; never reset an explicit opt-out."""
+    """Call only inside a successful OAuth transaction."""
     matches = db.execute("SELECT id FROM accounts WHERE provider='microsoft'").fetchall()
     if len(matches) == 1 and matches[0]["id"] == account_id:
         db.execute("INSERT OR REPLACE INTO settings(key,value) VALUES ('provider_sync_account',?)", (str(account_id),))
-    if not db.execute("SELECT 1 FROM settings WHERE key='provider_sync_local_only'").fetchone():
-        db.execute("INSERT INTO settings(key,value) VALUES ('provider_sync_local_only','false')")
+    db.execute("INSERT OR REPLACE INTO settings(key,value) VALUES ('provider_sync_local_only','false')")
 
 
 def ensure_move(db, message, destination):
@@ -82,12 +82,13 @@ def ensure_move(db, message, destination):
                          (int(destination[7:]), message["account_id"])).fetchone()
         if row:
             return {"destination": row["remote_id"]}
-    raise HTTPException(422, "This is a local-only folder. Turn on Local changes only to file this Microsoft message here.")
+    if destination.startswith('local-'):
+        return {'folder_path': folder_plan(db, message['account_id'], int(destination[6:]))}
+    raise HTTPException(422, "Choose a destination in the same server account")
 
 
 def enqueue_mail(db, message, kind, payload):
-    if kind == "delete":
-        require_mail_write(db, message)
+    require_mail_write(db, message)
     if not message["remote_key"] or not enabled(db, message["account_id"]):
         return 0
     if not message["remote_key"].startswith(f"{message['account_id']}:graph:"):
@@ -96,6 +97,16 @@ def enqueue_mail(db, message, kind, payload):
     db.execute("""INSERT INTO provider_jobs(account_id,resource_type,resource_id,kind,payload)
         VALUES (?,'mail',?,?,?)""", (message["account_id"], message["id"], kind, json.dumps(payload)))
     return 1
+
+
+def enqueue_tags(db, message, values):
+    old = json.loads(message['tags'])
+    if old == values:
+        return 0
+    return enqueue_mail(db, message, 'categories', {
+        'add': [tag for tag in values if tag not in old],
+        'remove': [tag for tag in old if tag not in values],
+    })
 
 
 def mail_result(result, queued):
@@ -115,7 +126,7 @@ def status():
             "SELECT state,count(*) n FROM provider_jobs WHERE state!='done' GROUP BY state")}
         failure = db.execute("SELECT error FROM provider_jobs WHERE state='failed' ORDER BY id DESC LIMIT 1").fetchone()
         return {
-            "local_changes_only": local_only(db) or not any(account_ready(db, row["id"]) for row in accounts),
+            "local_changes_only": False,
             "explicit_local_only": local_only(db),
             "authorization_required": sum(row["provider"] == "microsoft" and not microsoft.has_mail_write_permissions(row) for row in accounts),
             "completed": db.execute("SELECT count(*) FROM provider_jobs WHERE state='done'").fetchone()[0],
@@ -133,6 +144,8 @@ def status():
 
 @router.put("")
 def set_mode(data: Mode):
+    if data.local_changes_only:
+        raise HTTPException(422, "Server synchronization is always enabled and cannot be disabled")
     with store.db() as db:
         db.execute("BEGIN IMMEDIATE")
         if not data.local_changes_only:
@@ -225,6 +238,24 @@ def perform(job):
         remote = event_remote(db, job) if job["resource_type"] == "event" else None
         alive = db.execute("SELECT 1 FROM events WHERE id=?", (job["resource_id"],)).fetchone() if job["resource_type"] == "event" else None
     payload = json.loads(job["payload"])
+    if job["resource_type"] == "folder":
+        if job['kind'] != 'delete':
+            return provider_folders.resolve(account, payload['folder_path'], graph)
+        with store.db() as db:
+            row = db.execute('SELECT value FROM settings WHERE key=?',
+                             (provider_folders.mapping_key(account['id'], job['resource_id']),)).fetchone()
+        remote_id = payload.get('remote_id') or (row[0] if row else None)
+        if remote_id:
+            path = 'mailFolders/' + quote(remote_id, safe='')
+            folder = graph(account, 'GET', path + '?$select=id,totalItemCount,childFolderCount', missing_ok=True)
+            if folder:
+                if folder.get('totalItemCount') or folder.get('childFolderCount'):
+                    raise ValueError('Server folder is not empty; nothing was deleted. Review it in Outlook.')
+                graph(account, 'DELETE', path)
+            with store.db() as db:
+                db.execute('DELETE FROM settings WHERE key=?',
+                           (provider_folders.mapping_key(account['id'], job['resource_id']),))
+        return remote_id
     if job["resource_type"] == "event":
         if job["kind"] == "create":
             result = graph(account, "POST", "events", payload=event_body(payload, job))
@@ -250,6 +281,11 @@ def perform(job):
     path = "messages/" + quote(remote, safe="")
     if job["kind"] == "patch":
         graph(account, "PATCH", path, payload=payload["fields"])
+    elif job['kind'] == 'categories':
+        current = graph(account, 'GET', path + '?$select=id,categories')
+        values = [tag for tag in current.get('categories', []) if tag not in payload['remove']]
+        values.extend(tag for tag in payload['add'] if tag not in values)
+        graph(account, 'PATCH', path, payload={'categories': values})
     elif job["kind"] == "delete":
         # A 404 from the action could mean an unsupported endpoint, not that the
         # message was removed. Only a missing message itself confirms completion.
@@ -258,9 +294,12 @@ def perform(job):
         elif job["attempts"] < 4:
             raise ProviderDelayed("Confirming missing message before marking deletion complete")
     else:
-        target = payload["destination"]
-        folder = graph(account, "GET", "mailFolders/" + quote(target, safe="") + "?$select=id")
-        destination = folder["id"]
+        if 'folder_path' in payload:
+            destination = provider_folders.resolve(account, payload['folder_path'], graph)
+        else:
+            target = payload["destination"]
+            folder = graph(account, "GET", "mailFolders/" + quote(target, safe="") + "?$select=id")
+            destination = folder["id"]
         # A retry after a timeout must not move a message twice. Immutable IDs
         # survive folder moves; compare the current parent first.
         current = graph(account, "GET", path + "?$select=id,parentFolderId", missing_ok=True)
@@ -279,7 +318,6 @@ def claim():
         row = db.execute("""SELECT j.* FROM provider_jobs j WHERE j.state='pending'
             AND j.next_run<=? AND NOT EXISTS (
               SELECT 1 FROM provider_jobs older WHERE older.account_id=j.account_id
-               AND older.resource_type=j.resource_type AND older.resource_id=j.resource_id
                AND older.id<j.id AND older.state NOT IN ('done','cancelled')) ORDER BY j.id LIMIT 1""",
             (time.time(),)).fetchone()
         if row:
