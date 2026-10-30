@@ -471,7 +471,7 @@ window.InkwellTranslation = (() => {
       .then((result) => {
         if (!section.isConnected) return;
         section.querySelector('[role="status"]').textContent = result.ready
-          ? result.model + ' · ready · on-device'
+          ? result.model + ' · available on disk · loaded only while translating'
           : 'Download the 2.5 GB local model once to enable translation.';
       })
       .catch(() => {

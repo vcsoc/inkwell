@@ -335,8 +335,11 @@ def remember_remote_content(message_id: int, choice: RemoteContentChoice, reques
 @lru_cache(maxsize=12)
 def embedded_images(message_id, revision):
     """Re-encode explicitly requested Outlook CID images as inert inline PNGs."""
-    from . import calendar_import
+    from . import calendar_import, outgoing
 
+    local = outgoing.load(message_id)
+    if local:
+        return {f["content_id"].casefold(): "data:" + f["content_type"] + ";base64," + f["content"] for f in local if f["inline"]}
     mail = calendar_import.message_mime(message_id)
     images = {}
     total = 0

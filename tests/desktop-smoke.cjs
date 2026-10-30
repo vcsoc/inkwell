@@ -57,19 +57,184 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 24000 }, async (t) 
         ...(process.env.INKWELL_TEST_EXECUTABLE ? [] : ['.']),
         `--user-data-dir=${path.join(data, 'electron-profile')}`,
       ],
-      env: { ...process.env, INKWELL_DATA_DIR: data, INKWELL_DOCUMENTS_DIR: path.join(data, 'Documents'), XDG_DATA_HOME: path.join(data, 'xdg-data') },
+      env: {
+        ...process.env,
+        INKWELL_DATA_DIR: data,
+        INKWELL_DOCUMENTS_DIR: path.join(data, 'Documents'),
+        XDG_DATA_HOME: path.join(data, 'xdg-data'),
+      },
       timeout: 5000,
     });
     const window = await app.firstWindow({ timeout: 5000 });
     window.setDefaultTimeout(3000);
     window.setDefaultNavigationTimeout(5000);
     await expect(window.locator('#page-title')).toHaveText('your inbox.');
-    expect(await window.evaluate(async () => (await fetch('/api/provider-sync', {
-      method: 'PUT', headers: { 'X-Inkwell': '1', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ local_changes_only: true }),
-    })).status)).toBe(422);
+    const calendars = await window.evaluate(async () => (await fetch('/api/calendars')).json());
+    expect(calendars.calendars).toEqual([]);
+    expect(calendars.accounts).toEqual([]);
+    expect(typeof calendars.sync.active).toBe('boolean');
+    const modelRequests = [];
+    const modelServer = require('node:http').createServer((request, response) => {
+      let body = '';
+      request.on('data', (chunk) => {
+        body += chunk;
+      });
+      request.on('end', () => {
+        modelRequests.push({
+          path: request.url,
+          method: request.method,
+          body: body ? JSON.parse(body) : {},
+        });
+        response.writeHead(200, { 'Content-Type': 'application/json' });
+        response.end(
+          JSON.stringify({ message: { content: 'Demand-only inference proof' }, done: true }),
+        );
+      });
+    });
+    await new Promise((resolve, reject) => {
+      modelServer.once('error', reject);
+      modelServer.listen(0, '127.0.0.1', resolve);
+    });
+    try {
+      const modelPort = modelServer.address().port;
+      await window.evaluate(async (port) => {
+        const headers = { 'X-Inkwell': '1', 'Content-Type': 'application/json' };
+        const saved = await fetch('/api/ai/config', {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            provider: 'ollama',
+            model: 'test-model',
+            endpoint: `http://127.0.0.1:${port}/v1`,
+          }),
+        });
+        if (!saved.ok) throw Error('Could not configure isolated model proof');
+        await fetch('/api/ai/config');
+        await fetch('/api/ai/providers');
+        await fetch('/api/translation');
+      }, modelPort);
+      expect(modelRequests).toHaveLength(0);
+      const answer = await window.evaluate(async () =>
+        (
+          await fetch('/api/ai/chat', {
+            method: 'POST',
+            headers: { 'X-Inkwell': '1', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: 'Resource lifecycle test' }),
+          })
+        ).json(),
+      );
+      expect(answer.answer).toBe('Demand-only inference proof');
+      expect(modelRequests).toHaveLength(1);
+      expect(modelRequests[0].path).toBe('/api/chat');
+      expect(modelRequests[0].body.keep_alive).toBe(0);
+      expect(modelRequests[0].body.stream).toBe(false);
+    } finally {
+      try {
+        await window.evaluate(() =>
+          fetch('/api/ai/config', { method: 'DELETE', headers: { 'X-Inkwell': '1' } }),
+        );
+      } finally {
+        modelServer.closeAllConnections();
+        await new Promise((resolve) => modelServer.close(resolve));
+      }
+    }
+    const analysisProof = await window.evaluate(async () =>
+      (await fetch('/api/mail-analysis')).json(),
+    );
+    expect(analysisProof.mode).toBe('review');
+    expect(analysisProof.config.enabled).toBe(false);
+    expect(analysisProof.config.model).toBe('english');
+    expect(analysisProof.config.categories).toHaveLength(10);
+    expect(analysisProof.counts).toEqual({});
+    await window.evaluate(() => {
+      location.hash = '#/settings/analysis';
+    });
+    await expect(window.locator('.analysis-settings')).toBeVisible();
+    await window.locator('#analysis-catalog-tab').click();
+    await expect(window.locator('#analysis-config')).toBeVisible();
+    await window.locator('#analysis-review-tab').click();
+    await expect(window.locator('#analysis-backfill')).toBeDisabled();
+    await expect(window.locator('#analysis-results')).toContainText('No results');
+    await window.evaluate(() => {
+      location.hash = '#/inbox';
+    });
+    await expect(window.locator('#message-list')).toBeVisible();
+    const composerProof = await window.evaluate(async () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 16;
+      canvas.height = 8;
+      canvas.getContext('2d').fillRect(0, 0, 16, 8);
+      const headers = { 'X-Inkwell': '1', 'Content-Type': 'application/json' };
+      const created = await fetch('/api/drafts', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          subject: 'Installed attachment proof',
+          body: 'Inline image',
+          html_body: '<img src="cid:installed@inkwell" width="8" height="4">',
+          attachments: [
+            {
+              name: 'proof.png',
+              content_type: 'image/png',
+              content: canvas.toDataURL('image/png').split(',')[1],
+              content_id: 'installed@inkwell',
+              inline: true,
+            },
+            {
+              name: 'proof.txt',
+              content_type: 'text/plain',
+              content: btoa('attachment proof'),
+              content_id: 'file@inkwell',
+              inline: false,
+            },
+          ],
+        }),
+      });
+      if (!created.ok)
+        throw Error('Installed draft attachment validation failed: ' + created.status);
+      const draft = await created.json();
+      try {
+        const saved = await (await fetch('/api/messages/' + draft.id)).json();
+        const metadata = await (await fetch('/api/messages/' + draft.id + '/attachments')).json();
+        const file = metadata.groups[0].files.find((file) => file.name === 'proof.txt');
+        const text = await (
+          await fetch('/api/messages/' + draft.id + '/attachments/' + file.id + '/download')
+        ).text();
+        const preview = await (
+          await fetch('/api/messages/' + draft.id + '/html?inline=true')
+        ).text();
+        return {
+          module: typeof window.InkwellComposerMedia,
+          files: saved.compose_attachments.length,
+          text,
+          inline: preview.includes('data:image/png;base64,'),
+        };
+      } finally {
+        await fetch('/api/messages/' + draft.id, { method: 'DELETE', headers });
+      }
+    });
+    expect(composerProof).toEqual({
+      module: 'function',
+      files: 2,
+      text: 'attachment proof',
+      inline: true,
+    });
+    expect(
+      await window.evaluate(
+        async () =>
+          (
+            await fetch('/api/provider-sync', {
+              method: 'PUT',
+              headers: { 'X-Inkwell': '1', 'Content-Type': 'application/json' },
+              body: JSON.stringify({ local_changes_only: true }),
+            })
+          ).status,
+      ),
+    ).toBe(422);
     expect(await window.evaluate(() => window.inkwellUpdates.status())).toEqual({
-      supported: Boolean(process.env.INKWELL_TEST_EXECUTABLE?.includes('/.local/opt/inkwell/current/inkwell')),
+      supported: Boolean(
+        process.env.INKWELL_TEST_EXECUTABLE?.includes('/.local/opt/inkwell/current/inkwell'),
+      ),
     });
     expect(await app.evaluate(({ app }) => app.getName())).toBe('inkwell');
     expect(
@@ -131,10 +296,16 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 24000 }, async (t) 
     await window.locator('#doc-top-rename-input').fill('Desktop renamed.pdf');
     await window.locator('#doc-top-rename-input').press('Enter');
     await expect(window.locator('#doc-top-filename')).toHaveText('Desktop renamed.pdf');
-    await expect.poll(() => window.locator('#doc-pdf-image').evaluate((img) => img.complete && img.naturalWidth > 0)).toBe(true);
+    await expect
+      .poll(() =>
+        window.locator('#doc-pdf-image').evaluate((img) => img.complete && img.naturalWidth > 0),
+      )
+      .toBe(true);
     expect(fs.existsSync(path.join(data, 'Documents', beforeRename))).toBe(false);
     if (!(await window.locator('#doc-tree').isVisible())) await window.locator('#menu').click();
-    await window.locator('#doc-tree [data-doc-file="Desktop renamed.pdf"]').click({ button: 'right' });
+    await window
+      .locator('#doc-tree [data-doc-file="Desktop renamed.pdf"]')
+      .click({ button: 'right' });
     await window.locator('[data-doc-menu="trash"]').click();
     await window.locator('#doc-trash-submit').click();
     await expect(window.locator('#doc-top-name')).toBeHidden();
@@ -270,11 +441,14 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 24000 }, async (t) 
     await email.getByRole('heading', { name: 'Packaged HTML preview' }).click();
     // CDP keyboard injection bypasses Electron's before-input-event; use native input.
     const zoomKey = (key, modifiers = ['control']) =>
-      app.evaluate(({ BrowserWindow }, { keyCode, modifiers }) => {
-        const wc = BrowserWindow.getAllWindows()[0].webContents;
-        wc.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
-        wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
-      }, { keyCode: key, modifiers });
+      app.evaluate(
+        ({ BrowserWindow }, { keyCode, modifiers }) => {
+          const wc = BrowserWindow.getAllWindows()[0].webContents;
+          wc.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
+          wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
+        },
+        { keyCode: key, modifiers },
+      );
     await zoomKey('=');
     await expect(window.locator('html')).toHaveCSS('zoom', '1.1');
     await zoomKey('-');
@@ -327,9 +501,7 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 24000 }, async (t) 
     await window.locator('.message-row [data-more]').first().click();
     await expect(window.getByRole('menuitem', { name: 'Reply', exact: true })).toBeVisible();
     await window.getByRole('menuitem', { name: 'File', exact: true }).click();
-    await expect(
-      window.getByRole('menuitem', { name: 'Move email…', exact: true }),
-    ).toBeVisible();
+    await expect(window.getByRole('menuitem', { name: 'Move email…', exact: true })).toBeVisible();
     await window.keyboard.press('Escape');
     await window.keyboard.press('Escape');
     if (await window.locator('.mobile-tabs').isVisible()) {
@@ -552,6 +724,40 @@ test('Desktop startup, forms, theme and sandbox', { timeout: 24000 }, async (t) 
     await expect(window.locator('.message-table-header')).toBeVisible();
     await window.locator('#quick-view-button').click();
     await window.locator('#heading-compose').click();
+    await expect(window.locator('#modal-title')).toHaveText('New message');
+    await expect(window.locator('.compose-envelope')).toBeVisible();
+    await expect(window.locator('.compose-footer')).toBeVisible();
+    await expect(window.locator('.compose-media-tools svg')).toHaveCount(3);
+    const dockAudit = await window.evaluate(() => {
+      const list = document.querySelector('#message-list').getBoundingClientRect(),
+        dialog = document.querySelector('#modal').getBoundingClientRect();
+      const enough = document.querySelector('main').clientWidth >= 960;
+      return (
+        !enough ||
+        (Boolean(document.documentElement.dataset.composeSplit) &&
+          list.width >= 270 &&
+          list.right <= dialog.left + 1)
+      );
+    });
+    expect(dockAudit).toBe(true);
+
+    const quoteAudit = await window.evaluate(() => {
+      const reply = window.InkwellComposeQuote(
+        {
+          sender: 'Alex <alex@example.test>',
+          subject: 'Test',
+          body: '\n\n> \n> > \nHello\n\n\nWorld\n\n',
+        },
+        'reply',
+      );
+      return (
+        reply.body.startsWith('\n') &&
+        !/\n{3}/.test(reply.body) &&
+        !/^[> \t]+$/m.test(reply.body) &&
+        reply.body.includes('> Hello\n\n> World')
+      );
+    });
+    expect(quoteAudit).toBe(true);
     await window.locator('[name=subject]').fill('Desktop close autosave');
     await window.locator('#toggle-cc').click();
     await window.getByLabel('Cc', { exact: true }).fill('copy@example.com');

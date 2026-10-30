@@ -19,7 +19,9 @@ def key(event):
 def due(now=None):
     now = now or datetime.now(timezone.utc)
     with store.db() as db:
-        events = [dict(row) for row in db.execute("SELECT * FROM events WHERE all_day=0")]
+        events = [dict(row) for row in db.execute('''SELECT e.* FROM events e
+            LEFT JOIN outlook_calendars c ON c.id=e.provider_calendar_id
+            WHERE e.all_day=0 AND (e.provider_calendar_id IS NULL OR (c.removed=0 AND c.selected=1))''')]
         upcoming = calendar_tools.occurrences(events, now, now + timedelta(minutes=15, seconds=30))
         result = []
         for event in upcoming:

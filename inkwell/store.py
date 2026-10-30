@@ -49,7 +49,7 @@ def init():
         # Version 1: preserve password accounts while adding Microsoft OAuth metadata.
         conn.execute("BEGIN IMMEDIATE")
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        if version > 19:
+        if version > 22:
             raise RuntimeError("This database was created by a newer inkwell version")
         if version < 1:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)")}
@@ -276,6 +276,17 @@ def init():
                     json_object('remote_id',OLD.provider_event_id));
                 END""")
             conn.execute("PRAGMA user_version=19")
+        if version < 20:
+            from . import outlook_calendars
+            outlook_calendars.migrate(conn)
+            conn.execute('PRAGMA user_version=20')
+        if version < 21:
+            conn.execute("CREATE TABLE IF NOT EXISTS outgoing_files(message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE, files TEXT NOT NULL)")
+            conn.execute("PRAGMA user_version=21")
+        if version < 22:
+            from . import mail_analysis
+            mail_analysis.migrate(conn)
+            conn.execute("PRAGMA user_version=22")
         # Retire the old opt-out without replaying historical edits automatically.
         conn.execute("INSERT OR REPLACE INTO settings(key,value) VALUES ('provider_sync_local_only','false')")
         # Repair derived keys from old unquoted Graph display names, without changing

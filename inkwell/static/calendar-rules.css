@@ -1,3 +1,150 @@
+.calendar-event-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  margin-right: 3px;
+}
+#calendar-event-preview {
+  position: fixed;
+  z-index: 10000;
+  box-sizing: border-box;
+  width: min(340px, calc(100vw - 16px));
+  max-height: calc(100dvh - 16px);
+  overflow: hidden;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 12px 36px #0003;
+  overflow-wrap: anywhere;
+}
+#calendar-event-preview h3 {
+  margin: 6px 0 10px;
+  font-size: 18px;
+  line-height: 1.25;
+}
+#calendar-event-preview p {
+  margin: 7px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.calendar-preview-source {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+.calendar-preview-zone {
+  color: var(--muted);
+  font-size: 11px;
+}
+.calendar-preview-notes {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+.calendar-source-pills {
+  display: flex;
+  flex: 1;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 2px 0 4px;
+  scrollbar-width: thin;
+}
+.calendar-month-navigation {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 12px;
+}
+.calendar-month-navigation h2 {
+  margin: 0;
+}
+.calendar-month-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+html button.calendar-source-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 10px;
+  min-height: 28px;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.2;
+}
+html button.calendar-source-pill[aria-pressed='true'] {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--ink);
+}
+.calendar-source-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+}
+.calendar-source-pill[aria-pressed='true'] .calendar-source-dot {
+  background: var(--accent);
+  opacity: 1;
+}
+.calendar-source-pill:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.calendar-source-pills:empty {
+  display: none;
+}
+.calendar-sync-status {
+  position: relative;
+  font-size: 12px;
+}
+.calendar-sync-status summary {
+  cursor: pointer;
+}
+.outlook-calendar-body {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 40;
+  width: min(320px, 75vw);
+  max-height: 60dvh;
+  overflow: auto;
+  padding: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 6px 24px #0003;
+  border-radius: var(--radius);
+}
+.outlook-calendar-body p {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  .calendar-source-pills {
+    order: 3;
+    flex-basis: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 2px 0 4px;
+    scrollbar-width: thin;
+  }
+  .calendar-source-pill {
+    flex: none;
+  }
+}
 html .brand {
   display: block;
   width: 100%;

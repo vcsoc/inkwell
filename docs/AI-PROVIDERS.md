@@ -20,7 +20,7 @@ Changing a provider or URL clears its saved key unless you enter a replacement. 
 | DeepSeek | Chat Completions · `https://api.deepseek.com/v1` | DeepSeek key |
 | xAI | Chat Completions · `https://api.x.ai/v1` | xAI key |
 | Together AI | Chat Completions · `https://api.together.xyz/v1` | Together key |
-| Ollama | Compatible API · `http://127.0.0.1:11434/v1` | Usually no key |
+| Ollama | Native `/api/chat` with on-demand residency · accepts the existing `http://127.0.0.1:11434/v1` base | Usually no key |
 | LM Studio | Compatible API · `http://127.0.0.1:1234/v1` | Server-configured key, if any |
 | llama.cpp | Compatible API · `http://127.0.0.1:8080/v1` | Server-configured key, if any |
 | Unsloth exported/served models | An OpenAI-compatible inference server you run | Depends on that server |
@@ -67,11 +67,31 @@ ollama pull llama3.2
 # Start ollama serve if its service is not already running.
 ```
 
-Select Ollama, keep the default URL and enter the pulled model name.
+Select Ollama, keep the default URL and enter the pulled model name. Inkwell sends
+one native `/api/chat` request only when you click Ask, with `keep_alive: 0` and
+non-streaming output. Ollama loads the requested model for that request and is
+instructed to unload it when the request finishes, rather than retaining it for
+its default idle period. Startup, settings and status checks do not warm models.
+Expect a cold-load delay on subsequent requests in exchange for lower idle RAM/VRAM.
+
+Existing `/v1` base URLs remain supported: the adapter replaces that suffix with
+`/api/chat`; a root URL or `/api` base is accepted too, including proxy prefixes.
+An Ollama proxy must expose the native route. There is no OpenAI-compatible
+fallback that could silently omit the residency policy. For an OpenAI-only proxy,
+choose Custom; that server then owns model residency.
+
+### Externally managed servers
+
+Inkwell never starts, probes with inference, or stops shared external model servers
+at application startup. LM Studio, llama.cpp, Unsloth and Custom endpoints own
+their model-loading and idle-unloading policies; configure just-in-time loading
+and idle eviction in those servers when available. Inkwell does not kill shared
+processes or unload unrelated models. Select the Ollama adapter, rather than
+Custom, to apply the explicit per-request Ollama residency policy.
 
 ### LM Studio
 
-Download/load a model and start **Developer → Local Server** in LM Studio. Select its preset and enter the model identifier shown by that server. Adjust port and optional server API key to match your configuration.
+Download a model, enable just-in-time loading/idle eviction if supported, and start **Developer → Local Server** in LM Studio. Select its preset and enter the model identifier shown by that server. Adjust port and optional server API key to match your configuration.
 
 ### llama.cpp
 

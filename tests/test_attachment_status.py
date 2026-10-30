@@ -12,6 +12,8 @@ def test_indicator_has_three_states_and_uses_this_message_not_thread(client):
     with store.db() as db:
         record(db, ids[0], True)
         record(db, ids[1], False)
+        # Simulate an imported message whose attachment state is not yet known.
+        db.execute("DELETE FROM message_attachment_status WHERE message_id=?", (ids[2],))
         db.execute(
             "INSERT INTO attachment_views VALUES (?,?)",
             (

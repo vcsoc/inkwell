@@ -444,6 +444,10 @@ def failure(state, error):
 @router.get("/api/messages/{id}/attachments")
 def cached(id: int):
     m, a, state = context(id)
+    from . import outgoing
+    local = outgoing.manifest(id, m)
+    if local is not None:
+        return local
     connected = bool(a and m["remote_key"])
     if state and a and (state["owner"] != owner(a) or state["root_key"] != m["remote_key"]):
         state = None
@@ -561,6 +565,14 @@ def filename(value):
 
 def attachment_file(id: int, token: str):
     m, a, state = context(id)
+    from . import outgoing
+    local = outgoing.local_file(id, token)
+    if local is not None:
+        contents, name = local
+        temp = tempfile.TemporaryFile(dir=store.DATA)
+        temp.write(contents)
+        temp.seek(0)
+        return temp, len(contents), filename(name)
     if not state or not re.fullmatch(r"[a-f0-9]{64}", token):
         raise HTTPException(404, "Attachment not found in this message view")
     m, a = current(id, state)

@@ -63,11 +63,23 @@ Schema migrations use `PRAGMA user_version` in an immediate transaction. Version
 
 ## AI boundary
 
-The HTTP adapters speak OpenAI-compatible Chat Completions, Anthropic Messages or Gemini generateContent. The fixed provider catalog determines protocol; endpoints/models are user-configured. Config and credentials are read in one SQLite query, and a transactional config change clears a prior key when the provider or endpoint changes. Credentials are decrypted only for the outbound request. Requests include fixed safety instructions, untrusted selected context and the user's prompt, with no function/tool definitions.
+The HTTP adapters speak OpenAI-compatible Chat Completions, Anthropic Messages, Gemini generateContent or native Ollama chat. Inference starts only on an explicit request; Ollama uses `keep_alive: 0` to request unloading afterward. Built-in translation uses a short-lived process rather than a resident model server. The fixed provider catalog determines protocol; endpoints/models are user-configured. Config and credentials are read in one SQLite query, and a transactional config change clears a prior key when the provider or endpoint changes. Credentials are decrypted only for the outbound request. Requests include fixed safety instructions, untrusted selected context and the user's prompt, with no function/tool definitions.
 
 The Codex subscription adapter instead invokes the official CLI using its own ChatGPT login, stdin, an ephemeral temporary workspace, read-only sandbox and explicit capability restrictions. It does not implement OAuth itself or copy tokens into Inkwell. It has a separate runtime boundary and is tested using mocked subprocess results; see AI-PROVIDERS.md for restrictions and limitations. Neither adapter executes output as mail/calendar actions.
 
 Form presentation uses the same forms and event handlers in either a modal HTML dialog or an in-flow, non-modal internal page. Opening/closing restores focus. Draft exits await autosave; other unsaved forms discard without confirmation. Inline calendar forms share a container-query layout with the calendar: right-side editor at 1000px available content width, otherwise full-page. Resizing changes CSS layout without replacing form nodes. Presentation preferences are schema-validated JSON in the settings table. Themes map fixed, validated fields to CSS custom properties; imports cannot inject CSS or URLs. Draft theme changes preview locally until explicitly saved. Settings uses client-side `/#/settings/<page>` routes, a category overview and dedicated feature renderers rather than a long anchor-scrolling form. Only the active feature's controls are mounted; mail/AI data is fetched on demand and stale responses are ignored. Direct links, reload and browser history restore the active sub-page. Each editor saves its own feature without resetting unrelated preferences.
+
+## Local Mail Analysis
+
+Optional Laya mail analysis is separate from the on-demand Ask/translation paths.
+It is disabled by default, and enabling it queues newly downloaded eligible mail
+without performing inference in sync transactions. Schema 22 persists jobs, review
+scores, fingerprints, claims and resumable backfill state. A bounded CPU-only
+subprocess uses a separate managed Python runtime, then exits after each batch.
+No models are loaded by settings/status/startup. Only human-approved, predefined
+tags can enter the existing authorized provider-sync pipeline; model scores never
+execute mailbox actions. Initial synthetic accuracy is insufficient for automatic
+application, which is deliberately unavailable. See [MAIL-ANALYSIS.md](MAIL-ANALYSIS.md).
 
 ## Test scope
 

@@ -152,6 +152,11 @@ def has_mail_write_permissions(account):
     return has_write_permissions(account, {"Mail.ReadWrite"})
 
 
+def has_calendar_read_permissions(account):
+    return any(has_write_permissions(account, {scope}) for scope in (
+        'Calendars.Read', 'Calendars.ReadWrite', 'Calendars.Read.Shared', 'Calendars.ReadWrite.Shared'))
+
+
 def has_calendar_write_permissions(account):
     return has_write_permissions(account, {"Calendars.ReadWrite"})
 
@@ -248,6 +253,8 @@ def poll(flow_id: str):
 
                 provider_sync.connected(db, account_id)
                 result = {"account_id": account_id, "email": email, "reauthorized": bool(existing)}
+            from . import outlook_calendars
+            outlook_calendars.WORKER.wake.set()
             flow["completed"] = result
             flow.pop("device_code", None)
             return {"status": "complete", **result}
@@ -559,12 +566,14 @@ def sync_account(
     return count
 
 
-def send_mail(account, recipient, subject, body, cc="", bcc=""):
+def send_mail(account, recipient, subject, body, cc="", bcc="", *, html_body=None, attachments=()):
     from . import addresses
 
     def recipients(value):
         return [{"emailAddress": {"address": address}} for _, address in addresses.parse(value)]
 
+    if attachments and sum(len(f.content) for f in attachments) + len(json.dumps(html_body if html_body is not None else body, ensure_ascii=False).encode()) > 3_000_000:
+        return _send_large(account, recipient, subject, body, cc, bcc, html_body, attachments)
     with client() as http:
         result = http.post(
             GRAPH + "/me/sendMail",
@@ -575,7 +584,8 @@ def send_mail(account, recipient, subject, body, cc="", bcc=""):
                         "emailAddress": {"address": account.get("send_from", account["email"])}
                     },
                     "subject": subject,
-                    "body": {"contentType": "Text", "content": body},
+                    "body": {"contentType": "HTML" if html_body is not None else "Text", "content": html_body if html_body is not None else body},
+                    **({"attachments": [_graph_file(f) for f in attachments]} if attachments else {}),
                     "toRecipients": recipients(recipient),
                     "ccRecipients": recipients(cc),
                     "bccRecipients": recipients(bcc),
@@ -591,3 +601,62 @@ def send_mail(account, recipient, subject, body, cc="", bcc=""):
         if result.status_code != 202:
             result.raise_for_status()
             raise ValueError("Graph did not accept message")
+
+
+def _graph_file(file):
+    return {"@odata.type": "#microsoft.graph.fileAttachment", "name": file.name,
+            "contentType": file.content_type, "contentBytes": file.content,
+            "isInline": file.inline, "contentId": file.content_id}
+
+
+def _send_large(account, recipient, subject, body, cc, bcc, html, files):
+    """Upload into a provider draft; never report success until send returns 202."""
+    import base64
+    from . import addresses
+    headers = {"Authorization": "Bearer " + access_token(account)}
+    def recipients(value):
+        return [{"emailAddress": {"address": address}} for _, address in addresses.parse(value)]
+    with client() as http:
+        created = http.post(GRAPH + "/me/messages", headers=headers, json={
+            "subject": subject, "from": {"emailAddress": {"address": account.get("send_from", account["email"])}},
+            "body": {"contentType": "HTML" if html is not None else "Text", "content": html if html is not None else body},
+            "toRecipients": recipients(recipient), "ccRecipients": recipients(cc), "bccRecipients": recipients(bcc)})
+        created.raise_for_status()
+        url = GRAPH + "/me/messages/" + quote(created.json()["id"], safe="")
+        sending = False
+        try:
+            for file in files:
+                raw = base64.b64decode(file.content)
+                if len(raw) < 3_000_000:
+                    result = http.post(url + "/attachments", headers=headers, json=_graph_file(file))
+                    result.raise_for_status()
+                    continue
+                session = http.post(url + "/attachments/createUploadSession", headers=headers, json={"AttachmentItem": {
+                    "attachmentType": "file", "name": file.name, "size": len(raw), "contentType": file.content_type,
+                    "isInline": file.inline, "contentId": file.content_id}})
+                session.raise_for_status()
+                upload = session.json()["uploadUrl"]
+                parsed = urlparse(upload)
+                if parsed.scheme != "https" or not parsed.hostname or not any(parsed.hostname.endswith(suffix) for suffix in (".office.com", ".outlook.com", ".office365.com", ".microsoft.com")):
+                    raise ValueError("Microsoft returned an unsafe attachment upload address")
+                chunk = 320 * 1024 * 10
+                for offset in range(0, len(raw), chunk):
+                    part = raw[offset:offset + chunk]
+                    result = http.put(upload, content=part, headers={"Content-Type": "application/octet-stream", "Content-Length": str(len(part)), "Content-Range": f"bytes {offset}-{offset + len(part) - 1}/{len(raw)}"})
+                    result.raise_for_status()
+                    final = offset + len(part) == len(raw)
+                    if result.status_code not in ({200, 201} if final else {200, 202}):
+                        raise ValueError("Microsoft did not confirm attachment upload")
+            sending = True
+            result = http.post(url + "/send", headers=headers)
+            result.raise_for_status()
+            if result.status_code != 202:
+                raise ValueError("Microsoft did not accept message")
+        except Exception:
+            # An uncertain send may already have succeeded: never delete or resend it.
+            if not sending:
+                try:
+                    http.delete(url, headers=headers)
+                except Exception:
+                    pass
+            raise

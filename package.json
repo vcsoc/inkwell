@@ -8,7 +8,7 @@
   "scripts": {
     "desktop": "electron .",
     "test:ui": "playwright test",
-    "test:desktop": "node tests/desktop-smoke.cjs && node tests/desktop-recovery.cjs && node --test tests/backend-supervisor.cjs tests/diagnostics.cjs tests/updates.cjs tests/calendar-reminders.cjs tests/calendar-files.cjs tests/os-shortcut.cjs tests/date-groups.cjs tests/attachment-open.cjs && node tests/calendar-open-native.cjs",
+    "test:desktop": "node tests/desktop-smoke.cjs && node tests/desktop-recovery.cjs && node --test tests/composer-quotes.cjs tests/backend-supervisor.cjs tests/diagnostics.cjs tests/updates.cjs tests/calendar-reminders.cjs tests/calendar-files.cjs tests/os-shortcut.cjs tests/date-groups.cjs tests/attachment-open.cjs && node tests/calendar-open-native.cjs",
     "build:linux": "node desktop/build-linux.mjs",
     "prepare:translation": "node desktop/local-llm.mjs",
     "test:translation": "node --test tests/translation-runtime.cjs",

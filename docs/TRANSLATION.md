@@ -15,6 +15,13 @@ Original/translated toggle history belongs to the current view/editor session. I
 
 The Linux x86_64 installer includes a checksum-pinned **llama.cpp CPU runtime**; no Ollama server, GPU or API key is required. On first use, a setup dialog explicitly offers a **2.5 GB** download of **Qwen3-4B-Instruct-2507 Q4_K_M** (Apache 2.0 weights, Unsloth quantization). You can also open **Settings → AI assistant → Local translation → Set up local translation**. Downloads show progress, are bounded and SHA-256 checked before installation, and never contain selected text.
 
+Downloaded weights are **files on disk**, not a resident model. Opening Inkwell,
+settings, status checks or the translation language menu does not read the weights
+or launch inference. Only an explicit translation request verifies/loads them.
+Each request owns a short-lived CPU process; it exits after translation (and is
+killed on timeout), releasing its model mappings. There is no warm-up or persistent
+translation-model server. Normal filesystem cache remains managed by the OS.
+
 After download, inference is offline, with no cloud fallback, HTTP model service, tools or shell execution. Only the selection and target language are passed to the local process, in a private temporary directory which is removed afterward. Inference does not inherit API keys or Inkwell secrets and uses four CPU threads at most. Your separate Ask Inkwell/cloud-provider settings are not used or changed.
 
 The model runs on the **Inkwell backend computer**. A paired browser/phone sends the selected text to that private backend, not to a model running on the phone. Internet is needed for the first weights download, not for later desktop translations.

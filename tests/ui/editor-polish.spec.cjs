@@ -165,7 +165,7 @@ test('internal calendar editor sits to the right when wide and preserves edits o
     fullPage: true,
   });
   await page.setViewportSize({ width: 700, height: 900 });
-  await expect(page.locator('#calendar-editor-layout > #workspace')).not.toBeVisible();
+  await expect(page.locator('#calendar-editor-layout > #workspace')).toBeVisible();
   await expect(page.getByLabel('Event title', { exact: true })).toHaveValue(title);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
   await page.setViewportSize({ width: 1600, height: 1000 });

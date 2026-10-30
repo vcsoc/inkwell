@@ -167,3 +167,31 @@ def test_html_translation_bridge_is_nonce_only_opaque_and_sender_code_is_removed
     assert client.get(f'/api/messages/{message}/html?translation=bad-token').status_code == 422
     normal = client.get(f'/api/messages/{message}/html')
     assert "script-src 'none'" in normal.headers['Content-Security-Policy'] and '<script' not in normal.text
+
+
+def test_startup_config_and_status_never_read_weights_or_start_inference(local_model, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from inkwell import app as application, ai
+    monkeypatch.setattr(store, "DATA", tmp_path / "workspace")
+    monkeypatch.setattr(application, "ACCESS_KEY", "")
+    weights = local_model / translation.MODEL_FILE
+    original_open = Path.open
+    def guarded_open(path, *args, **kwargs):
+        assert path != weights, "Idle/status requests must not read model weights"
+        return original_open(path, *args, **kwargs)
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Inference must require an explicit user request")
+    monkeypatch.setattr(Path, "open", guarded_open)
+    monkeypatch.setattr(translation.subprocess, "run", forbidden)
+    monkeypatch.setattr(translation, "download_model", forbidden)
+    monkeypatch.setattr(ai, "answer", forbidden)
+    with TestClient(application.app, base_url="http://localhost") as client:
+        client.get("/")
+        client.headers.update({"Origin":"http://localhost", "X-Inkwell":"1"})
+        assert client.put("/api/ai/config", json={"provider":"ollama", "model":"idle-model"}).status_code == 200
+        for _ in range(3):
+            assert client.get("/api/ai/config").status_code == 200
+            assert client.get("/api/ai/providers").status_code == 200
+            assert client.get("/api/translation").json()["ready"] is True
+        # An already-downloaded model is still only a file, not a running process.
+        assert client.post("/api/translation/install", json={"download":True}).json()["ready"] is True

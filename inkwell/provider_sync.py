@@ -213,6 +213,8 @@ def event_body(event, job):
         body["recurrence"] = {"pattern": pattern,
                               "range": {"type": "numbered", "startDate": start.date().isoformat(),
                                         "numberOfOccurrences": instances, "recurrenceTimeZone": zone}}
+    if job['kind'] == 'update' and event.get('notes_changed') == 0:
+        body.pop('body', None)
     if job["kind"] == "create":
         body["transactionId"] = f"inkwell-{job['account_id']}-{job['id']}"
     return body
@@ -257,8 +259,15 @@ def perform(job):
                            (provider_folders.mapping_key(account['id'], job['resource_id']),))
         return remote_id
     if job["resource_type"] == "event":
+        event_path = 'events'
+        if payload.get('calendar_id'):
+            with store.db() as db:
+                calendar = db.execute('SELECT remote_id FROM outlook_calendars WHERE id=? AND account_id=?', (payload['calendar_id'], job['account_id'])).fetchone()
+            if not calendar:
+                raise ValueError('Destination Outlook calendar is no longer connected')
+            event_path = 'calendars/' + quote(calendar[0], safe='') + '/events'
         if job["kind"] == "create":
-            result = graph(account, "POST", "events", payload=event_body(payload, job))
+            result = graph(account, "POST", event_path, payload=event_body(payload, job))
             if not result or not result.get("id"):
                 raise ValueError("Graph did not return the new calendar event ID")
             return result["id"]
@@ -267,10 +276,10 @@ def perform(job):
                 return remote
             if not remote:
                 raise ValueError("No provider calendar event ID; retry the earlier create first")
-            graph(account, "PATCH", "events/" + quote(remote, safe=""), payload=event_body(payload, job))
+            graph(account, "PATCH", event_path + '/' + quote(remote, safe=""), payload=event_body(payload, job))
             return remote
         if remote := payload.get("remote_id") or remote:
-            path = "events/" + quote(remote, safe="")
+            path = event_path + '/' + quote(remote, safe="")
             if graph(account, "GET", path + "?$select=id", missing_ok=True) is None:
                 if job["attempts"] < 4:
                     raise ProviderDelayed("Confirming missing calendar event before marking deletion complete")

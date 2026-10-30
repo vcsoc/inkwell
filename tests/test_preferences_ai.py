@@ -139,6 +139,8 @@ def test_provider_protocols(client, monkeypatch, provider):
             response = {"content": [{"type": "text", "text": "A suggestion"}]}
         elif provider == "gemini":
             response = {"candidates": [{"content": {"parts": [{"text": "A suggestion"}]}}]}
+        elif provider == "ollama":
+            response = {"message": {"content": "A suggestion"}, "done": True}
         else:
             response = {"choices": [{"message": {"content": "A suggestion"}}]}
         return httpx.Response(200, json=response)
@@ -162,6 +164,12 @@ def test_provider_protocols(client, monkeypatch, provider):
     elif provider == "gemini":
         assert request.url.path.endswith(":generateContent")
         assert request.headers["x-goog-api-key"] == "only-this-key"
+    elif provider == "ollama":
+        assert request.url.path == '/api/chat'
+        assert request.headers['authorization'] == 'Bearer only-this-key'
+        assert data['keep_alive'] == 0 and data['stream'] is False
+        assert data['options'] == {'num_predict': 1500}
+        assert len(captured) == 1
     else:
         assert request.url.path.endswith("/chat/completions")
         assert request.headers["authorization"] == "Bearer only-this-key"
@@ -228,3 +236,46 @@ def test_codex_absent_and_provider_errors_redacted(client, monkeypatch):
     monkeypatch.setattr(ai, "answer", fail)
     result = client.post("/api/ai/chat", json={"prompt": "Hi"})
     assert "Sensitive" not in result.text
+
+
+@pytest.mark.parametrize("base,path", [("http://127.0.0.1:11434/v1", "/api/chat"), ("http://localhost:11434", "/api/chat"), ("http://localhost:11434/api", "/api/chat"), ("https://models.example/ollama/v1", "/ollama/api/chat")])
+def test_ollama_uses_one_demand_only_request_without_warmup_or_unload_calls(monkeypatch, base, path):
+    requests = []
+    original = httpx.Client
+    def handle(request):
+        requests.append(request)
+        assert request.url.path == path
+        assert "authorization" not in request.headers
+        payload = json.loads(request.content)
+        assert payload["keep_alive"] == 0 and payload["stream"] is False
+        assert payload["messages"][-1]["content"].endswith("User request:\nHelp")
+        return httpx.Response(200, json={"message":{"content":"Answer"}, "done":True})
+    monkeypatch.setattr(ai.httpx, "Client", lambda **kwargs: original(transport=httpx.MockTransport(handle)))
+    assert ai.answer({"provider":"ollama", "endpoint":base, "model":"test-model", "instructions":""}, "", "Help", "") == "Answer"
+    assert len(requests) == 1
+
+
+@pytest.mark.parametrize("status,response", [(500, {"error":"private provider detail"}), (200, {"message":{"content":"partial"}, "done":False})])
+def test_ollama_failure_never_falls_back_to_a_resident_openai_request(client, monkeypatch, status, response):
+    assert client.put("/api/ai/config", json={"provider":"ollama", "model":"test-model"}).status_code == 200
+    requests = []
+    original = httpx.Client
+    def handle(request):
+        requests.append(request)
+        return httpx.Response(status, json=response)
+    monkeypatch.setattr(ai.httpx, "Client", lambda **kwargs: original(transport=httpx.MockTransport(handle)))
+    result = client.post("/api/ai/chat", json={"prompt":"Help"})
+    assert result.status_code == 502
+    assert "private provider detail" not in result.text
+    assert len(requests) == 1
+    assert requests[0].url.path == "/api/chat"
+    assert json.loads(requests[0].content)["keep_alive"] == 0
+
+
+@pytest.mark.parametrize("prompt", ["", "   ", "\n\t"])
+def test_empty_prompts_never_start_a_model(client, monkeypatch, prompt):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("An empty prompt must not load a model")
+    monkeypatch.setattr(ai, "answer", forbidden)
+    assert client.put("/api/ai/config", json={"provider":"ollama", "model":"idle-model"}).status_code == 200
+    assert client.post("/api/ai/chat", json={"prompt":prompt}).status_code == 422

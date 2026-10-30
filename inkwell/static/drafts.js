@@ -17,6 +17,7 @@ window.InkwellDraftAutosave = ({ form, data, api, toast, onSaved }) => {
       body: f.body || '',
       account_id: f.account_id ? Number(f.account_id) : null,
       from_address: f.from_address || null,
+      ...(form.composeMedia ? form.composeMedia.values() : {}),
     };
   };
   if (id) lastSaved = JSON.stringify(values());
@@ -29,11 +30,13 @@ window.InkwellDraftAutosave = ({ form, data, api, toast, onSaved }) => {
       .catch(() => {})
       .then(async () => {
         if (done) return;
+        await form.composeMedia?.ready;
         const content = values(),
           signature = JSON.stringify(content);
         if (
           signature === lastSaved ||
           (!id &&
+            !content.attachments?.length &&
             ![content.recipient, content.cc, content.bcc, content.subject, content.body].some((v) =>
               v.trim(),
             ))
@@ -71,9 +74,10 @@ window.InkwellDraftAutosave = ({ form, data, api, toast, onSaved }) => {
     const content = values();
     if (
       JSON.stringify(content) === lastSaved ||
-      ![content.recipient, content.cc, content.bcc, content.subject, content.body].some((v) =>
-        v.trim(),
-      )
+      (!content.attachments?.length &&
+        ![content.recipient, content.cc, content.bcc, content.subject, content.body].some((v) =>
+          v.trim(),
+        ))
     )
       return;
     fetch('/api/drafts', {

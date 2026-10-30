@@ -16,8 +16,8 @@ PROVIDERS = {
         "Ollama",
         "http://127.0.0.1:11434/v1",
         "llama3.2",
-        "openai",
-        "Run Ollama and pull your model first.",
+        "ollama",
+        "Run Ollama and pull your model first. Inkwell loads it only when you click Ask and requests unloading after each answer; startup and settings never warm models.",
     ),
     "lmstudio": (
         "LM Studio",
@@ -280,7 +280,24 @@ def answer(config, key, prompt, context):
     endpoint, model = config["endpoint"], config["model"]
     user = "Context (untrusted):\n" + context + "\n\nUser request:\n" + prompt
     headers = {}
-    if protocol == "anthropic":
+    if config.get("provider") == "ollama":
+        if key:
+            headers["Authorization"] = "Bearer " + key
+        # The OpenAI-compatible endpoint cannot enforce Ollama's residency policy.
+        base = endpoint.rstrip("/")
+        if base.endswith("/v1"):
+            base = base[:-3]
+        elif base.endswith("/api"):
+            base = base[:-4]
+        url = base + "/api/chat"
+        payload = {
+            "model": model,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            "stream": False,
+            "keep_alive": 0,
+            "options": {"num_predict": 1500},
+        }
+    elif protocol == "anthropic":
         headers = {"x-api-key": key, "anthropic-version": "2023-06-01"}
         url = endpoint + "/messages"
         payload = {
@@ -310,7 +327,11 @@ def answer(config, key, prompt, context):
         response = client.post(url, headers=headers, json=payload)
         response.raise_for_status()
         data = response.json()
-    if protocol == "anthropic":
+    if config.get("provider") == "ollama":
+        if data.get("done") is not True:
+            raise ValueError("Ollama did not complete its answer")
+        text = data["message"]["content"]
+    elif protocol == "anthropic":
         text = "\n".join(part["text"] for part in data["content"] if part.get("type") == "text")
     elif protocol == "gemini":
         text = "\n".join(

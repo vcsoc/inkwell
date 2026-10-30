@@ -148,7 +148,7 @@ def sync_account(account):
     return count
 
 
-def send_mail(account, recipient, subject, body, cc="", bcc=""):
+def send_mail(account, recipient, subject, body, cc="", bcc="", *, html_body=None, attachments=()):
     message = EmailMessage()
     message["From"] = account["email"]
     if recipient:
@@ -162,6 +162,8 @@ def send_mail(account, recipient, subject, body, cc="", bcc=""):
     # Avoid getfqdn() / reverse-DNS delays on desktop hosts without DNS records.
     message["Message-ID"] = make_msgid(domain=account["email"].rsplit("@", 1)[-1])
     message.set_content(body)
+    from . import outgoing
+    outgoing.add_mime(message, html_body, attachments)
     context = ssl.create_default_context()
     if account["smtp_security"] == "tls":
         client = smtplib.SMTP_SSL(

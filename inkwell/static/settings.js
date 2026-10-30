@@ -38,6 +38,12 @@ window.InkwellSettings = (() => {
       description: 'Choose when new mail sounds and select a notification sound.',
     },
     {
+      id: 'analysis',
+      name: 'Mail analysis',
+      icon: '◇',
+      description: 'Local Laya tagging, background queue and suggestion review.',
+    },
+    {
       id: 'assistant',
       name: 'AI assistant',
       icon: '✦',
@@ -93,6 +99,10 @@ window.InkwellSettings = (() => {
           return navigate(link.dataset.category);
         }),
       );
+      return;
+    }
+    if (page === 'analysis') {
+      await InkwellMailAnalysis.mount(content, deps);
       return;
     }
     if (page === 'shortcuts') {

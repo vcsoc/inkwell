@@ -238,12 +238,12 @@ function modal(title, html, { calendar = false } = {}) {
         wrapper.append($('#workspace'), dialog);
       } else $('main').insertBefore(dialog, $('#workspace'));
       dialog.show();
-      dialog.scrollIntoView({ block: 'start' });
+      if (!calendar) dialog.scrollIntoView({ block: 'start' });
     } else {
       dialog.showModal();
     }
   }
-  $('input, select, textarea, button', $('#modal-body'))?.focus();
+  $('input, select, textarea, button', $('#modal-body'))?.focus({ preventScroll: calendar });
 }
 $('#modal').addEventListener('close', () => {
   if ($('#modal').open) return;
@@ -1332,31 +1332,8 @@ async function messageAction(action, id) {
     return result;
   };
   if (action === 'reply')
-    return compose({
-      account_id: m.account_id,
-      recipient: address,
-      subject: /^re:/i.test(m.subject) ? m.subject : 'Re: ' + m.subject,
-      body:
-        '\n\n' +
-        m.sender +
-        ' wrote:\n' +
-        m.body
-          .split('\n')
-          .map((line) => '> ' + line)
-          .join('\n'),
-    });
-  if (action === 'forward')
-    return compose({
-      account_id: m.account_id,
-      subject: 'Fwd: ' + m.subject,
-      body:
-        '\n\n---------- Forwarded message ----------\nFrom: ' +
-        m.sender +
-        '\nSubject: ' +
-        m.subject +
-        '\n\n' +
-        m.body,
-    });
+    return compose({ ...InkwellComposeQuote(m, 'reply'), recipient: address });
+  if (action === 'forward') return compose(InkwellComposeQuote(m, 'forward'));
   if (action === 'write') return compose({ account_id: m.account_id, recipient: address });
   if (action === 'contact') return contactForm({ name: displayName(m.sender), email: address });
   if (action === 'copy') {
@@ -1655,36 +1632,8 @@ function renderReader() {
       toast(InkwellProviderChangeNotice(result));
     } else await change({ folder: 'trash' });
   });
-  on($('#reply'), 'click', () =>
-    compose({
-      account_id: m.account_id,
-      recipient: m.sender.match(/<([^>]+)>/)?.[1] || m.sender,
-      subject: /^re:/i.test(m.subject) ? m.subject : 'Re: ' + m.subject,
-      body:
-        '\n\nOn ' +
-        new Date(m.date).toLocaleString() +
-        ', ' +
-        m.sender +
-        ' wrote:\n' +
-        m.body
-          .split('\n')
-          .map((l) => '> ' + l)
-          .join('\n'),
-    }),
-  );
-  on($('#forward'), 'click', () =>
-    compose({
-      account_id: m.account_id,
-      subject: 'Fwd: ' + m.subject,
-      body:
-        '\n\n---------- Forwarded message ----------\nFrom: ' +
-        m.sender +
-        '\nSubject: ' +
-        m.subject +
-        '\n\n' +
-        m.body,
-    }),
-  );
+  on($('#reply'), 'click', () => compose(InkwellComposeQuote(m, 'reply')));
+  on($('#forward'), 'click', () => compose(InkwellComposeQuote(m, 'forward')));
 }
 let notJunkPolling = false;
 const notifications = InkwellMailNotifications({
@@ -1872,6 +1821,10 @@ async function renderSettings() {
     loadDemo,
     notifications,
     navigate: (section) => navigate(section === 'overview' ? 'settings' : 'settings/' + section),
+    openMail: async (id) => {
+      await navigate('inbox');
+      await openMessage(id);
+    },
     isCurrent: () =>
       state.generation === generation && state.view === 'settings' && state.settingsPage === page,
     accountsChanged: (accounts) => {
@@ -2135,7 +2088,7 @@ on($('#rule-manager-link'), 'click', () => navigate('rules'));
 on($('#menu'), 'click', () => $('#sidebar').classList.toggle('open'));
 on($('#close-modal'), 'click', requestModalClose);
 on($('#modal'), 'click', async (event) => {
-  if (!$('#modal').matches(':modal')) return;
+  if (event.target !== event.currentTarget || !$('#modal').matches(':modal')) return;
   const box = $('#modal').getBoundingClientRect();
   if (
     event.clientX >= box.left &&
@@ -2171,6 +2124,7 @@ document.addEventListener(
   true,
 );
 $('#modal').addEventListener('cancel', (e) => {
+  if (e.target !== e.currentTarget) return;
   e.preventDefault();
   requestModalClose();
 });

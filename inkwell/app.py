@@ -20,6 +20,8 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .background_sync import BackgroundSync
 from . import (
+    outgoing,
+    mail_analysis,
     sending_identities,
     app_info,
     not_junk,
@@ -43,6 +45,7 @@ from . import (
     calendar_import,
     meeting_suggestions,
     calendar_reminders,
+    outlook_calendars,
     attachments,
     documents,
     provider_sync,
@@ -58,6 +61,7 @@ if EXTRA_HOSTS and not ACCESS_KEY:
     raise RuntimeError("Remote access requires INKWELL_ACCESS_KEY")
 TOKEN = secrets.token_urlsafe(32)
 SYNC_LOCK = threading.Lock()
+
 BACKGROUND_SYNC = BackgroundSync(SYNC_LOCK)
 PROVIDER_SYNC = provider_sync.ProviderWorker()
 LOGIN_LOCK = threading.Lock()
@@ -67,10 +71,14 @@ LOGIN_ATTEMPTS = []
 @asynccontextmanager
 async def lifespan(app):
     store.init()
+    mail_analysis.WORKER.start()
     PROVIDER_SYNC.start()
+    outlook_calendars.WORKER.start()
     try:
         yield
     finally:
+        mail_analysis.WORKER.stop()
+        outlook_calendars.WORKER.stop()
         PROVIDER_SYNC.stop()
         BACKGROUND_SYNC.stop()
 
@@ -89,6 +97,7 @@ app.include_router(email_export.router)
 app.include_router(rules.router)
 app.include_router(message_moves.router)
 app.include_router(tag_store.router)
+app.include_router(mail_analysis.router)
 app.include_router(addresses.router)
 app.include_router(not_junk.router)
 app.include_router(sending_identities.router)
@@ -266,7 +275,8 @@ def delete_account(account_id: int):
         conn.execute("""UPDATE provider_jobs SET state='cancelled',
             error='Account disconnected before provider confirmation'
             WHERE account_id=? AND state!='done'""", (account_id,))
-        conn.execute("UPDATE events SET provider_account_id=NULL,provider_event_id=NULL WHERE provider_account_id=?", (account_id,))
+        conn.execute("UPDATE events SET provider_account_id=NULL,provider_event_id=NULL,provider_calendar_id=NULL WHERE provider_account_id=?", (account_id,))
+        conn.execute('DELETE FROM outlook_calendars WHERE account_id=?', (account_id,))
         selected = conn.execute("SELECT value FROM settings WHERE key='provider_sync_account'").fetchone()
         if selected and selected[0] == str(account_id):
             conn.execute("DELETE FROM settings WHERE key='provider_sync_account'")
@@ -543,6 +553,8 @@ def message(message_id: int):
         AS sent_by_me FROM messages m WHERE m.id=?""", (message_id,))
     if not result:
         raise HTTPException(404, "Message not found")
+    if result[0]["folder"] == "drafts":
+        result[0]["compose_attachments"] = outgoing.load(message_id)
     return result[0]
 
 
@@ -634,6 +646,14 @@ class Compose(BaseModel):
     bcc: str = Field(default="", max_length=8192)
     subject: str = Field(default="", max_length=998, pattern=r"^[^\r\n]*$")
     body: str = Field(default="", max_length=500_000)
+    html_body: str | None = Field(default=None, max_length=1_000_000)
+    attachments: list[outgoing.Attachment] = Field(default_factory=list, max_length=50)
+
+    @model_validator(mode="after")
+    def validate_content(self):
+        self.html_body = outgoing.prepare(self.html_body, self.attachments)
+        return self
+
     draft_id: int | None = None
     draft_key: str | None = Field(default=None, pattern=r"^[a-f0-9-]{36}$")
     draft_revision: int | None = Field(default=None, ge=0)
@@ -658,6 +678,7 @@ def save_composed(data, folder, sender, demo=False):
                 data.bcc,
             ),
         )
+        outgoing.save(conn, cursor.lastrowid, data)
         addresses.remember(conn, sender, data.recipient, data.cc, data.bcc)
         if data.draft_id:
             conn.execute(
@@ -710,6 +731,7 @@ def save_draft(data: Compose):
                     row["id"],
                 ),
             )
+            outgoing.save(conn, row["id"], data)
             return {"id": row["id"], "draft_revision": row["draft_revision"] + 1}
         cursor = conn.execute(
             "INSERT INTO messages(account_id,folder,sender,recipient,subject,body,date,unread,draft_key,draft_revision,cc,bcc) VALUES (?,'drafts',?,?,?,?,?,0,?,1,?,?)",
@@ -725,6 +747,7 @@ def save_draft(data: Compose):
                 data.bcc,
             ),
         )
+        outgoing.save(conn, cursor.lastrowid, data)
         return {"id": cursor.lastrowid, "draft_revision": 1}
 
 
@@ -769,7 +792,9 @@ def send_once(data: Compose):
         transport_account["email"] = chosen_from
     try:
         transport = microsoft if account["provider"] == "microsoft" else mail
-        if data.cc or data.bcc:
+        if data.html_body is not None or data.attachments:
+            transport.send_mail(transport_account, data.recipient, data.subject, data.body, cc=data.cc, bcc=data.bcc, html_body=data.html_body, attachments=data.attachments)
+        elif data.cc or data.bcc:
             transport.send_mail(
                 transport_account, data.recipient, data.subject, data.body, cc=data.cc, bcc=data.bcc
             )
@@ -786,6 +811,7 @@ def send_once(data: Compose):
 
 
 class Event(calendar_tools.CalendarFields):
+    calendar_id: int | None = Field(default=None, gt=0)
     title: str = Field(min_length=1, max_length=200)
     start: datetime
     end: datetime
@@ -813,7 +839,10 @@ class Event(calendar_tools.CalendarFields):
 
 @app.get("/api/events")
 def events():
-    return rows("SELECT * FROM events ORDER BY start")
+    return rows('''SELECT e.*,c.name AS calendar_name,c.can_edit AS calendar_can_edit
+        FROM events e LEFT JOIN outlook_calendars c ON c.id=e.provider_calendar_id
+        WHERE e.provider_calendar_id IS NULL OR (c.removed=0 AND c.selected=1)
+        ORDER BY e.start''')
 
 
 @app.get("/api/events/occurrences")
@@ -842,9 +871,10 @@ def event_values(data):
 @app.post("/api/events")
 def add_event(data: Event):
     with store.db() as conn:
+        target = outlook_calendars.write_target(conn, data.calendar_id) if data.calendar_id else None
         c = conn.execute(
-            "INSERT INTO events(title,start,end,location,notes,all_day,timezone,recurrence) VALUES (?,?,?,?,?,?,?,?)",
-            event_values(data),
+            'INSERT INTO events(title,start,end,location,notes,all_day,timezone,recurrence,provider_account_id,provider_calendar_id) VALUES (?,?,?,?,?,?,?,?,?,?)',
+            (*event_values(data), target['account_id'] if target else None, data.calendar_id),
         )
         return {"id": c.lastrowid}
 
@@ -852,18 +882,27 @@ def add_event(data: Event):
 @app.put("/api/events/{event_id}")
 def update_event(event_id: int, data: Event):
     with store.db() as conn:
-        require_change(
-            conn.execute(
-                "UPDATE events SET title=?,start=?,end=?,location=?,notes=?,all_day=?,timezone=?,recurrence=? WHERE id=?",
-                (*event_values(data), event_id),
-            )
-        )
-    return {"ok": True}
+        existing = conn.execute('SELECT * FROM events WHERE id=?', (event_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, 'Event not found')
+        calendar_id = existing['provider_calendar_id'] or data.calendar_id
+        if existing['provider_calendar_id'] and data.calendar_id not in (None, calendar_id):
+            raise HTTPException(409, 'Moving existing events between calendars is not supported. No change was made.')
+        target = outlook_calendars.write_target(conn, calendar_id) if calendar_id else None
+        if existing['provider_event_id'] and data.recurrence.frequency != 'none':
+            raise HTTPException(422, 'This downloaded event is an occurrence. Edit its dates, not its recurrence series.')
+        require_change(conn.execute(
+            'UPDATE events SET title=?,start=?,end=?,location=?,notes=?,all_day=?,timezone=?,recurrence=?,provider_account_id=?,provider_calendar_id=? WHERE id=?',
+            (*event_values(data), target['account_id'] if target else existing['provider_account_id'], calendar_id, event_id)))
+    return {'ok': True}
 
 
 @app.delete("/api/events/{event_id}")
 def delete_event(event_id: int):
     with store.db() as conn:
+        existing = conn.execute('SELECT provider_calendar_id FROM events WHERE id=?', (event_id,)).fetchone()
+        if existing and existing[0]:
+            outlook_calendars.write_target(conn, existing[0])
         require_change(conn.execute("DELETE FROM events WHERE id=?", (event_id,)))
         conn.execute(
             "DELETE FROM settings WHERE (key LIKE 'calendar-import:%' OR key LIKE 'calendar-reminder:%') AND json_extract(value,'$.event_id')=?",
@@ -875,6 +914,7 @@ def delete_event(event_id: int):
 app.include_router(calendar_import.router(Event, event_values))
 app.include_router(meeting_suggestions.router_for(Event, event_values))
 app.include_router(calendar_reminders.router)
+app.include_router(outlook_calendars.router)
 app.include_router(attachments.router)
 
 
@@ -1097,6 +1137,13 @@ def clear_ai_config():
 class AIRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=10000)
     context: str = Field(default="", max_length=30000)
+
+    @field_validator('prompt')
+    @classmethod
+    def nonempty_prompt(cls, value):
+        if not value.strip():
+            raise ValueError('Enter a request before asking the assistant.')
+        return value
 
 
 @app.post("/api/ai/chat")

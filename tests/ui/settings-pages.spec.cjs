@@ -9,6 +9,7 @@ const pages = [
   ['notifications', 'Notifications', '#settings-notifications'],
   ['about', 'About', '#settings-about'],
   ['assistant', 'AI assistant', '#ai-settings'],
+  ['analysis', 'Mail analysis', '.analysis-settings'],
   ['privacy', 'Privacy & data', '#privacy-card'],
 ];
 

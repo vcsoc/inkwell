@@ -132,6 +132,33 @@ test.afterEach(async ({ page }) => {
     fs.rmSync(path.join(process.env.INKWELL_UI_DATA, 'Documents', file), { force: true });
   if (original) await api(page, '/preferences', 'PUT', original);
 });
+test('startup, assistant settings and translation menus never warm a model', async ({ page }) => {
+  let assistantCalls = 0;
+  await page.route('**/api/ai/chat', (route) => {
+    assistantCalls++;
+    return route.fulfill({ json: { answer: 'Unexpected inference' } });
+  });
+  await page.reload();
+  await expect(page.locator('#heading-compose')).toBeVisible();
+  await page.goto('/#/settings/assistant');
+  await expect(page.locator('#settings-local-translation')).toContainText('available on disk');
+  await page.locator('#ai-provider-select').selectOption('ollama');
+  await expect(page.locator('#ai-provider-help')).toContainText('only when you click Ask');
+  expect(assistantCalls).toBe(0);
+  expect(calls).toEqual([]);
+  await createMail(page);
+  const body = page.locator('#reader .message-body');
+  await selectText(body);
+  await page.getByRole('menuitem', { name: 'Translate ▸', exact: true }).click();
+  const languages = page.getByRole('menu', { name: 'Translation languages' });
+  await expect(languages).toBeVisible();
+  expect(calls).toEqual([]);
+  await languages.getByRole('menuitem', { name: 'French', exact: true }).click();
+  await expect(body).toContainText(translated);
+  expect(calls).toHaveLength(1);
+  expect(assistantCalls).toBe(0);
+});
+
 test('received text translates only the selection inline and toggles without changing cached mail', async ({
   page,
 }) => {
