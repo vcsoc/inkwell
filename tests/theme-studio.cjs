@@ -24,9 +24,13 @@ const path = require('node:path');
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.addInitScript(() => {
+      let contacts = [];
       window.__TAURI__ = { core: { invoke: async (name, args) => {
+        if (name === 'contacts') return contacts;
+        if (name === 'save_contact') { contacts = [{ id: 1, ...args.fields }]; return 1; }
+        if (name === 'delete_contact') { contacts = []; return; }
         if (name === 'folders') return [{ key: 'inbox', label: 'Inbox' }];
-        if (name === 'messages') return { rows: [], more: false };
+        if (name === 'messages') { window.searchFixture = args; return { rows: [], more: false }; };
         if (name === 'export_theme') { window.exportFixture = args; return true; }
         return [];
       } } };
@@ -68,8 +72,27 @@ const path = require('node:path');
     await page.setViewportSize({ width: 390, height: 740 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
     if (process.env.THEME_SCREENSHOT) await page.screenshot({ path: process.env.THEME_SCREENSHOT });
+    await page.setViewportSize({ width: 1280, height: 850 });
+    await button('Contacts').click();
+    await button('New contact').click();
+    await page.getByLabel('Name', { exact: true }).fill('Fixture Contact');
+    await page.getByLabel('Email', { exact: true }).fill('contact@example.test');
+    await button('Save contact').click();
+    await page.getByText('Fixture Contact', { exact: true }).waitFor();
+    await button('Edit').click();
+    await page.getByLabel('Notes', { exact: true }).fill('Fixture note');
+    await button('Save contact').click();
+    await page.getByText('Fixture note', { exact: true }).waitFor();
+    page.once('dialog', (dialog) => dialog.accept());
+    await button('Delete').click();
+    await page.getByText('Fixture Contact', { exact: true }).waitFor({ state: 'detached' });
+    await button('Mail').click();
+    await page.getByLabel('Search mail', { exact: true }).fill('tag:work');
+    await page.getByLabel('Search scope', { exact: true }).selectOption('subfolders');
+    await button('Search').click();
+    await page.waitForFunction(() => window.searchFixture?.search === 'tag:work' && window.searchFixture.scope === 'subfolders');
     assert.deepEqual(errors, []);
-    console.log('Theme Studio smoke passed: exact default/dark tokens, preview/revert, legacy YAML, save/relaunch, export payload, library, narrow viewport.');
+    console.log('Theme Studio smoke passed: exact default/dark tokens, preview/revert, legacy YAML, save/relaunch, export payload, library, narrow viewport, contact editing, and search scope.');
   } finally {
     await browser?.close();
     server.close();

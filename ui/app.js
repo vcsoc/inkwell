@@ -1,6 +1,6 @@
 'use strict';
 const $ = (id) => document.getElementById(id);
-const state = { view: 'mail', folder: 'inbox', folders: [], search: '', offset: 0, list: 0, reader: 0, navigation: 0 };
+const state = { view: 'mail', folder: 'inbox', folders: [], search: '', scope: 'folder', offset: 0, list: 0, reader: 0, navigation: 0 };
 const pageSize = 50;
 const invoke = (command, args) => window.__TAURI__.core.invoke(command, args);
 
@@ -41,7 +41,9 @@ function select(view, folder) {
   if (folder) state.folder = folder;
   state.offset = 0;
   state.search = '';
+  state.scope = 'folder';
   $('search').value = '';
+  $('search-scope').value = 'folder';
   folders();
   for (const button of $('sections').querySelectorAll('button')) {
     button.setAttribute('aria-pressed', String(button.dataset.view === view));
@@ -91,7 +93,7 @@ function formatDate(value) {
 }
 async function load() {
   const ticket = ++state.list;
-  const { view, folder, search, offset } = state;
+  const { view, folder, search, offset, scope } = state;
   if (view === 'theme') {
     $('title').textContent = 'Theme Studio';
     $('search-form').hidden = true;
@@ -107,12 +109,13 @@ async function load() {
   $('rows').replaceChildren();
   $('pages').hidden = true;
   try {
-    const result = await (view === 'mail' ? invoke('messages', { folder, search, offset }) : invoke(view === 'calendar' ? 'events' : 'contacts'));
+    const result = await (view === 'mail' ? invoke('messages', { folder, search, offset, scope }) : invoke(view === 'calendar' ? 'events' : 'contacts'));
     if (ticket !== state.list) return;
     const rows = view === 'mail' ? result.rows.map(mailRow) : view === 'calendar'
       ? result.map((row) => item(row.title, [formatDate(row.start), row.location].filter(Boolean).join(' | ')))
-      : result.map((row) => item(row.name, [row.email, row.company].filter(Boolean).join(' | ')));
-    $('rows').replaceChildren(...rows);
+      : result.map(contactRow);
+    if (view === 'contacts') $('rows').replaceChildren(action('New contact', () => openContact()), ...rows);
+    else $('rows').replaceChildren(...rows);
     $('status').textContent = rows.length ? '' : 'Nothing to show here.';
     if (view === 'mail') {
       $('pages').hidden = !(offset || result.more);
@@ -142,11 +145,56 @@ async function openMessage(id, row) {
     if (ticket === state.reader) $('reader').replaceChildren(back, element('p', errorMessage(error), 'placeholder'));
   }
 }
+function action(label, activate) {
+  const button = element('button', label);
+  button.type = 'button';
+  button.onclick = activate;
+  return button;
+}
+const contactDialog = $('contact-dialog');
+const contactForm = $('contact-form');
+let contact = null;
+let contactBusy = false;
+function openContact(row = null) {
+  contact = row;
+  $('contact-title').textContent = row ? 'Edit contact' : 'New contact';
+  $('contact-status').textContent = '';
+  for (const field of ['name', 'email', 'company', 'notes']) contactForm.elements[field].value = row?.[field] || '';
+  contactDialog.showModal();
+}
+function contactRow(row) {
+  const result = item(row.name, [row.email, row.company].filter(Boolean).join(' | '));
+  if (row.notes) result.append(element('p', row.notes, 'contact-notes'));
+  const controls = element('div', null, 'theme-actions');
+  controls.append(action('Edit', () => openContact(row)), action('Delete', async () => {
+    if (!window.confirm(`Delete ${row.name} from Contacts?`)) return;
+    try { await invoke('delete_contact', { id: row.id, prior: row }); if (state.view === 'contacts') await load(); }
+    catch (error) { if (state.view === 'contacts') $('status').textContent = errorMessage(error); }
+  }));
+  result.append(controls);
+  return result;
+}
+$('cancel-contact').onclick = () => { if (!contactBusy) contactDialog.close(); };
+contactDialog.addEventListener('cancel', (event) => { if (contactBusy) event.preventDefault(); });
+contactForm.onsubmit = async (event) => {
+  event.preventDefault();
+  if (contactBusy) return;
+  contactBusy = true;
+  const buttons = [...contactForm.querySelectorAll('button')];
+  for (const button of buttons) button.disabled = true;
+  try {
+    await invoke('save_contact', { id: contact?.id ?? null, prior: contact, fields: Object.fromEntries(new FormData(contactForm)) });
+    contactDialog.close();
+    if (state.view === 'contacts') await load();
+  } catch (error) { $('contact-status').textContent = errorMessage(error); }
+  finally { contactBusy = false; for (const button of buttons) button.disabled = false; }
+};
 for (const button of $('sections').querySelectorAll('button')) button.onclick = () => select(button.dataset.view);
 $('refresh').onclick = () => { if (state.view !== 'theme') void refresh(); };
 $('search-form').onsubmit = (event) => {
   event.preventDefault();
   state.search = $('search').value;
+  state.scope = $('search-scope').value;
   state.offset = 0;
   clearReader();
   void load();

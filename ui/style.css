@@ -40,7 +40,9 @@ nav .section-label { margin-top: 12px; overflow-wrap: anywhere; }
 h1, h2 { font-family: var(--heading-font, inherit); font-weight: 600; letter-spacing: -.03em; }
 h1 { margin: 0 0 8px; font-size: 24px; }
 h2 { margin: 8px 0; font-size: 16px; }
-#search-form { display: flex; gap: 4px; }
+#search-form { display: flex; flex-wrap: wrap; gap: 4px; }
+#search-form select { max-width: 100%; }
+#search-form #search { flex: 1 1 140px; }
 #search-form button { flex-shrink: 0; white-space: nowrap; }
 #search { min-width: 0; width: 100%; }
 #status, .placeholder, .metadata, .date, .record p, .theme-ratios { color: var(--muted-foreground); }
@@ -55,6 +57,11 @@ h2 { margin: 8px 0; font-size: 16px; }
 #reader h2 { font-size: 24px; }
 .message-body { white-space: pre-wrap; line-height: 1.6; margin-top: var(--gap); }
 .record { border-bottom: 1px solid var(--border); padding-block: var(--row-pad); }
+.contact-notes { white-space: pre-wrap; }
+#contact-dialog { width: min(420px, calc(100vw - 24px)); background: var(--card); color: var(--foreground); border: 1px solid var(--border); border-radius: var(--radius); }
+#contact-dialog::backdrop { background: #0006; }
+#contact-form, #contact-form label { display: grid; gap: 8px; }
+#contact-form textarea { background: var(--background); color: inherit; font: inherit; padding: 8px; border: 1px solid var(--input); border-radius: var(--radius); }
 body:not([data-view='mail'])[data-view] #reader, .back { display: none; }
 body:not([data-view='mail'])[data-view] #index { grid-column: 2 / -1; }
 .theme-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

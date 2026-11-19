@@ -1,7 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use inkwell_tauri::{
-    Contact, Event, Folder, Message, MessagePage, StoreError, Workspace, workspace_database,
+    Event, Folder, Message, MessagePage, StoreError, Workspace,
+    contacts::{Contact, ContactFields},
+    workspace_database,
 };
 
 async fn read<T: Send + 'static>(
@@ -21,8 +23,17 @@ async fn folders() -> Result<Vec<Folder>, String> {
     read(Workspace::folders).await
 }
 #[tauri::command]
-async fn messages(folder: String, search: String, offset: u32) -> Result<MessagePage, String> {
-    read(move |workspace| workspace.messages(&folder, &search, offset)).await
+async fn messages(
+    folder: String,
+    search: String,
+    offset: u32,
+    scope: Option<String>,
+) -> Result<MessagePage, String> {
+    let scope = scope.unwrap_or_else(|| "folder".into());
+    if !matches!(scope.as_str(), "folder" | "subfolders" | "all") {
+        return Err("Unknown search scope.".into());
+    }
+    read(move |workspace| workspace.scoped_messages(&folder, &search, offset, &scope)).await
 }
 #[tauri::command]
 async fn message(id: i64) -> Result<Message, String> {
@@ -31,6 +42,29 @@ async fn message(id: i64) -> Result<Message, String> {
 #[tauri::command]
 async fn contacts() -> Result<Vec<Contact>, String> {
     read(Workspace::contacts).await
+}
+async fn contact_write<T: Send + 'static>(
+    operation: impl FnOnce(&mut Workspace) -> Result<T, StoreError> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = workspace_database().ok_or(StoreError::Missing)?;
+        operation(&mut Workspace::open_for_contacts(&path)?)
+    })
+    .await
+    .map_err(|_| "Could not start the contact update.".to_owned())?
+    .map_err(|error| error.to_string())
+}
+#[tauri::command]
+async fn save_contact(
+    id: Option<i64>,
+    prior: Option<ContactFields>,
+    fields: ContactFields,
+) -> Result<i64, String> {
+    contact_write(move |workspace| workspace.save_contact(id, prior, fields)).await
+}
+#[tauri::command]
+async fn delete_contact(id: i64, prior: ContactFields) -> Result<(), String> {
+    contact_write(move |workspace| workspace.delete_contact(id, prior)).await
 }
 #[tauri::command]
 async fn events() -> Result<Vec<Event>, String> {
@@ -89,6 +123,8 @@ fn main() {
             messages,
             message,
             contacts,
+            save_contact,
+            delete_contact,
             events,
             export_theme
         ])

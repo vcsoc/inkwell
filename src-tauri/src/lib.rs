@@ -1,10 +1,12 @@
-use rusqlite::{Connection, OpenFlags, Result, Row, params};
+use rusqlite::{Connection, OpenFlags, Result, Row, params_from_iter, types::Value};
 use serde::Serialize;
 use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
 
+pub mod contacts;
+mod search;
 pub mod vault;
 
 pub const SCHEMA: i64 = 22;
@@ -14,6 +16,8 @@ pub const PAGE_SIZE: u32 = 50;
 pub enum StoreError {
     Missing,
     Unsupported(i64),
+    Invalid(&'static str),
+    Conflict,
     Query(rusqlite::Error),
 }
 impl From<rusqlite::Error> for StoreError {
@@ -40,7 +44,11 @@ impl std::fmt::Display for StoreError {
             {
                 write!(f, "The workspace is busy. Try again shortly.")
             }
-            Self::Query(_) => write!(f, "Could not read the workspace. No data was modified."),
+            Self::Invalid(error) => f.write_str(error),
+            Self::Conflict => {
+                f.write_str("This contact changed elsewhere. Refresh before editing it again.")
+            }
+            Self::Query(_) => f.write_str("Could not complete the workspace operation."),
         }
     }
 }
@@ -84,12 +92,6 @@ pub struct Message {
     pub body: String,
 }
 #[derive(Serialize)]
-pub struct Contact {
-    pub name: String,
-    pub email: String,
-    pub company: String,
-}
-#[derive(Serialize)]
 pub struct Event {
     pub title: String,
     pub start: String,
@@ -99,21 +101,35 @@ pub struct Event {
 
 impl Workspace {
     pub fn open(path: &Path) -> std::result::Result<Self, StoreError> {
+        Self::connect(path, false)
+    }
+
+    pub fn open_for_contacts(path: &Path) -> std::result::Result<Self, StoreError> {
+        Self::connect(path, true)
+    }
+
+    fn connect(path: &Path, write: bool) -> std::result::Result<Self, StoreError> {
         if !path.is_file() {
             return Err(StoreError::Missing);
         }
         // Do not use immutable=1: it can ignore changes in an existing SQLite WAL.
         let connection = Connection::open_with_flags(
             path,
-            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+            (if write {
+                OpenFlags::SQLITE_OPEN_READ_WRITE
+            } else {
+                OpenFlags::SQLITE_OPEN_READ_ONLY
+            }) | OpenFlags::SQLITE_OPEN_NO_MUTEX,
         )?;
         connection.busy_timeout(Duration::from_secs(4))?;
-        connection.pragma_update(None, "query_only", true)?;
+        connection.pragma_update(None, "query_only", !write)?;
+        connection.pragma_update(None, "foreign_keys", true)?;
         connection.pragma_update(None, "trusted_schema", false)?;
         let version = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
         if version != SCHEMA {
             return Err(StoreError::Unsupported(version));
         }
+        search::register(&connection)?;
         Ok(Self(connection))
     }
 
@@ -139,17 +155,21 @@ impl Workspace {
     }
 
     pub fn messages(&self, folder: &str, search: &str, offset: u32) -> Result<MessagePage> {
-        let search: String = search.trim().chars().take(250).collect();
-        let pattern = format!(
-            "%{}%",
-            search
-                .replace('\\', "\\\\")
-                .replace('%', "\\%")
-                .replace('_', "\\_")
-        );
+        self.scoped_messages(folder, search, offset, "folder")
+    }
+
+    pub fn scoped_messages(
+        &self,
+        folder: &str,
+        search: &str,
+        offset: u32,
+        scope: &str,
+    ) -> Result<MessagePage> {
+        let mut bindings: Vec<Value> = Vec::new();
+        let mut cte = "";
         let destination =
             "CASE WHEN local_folder_override=1 THEN local_destination_id ELSE remote_folder_id END";
-        let (clause, value) = match folder {
+        let (mut clause, value) = match folder {
             "starred" => ("starred=1 AND folder!='trash'".into(), None),
             "archive" | "sent" => {
                 let role = if folder == "archive" {
@@ -165,22 +185,59 @@ impl Workspace {
                 )
             }
             _ if folder.starts_with("remote:") => (
-                format!("{destination}=CAST(?4 AS INTEGER) AND folder IN ('inbox','remote')"),
-                Some(&folder[7..]),
+                format!("{destination}=? AND folder IN ('inbox','remote')"),
+                Some(
+                    folder[7..]
+                        .parse::<i64>()
+                        .ok()
+                        .map_or(Value::Null, Into::into),
+                ),
             ),
-            _ => ("folder=?4".into(), Some(folder)),
+            _ => ("folder=?".into(), Some(folder.to_owned().into())),
         };
-        let filter = if search.is_empty() {
-            ""
+        if scope == "all" {
+            clause = "1".into();
         } else {
-            " AND (subject LIKE ?1 ESCAPE '\\' OR sender LIKE ?1 ESCAPE '\\' OR recipient LIKE ?1 ESCAPE '\\' OR body LIKE ?1 ESCAPE '\\')"
-        };
-        // Number the placeholders consistently, including optional search and folder parameters.
+            if let Some(value) = value {
+                bindings.push(value);
+            }
+            if scope == "subfolders" {
+                let role = match folder {
+                    "archive" => Some("archive"),
+                    "sent" => Some("sentitems"),
+                    "inbox" => Some("inbox"),
+                    _ => None,
+                };
+                let remote = folder
+                    .strip_prefix("remote:")
+                    .and_then(|id| id.parse::<i64>().ok());
+                cte = "WITH RECURSIVE tree(id,remote_id,account_id) AS (
+                    SELECT id,remote_id,account_id FROM remote_folders WHERE id=? OR well_known=?
+                    UNION SELECT c.id,c.remote_id,c.account_id FROM remote_folders c JOIN tree p
+                      ON c.parent_remote_id=p.remote_id AND c.account_id=p.account_id
+                  ), local(id) AS (
+                    SELECT id FROM local_folders WHERE parent=? OR parent IN (SELECT 'remote:'||id FROM tree)
+                    UNION SELECT c.id FROM local_folders c JOIN local p ON c.parent='local-'||p.id
+                  ) ";
+                clause = format!("({clause} OR ({destination} IN (SELECT id FROM tree) AND folder IN ('inbox','remote'))
+                    OR folder IN (SELECT 'local-'||id FROM local))");
+                bindings.splice(
+                    0..0,
+                    [
+                        remote.map_or(Value::Null, Into::into),
+                        role.map_or(Value::Null, |role| role.to_owned().into()),
+                        folder.to_owned().into(),
+                    ],
+                );
+            }
+        }
+        clause = format!("({clause})");
+        search::append(search, &mut clause, &mut bindings);
+        bindings.extend([i64::from(PAGE_SIZE + 1).into(), i64::from(offset).into()]);
         let sql = format!(
-            "SELECT id,sender,subject,date,unread,starred FROM messages WHERE {clause}{filter} ORDER BY date DESC,id DESC LIMIT ?2 OFFSET ?3"
+            "{cte}SELECT id,sender,subject,date,unread,starred FROM messages WHERE {clause} ORDER BY date DESC,id DESC LIMIT ? OFFSET ?"
         );
         let mut statement = self.0.prepare(&sql)?;
-        let count = statement.parameter_count();
         let read = |row: &Row<'_>| {
             Ok(MessageRow {
                 id: row.get(0)?,
@@ -191,15 +248,9 @@ impl Workspace {
                 starred: row.get(5)?,
             })
         };
-        let mut rows: Vec<MessageRow> = if count == 4 {
-            statement
-                .query_map(params![pattern, PAGE_SIZE + 1, offset, value], read)?
-                .collect::<Result<_>>()?
-        } else {
-            statement
-                .query_map(params![pattern, PAGE_SIZE + 1, offset], read)?
-                .collect::<Result<_>>()?
-        };
+        let mut rows: Vec<MessageRow> = statement
+            .query_map(params_from_iter(bindings), read)?
+            .collect::<Result<_>>()?;
         let more = rows.len() > PAGE_SIZE as usize;
         rows.truncate(PAGE_SIZE as usize);
         Ok(MessagePage { rows, more })
@@ -216,19 +267,6 @@ impl Workspace {
                     subject: r.get(2)?,
                     date: r.get(3)?,
                     body: r.get(4)?,
-                })
-            },
-        )
-    }
-    pub fn contacts(&self) -> Result<Vec<Contact>> {
-        self.collect(
-            "SELECT name,email,company FROM contacts ORDER BY name COLLATE NOCASE,id LIMIT 1000",
-            [],
-            |r| {
-                Ok(Contact {
-                    name: r.get(0)?,
-                    email: r.get(1)?,
-                    company: r.get(2)?,
                 })
             },
         )

@@ -13,7 +13,7 @@
   <body>
     <header class="masthead">
       <div class="wordmark">inkwell<span>.</span></div>
-      <div class="edition">DESKTOP PREVIEW <b> / </b> READ ONLY</div>
+      <div class="edition">DESKTOP PREVIEW <b> / </b> NO MAIL SYNC</div>
       <button id="refresh" type="button">Refresh</button>
     </header>
     <main>
@@ -31,7 +31,8 @@
         <div class="view-header">
           <h1 id="title">Inbox</h1>
           <form id="search-form" role="search">
-            <input type="search" id="search" aria-label="Search this folder" placeholder="Search this folder..." maxlength="250">
+            <input type="search" id="search" aria-label="Search mail" placeholder="Search mail or tag:work" maxlength="200">
+            <select id="search-scope" aria-label="Search scope"><option value="folder">This folder</option><option value="subfolders">Include subfolders</option><option value="all">All mail</option></select>
             <button type="submit">Search</button>
           </form>
         </div>
@@ -44,5 +45,16 @@
       </section>
       <section id="reader" aria-label="Message reader"><p class="placeholder">Select a message to read it here.</p></section>
     </main>
+    <dialog id="contact-dialog" aria-labelledby="contact-title">
+      <form id="contact-form">
+        <h2 id="contact-title">Contact</h2>
+        <label>Name<input name="name" required maxlength="200" autocomplete="off"></label>
+        <label>Email<input name="email" type="email" required maxlength="254" autocomplete="off"></label>
+        <label>Company<input name="company" maxlength="200" autocomplete="off"></label>
+        <label>Notes<textarea name="notes" maxlength="10000" rows="4"></textarea></label>
+        <p id="contact-status" role="status"></p>
+        <div class="theme-actions"><button type="submit" class="primary">Save contact</button><button type="button" id="cancel-contact">Cancel</button></div>
+      </form>
+    </dialog>
   </body>
 </html>

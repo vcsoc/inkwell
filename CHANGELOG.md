@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0-alpha.3
+
+- Added scoped mail search with Unicode-normalized tag queries, quoted tag names, hashtags, and Cc/Bcc matching.
+- Added local contact creation, editing, and deletion in the existing workspace, with address history updates and stale-edit protection.
+- Mail, provider sync state, and credentials remain read-only in the preview.
+
 ## 0.2.0-alpha.2
 
 - Replaced the preview palette with the exact Waypoint light and dark dashboard tokens. Waypoint Light is the default; Dark and Follow System are also available.
