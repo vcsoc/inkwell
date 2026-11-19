@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Inkwell Preview</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="wordmark">inkwell<span>.</span></div>
+      <div class="edition">DESKTOP PREVIEW <b> / </b> READ ONLY</div>
+      <button id="refresh" type="button">Refresh</button>
+    </header>
+    <main>
+      <aside aria-label="Workspace navigation">
+        <div class="section-label">WORKSPACE</div>
+        <nav id="sections" aria-label="Workspace sections">
+          <button data-view="mail" type="button" aria-pressed="true">Mail</button>
+          <button data-view="calendar" type="button" aria-pressed="false">Calendar</button>
+          <button data-view="contacts" type="button" aria-pressed="false">Contacts</button>
+        </nav>
+        <nav id="folders" aria-label="Mail folders"></nav>
+      </aside>
+      <section id="index" aria-labelledby="title">
+        <div class="view-header">
+          <h1 id="title">Inbox</h1>
+          <form id="search-form" role="search">
+            <input type="search" id="search" aria-label="Search this folder" placeholder="Search this folder..." maxlength="250">
+            <button type="submit">Search</button>
+          </form>
+        </div>
+        <p id="status" role="status"></p>
+        <div id="rows"></div>
+        <div id="pages" hidden>
+          <button id="previous" type="button">Previous</button>
+          <button id="next" type="button">Next</button>
+        </div>
+      </section>
+      <section id="reader" aria-label="Message reader"><p class="placeholder">Select a message to read it here.</p></section>
+    </main>
+  </body>
+</html>
