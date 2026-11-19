@@ -30,6 +30,9 @@ button:disabled { opacity: .48; cursor: default; }
 .mail-filters input[type='date'], .mail-filters button, .mail-filters select { min-height: 30px; font-size: .85em; }
 @media (max-width: 900px) { .mail-filters { order: 3; width: 100%; justify-content: start; } .masthead { flex-wrap: wrap; } }
 .wordmark { font: bold 32px/1 Georgia, serif; letter-spacing: -.075em; }
+html[data-syncing='true'] .wordmark { text-decoration: underline; text-decoration-color: var(--brand-hexagon); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.sync-status { flex: 1 0 100%; font-size: .85em; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.masthead:has(.sync-status:not([hidden])) { flex-wrap: wrap; }
 .wordmark span { color: var(--brand-hexagon); font: 600 .5em/1 var(--body-font, sans-serif); letter-spacing: 0; margin-inline-start: .12em; vertical-align: super; }
 .edition, .section-label { color: var(--muted-foreground); font-size: 11px; font-weight: 600; letter-spacing: .09em; }
 main { flex: 1; min-height: 0; display: grid; grid-template-columns: clamp(160px, 22%, 280px) minmax(17rem, 33%) 1fr; }

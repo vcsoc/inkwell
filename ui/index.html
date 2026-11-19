@@ -24,7 +24,8 @@
         <select name="order" aria-label="Mail order"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select>
         <button type="reset">Clear</button>
       </form>
-      <div class="theme-actions"><button id="new-draft" class="primary" type="button">Compose</button><button id="refresh" type="button">Refresh</button></div>
+      <div class="theme-actions"><button id="new-draft" class="primary" type="button">Compose</button><button id="sync-inbox" type="button" title="Import Outlook Inbox mail that is not already cached">Sync Outlook Inbox</button><button id="refresh" type="button" title="Reload local workspace data">Refresh</button></div>
+      <span id="sync-status" class="sync-status" role="status" hidden></span>
     </header>
     <main>
       <aside aria-label="Workspace navigation">

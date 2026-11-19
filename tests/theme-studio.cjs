@@ -27,6 +27,8 @@ const path = require('node:path');
       let contacts = [], events = [];
       window.__TAURI__ = { core: { invoke: async (name, args) => {
         if (name === 'save_draft') { window.draftFixture = args; return { id: 10, key: args.key, revision: (args.expected?.revision || 0) + 1 }; }
+        if (name === 'start_inbox_job') { window.fixtureSync = true; return { running: true, pages: 0, inserted: 0, errors: [] }; }
+        if (name === 'inbox_job_status') return window.fixtureSync ? { running: !window.fixtureSyncDone, pages: 20, inserted: 111, errors: [] } : null;
         if (name === 'recent_sent_addresses') return [['Sent Person <sent@example.test>', '', '']];
         if (name === 'draft_clipboard') return 'Clipboard fixture';
         if (name === 'translate_draft') return 'Texte de test';
@@ -125,7 +127,11 @@ const path = require('node:path');
     await button('Delete').click();
     await page.getByText('Fixture Contact', { exact: true }).waitFor({ state: 'detached' });
     await button('Mail').click();
+    await button('Sync Outlook Inbox').click();
+    await page.getByText('Syncing Outlook Inbox:', { exact: false }).waitFor();
     await page.getByLabel('Unread', { exact: true }).check();
+    await page.evaluate(() => { window.fixtureSyncDone = true; });
+    await page.getByText('Outlook Inbox sync complete: 20 pages scanned, 111 messages added.', { exact: true }).waitFor();
     await page.getByLabel('Mail order').selectOption('oldest');
     await page.waitForFunction(() => window.searchFixture?.filters?.unread && window.searchFixture.filters.oldest);
     await button('Clear').click();

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0-alpha.9
+
+- Added a manual Outlook Inbox import that follows all server pages, without a total message or page cap. Each page is validated and committed independently without replacing cached messages or queued provider changes.
+- Outlook network and SQLite work run on a background worker; the UI reports progress asynchronously and prevents overlapping imports. Request deadlines, response validation, and loop detection remain in place.
+- The importer requires an unexpired account grant already cached by legacy Inkwell. It does not yet refresh credentials, reconcile remote changes or deletions, or sync other folders or providers.
+
 ## 0.2.0-alpha.8
 
 - Expanded Calendar to the full workspace, with a continuous month grid and hour-aligned day and week views.

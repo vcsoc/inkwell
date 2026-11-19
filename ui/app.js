@@ -319,6 +319,35 @@ contactForm.onsubmit = async (event) => {
 };
 for (const button of $('sections').querySelectorAll('button')) button.onclick = () => select(button.dataset.view);
 $('refresh').onclick = () => { if (state.view !== 'theme') void refresh(); };
+const syncButton = $('sync-inbox');
+const syncStatus = $('sync-status');
+let syncTimer;
+function showInboxJob(job) {
+  if (!job) return;
+  syncButton.disabled = job.running;
+  document.documentElement.dataset.syncing = String(job.running);
+  syncStatus.hidden = false;
+  const counts = `${job.pages} pages scanned, ${job.inserted} messages added`;
+  syncStatus.textContent = job.running ? `Syncing Outlook Inbox: ${counts}` : job.errors.length
+    ? `Inbox sync incomplete: ${counts}. ${job.errors.join(' ')}` : `Outlook Inbox sync complete: ${counts}.`;
+  clearTimeout(syncTimer);
+  if (job.running) syncTimer = setTimeout(pollInboxJob, 1000);
+  else if (job.inserted && state.view === 'mail') void refresh();
+}
+async function pollInboxJob() {
+  try { showInboxJob(await invoke('inbox_job_status')); }
+  catch (error) {
+    syncStatus.hidden = false;
+    syncStatus.textContent = 'Outlook sync status unavailable; retrying.';
+    syncTimer = setTimeout(pollInboxJob, 2500);
+  }
+}
+syncButton.onclick = async () => {
+  syncButton.disabled = true;
+  try { showInboxJob(await invoke('start_inbox_job')); }
+  catch (error) { syncButton.disabled = false; syncStatus.hidden = false; syncStatus.textContent = errorMessage(error); }
+};
+void pollInboxJob();
 function applyMailFilters() { state.offset = 0; clearReader(); if (state.view === 'mail') void load(); }
 $('mail-filters').onchange = applyMailFilters;
 $('mail-filters').onreset = () => setTimeout(applyMailFilters, 0);

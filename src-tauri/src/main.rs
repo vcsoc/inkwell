@@ -103,6 +103,85 @@ async fn save_draft(
     .map_err(|error| error.to_string())
 }
 mod local_translation;
+mod mail_sync;
+
+#[derive(Clone, Default, serde::Serialize)]
+struct InboxJob {
+    running: bool,
+    pages: usize,
+    inserted: usize,
+    accounts: usize,
+    errors: Vec<String>,
+}
+static INBOX_JOB: std::sync::Mutex<Option<InboxJob>> = std::sync::Mutex::new(None);
+
+#[tauri::command]
+fn inbox_job_status() -> Option<InboxJob> {
+    INBOX_JOB.lock().ok()?.clone()
+}
+
+#[tauri::command]
+fn start_inbox_job() -> Result<InboxJob, String> {
+    let path = workspace_database().ok_or_else(|| StoreError::Missing.to_string())?;
+    let mut slot = INBOX_JOB
+        .lock()
+        .map_err(|_| "Inbox import is unavailable.")?;
+    if let Some(job) = slot.as_ref().filter(|job| job.running) {
+        return Ok(job.clone());
+    }
+    let job = InboxJob {
+        running: true,
+        ..InboxJob::default()
+    };
+    *slot = Some(job.clone());
+    drop(slot);
+    tauri::async_runtime::spawn(async move {
+        let result = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+            let accounts = mail_sync::outlook_accounts(&path).map_err(|e| e.to_string())?;
+            if accounts.is_empty() {
+                return Err("No connected Outlook accounts were found.".into());
+            }
+            if let Ok(mut slot) = INBOX_JOB.lock() {
+                if let Some(job) = slot.as_mut() {
+                    job.accounts = accounts.len();
+                }
+            }
+            // SQLite has one writer; keep one import lane and leave independent UI reads to the blocking pool.
+            for id in accounts {
+                let mut previous = mail_sync::SyncReport::default();
+                let result = mail_sync::sync_inbox(&path, id, |page| {
+                    if let Ok(mut slot) = INBOX_JOB.lock() {
+                        if let Some(job) = slot.as_mut() {
+                            job.pages += page.pages - previous.pages;
+                            job.inserted += page.inserted - previous.inserted;
+                        }
+                    }
+                    previous = page;
+                });
+                if let Err(error) = result {
+                    if let Ok(mut slot) = INBOX_JOB.lock() {
+                        if let Some(job) = slot.as_mut() {
+                            job.errors.push(error.to_string());
+                        }
+                    }
+                }
+            }
+            Ok(())
+        })
+        .await;
+        if let Ok(mut slot) = INBOX_JOB.lock() {
+            if let Some(job) = slot.as_mut() {
+                if let Err(error) = result
+                    .unwrap_or_else(|_| Err("The Inbox import worker stopped unexpectedly.".into()))
+                {
+                    job.errors.push(error);
+                }
+                job.running = false;
+            }
+        }
+    });
+    Ok(job)
+}
 
 #[tauri::command]
 async fn translate_draft(text: String, language: String) -> Result<String, String> {
@@ -243,6 +322,8 @@ fn main() {
             draft_clipboard,
             translate_draft,
             recent_sent_addresses,
+            start_inbox_job,
+            inbox_job_status,
             events,
             save_local_event,
             delete_local_event,
