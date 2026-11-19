@@ -18,6 +18,8 @@ use unicode_casefold::UnicodeCaseFold;
 use unicode_normalization::UnicodeNormalization;
 
 const GRAPH: &str = "https://graph.microsoft.com";
+const TOKEN_ENDPOINT: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
+const MAX_TOKEN_BYTES: u64 = 128 * 1024;
 const PAGE_SIZE: usize = 25;
 const MAX_PAGE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_LINK_BYTES: usize = 16 * 1024;
@@ -29,6 +31,8 @@ pub enum SyncError {
     UnsupportedSchema,
     Account,
     Credential,
+    AuthorizationUnavailable,
+    AuthorizationStatus(u16),
     Busy,
     WorkspaceChanged,
     Graph,
@@ -55,7 +59,9 @@ impl fmt::Display for SyncError {
             Self::Workspace => "Could not complete the Outlook import in this workspace.",
             Self::UnsupportedSchema => "This workspace schema is not supported for Outlook import.",
             Self::Account => "The Outlook account or its cached Inbox is unavailable.",
-            Self::Credential => "No valid cached Outlook access grant. Refresh or reauthorize the account before importing.",
+            Self::Credential => "No usable Outlook grant. Reauthorize the account in legacy Inkwell.",
+            Self::AuthorizationUnavailable => "Could not refresh Outlook authorization. Check your connection and retry.",
+            Self::AuthorizationStatus(status) => return write!(f, "Microsoft declined credential refresh (HTTP {status}). Retry or reauthorize in legacy Inkwell."),
             Self::Busy => "The workspace is busy. Retry the Outlook import.",
             Self::WorkspaceChanged => "The workspace changed during the Outlook import. Retry to use the current state.",
             Self::Graph => "Could not read the Outlook Inbox from Microsoft.",
@@ -94,8 +100,7 @@ pub fn outlook_accounts(path: &Path) -> Result<Vec<i64>, SyncError> {
 }
 
 /// Run on a blocking thread with a trusted workspace DB path and selected account ID.
-/// Only reads an unexpired grant from the existing vault; no refresh, secret update,
-/// provider write, delete, existing-message update, or delta checkpoint is performed.
+/// Refreshes the encrypted grant when needed; does not modify messages at the provider.
 pub fn sync_inbox(
     path: &Path,
     account_id: i64,
@@ -111,13 +116,6 @@ pub fn sync_inbox(
     let snapshot = snapshot(&db, account_id)?;
     let vault = Vault::open(path.parent().ok_or(SyncError::Credential)?)
         .map_err(|_| SyncError::Credential)?;
-    let clear = vault
-        .unseal(&snapshot.secret)
-        .map_err(|_| SyncError::Credential)?;
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| SyncError::Credential)?;
-    let token = cached_token(&clear, now.as_secs_f64())?;
     let client = Client::builder()
         .https_only(true)
         .redirect(Policy::none())
@@ -130,18 +128,53 @@ pub fn sync_inbox(
     let mut report = SyncReport::default();
     let db = std::cell::RefCell::new(&mut db);
     let page_snapshot = std::cell::RefCell::new(None);
+    let mut account_secret = snapshot.secret.clone();
     walk_inbox(
         &snapshot.inbox.remote_id,
         |url| {
-            let current = self::snapshot(&db.borrow(), account_id)?;
-            if !current.same_account(&snapshot) {
+            let db = db.borrow();
+            let current = self::snapshot(&db, account_id)?;
+            if !current.same_account(&snapshot) || current.secret != account_secret {
                 return Err(SyncError::WorkspaceChanged);
             }
-            *page_snapshot.borrow_mut() = Some(current);
-            let current_time = SystemTime::now()
+            let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map_err(|_| SyncError::Credential)?;
-            cached_token(&clear, current_time.as_secs_f64())?;
+                .map_err(|_| SyncError::Credential)?
+                .as_secs_f64();
+            let (token, secret) =
+                ensure_token(&db, &vault, &current, now, |client_id, refresh, scope| {
+                    let mut form = vec![
+                        ("grant_type", "refresh_token"),
+                        ("client_id", client_id),
+                        ("refresh_token", refresh),
+                    ];
+                    if let Some(scope) = scope {
+                        form.push(("scope", scope));
+                    }
+                    let response = client
+                        .post(TOKEN_ENDPOINT)
+                        .form(&form)
+                        .send()
+                        .map_err(|_| SyncError::AuthorizationUnavailable)?;
+                    if !response.status().is_success() {
+                        return Err(SyncError::AuthorizationStatus(response.status().as_u16()));
+                    }
+                    let mut bytes = Vec::new();
+                    response
+                        .take(MAX_TOKEN_BYTES + 1)
+                        .read_to_end(&mut bytes)
+                        .map_err(|_| SyncError::AuthorizationUnavailable)?;
+                    if bytes.len() as u64 > MAX_TOKEN_BYTES {
+                        return Err(SyncError::AuthorizationUnavailable);
+                    }
+                    serde_json::from_slice(&bytes).map_err(|_| SyncError::AuthorizationUnavailable)
+                })?;
+            account_secret = secret;
+            let expected = self::snapshot(&db, account_id)?;
+            if !expected.same_account(&snapshot) || expected.secret != account_secret {
+                return Err(SyncError::WorkspaceChanged);
+            }
+            *page_snapshot.borrow_mut() = Some(expected);
             let response = client
                 .get(url)
                 .bearer_auth(token)
@@ -202,6 +235,70 @@ fn cached_token(clear: &str, now: f64) -> Result<&str, SyncError> {
     Ok(grant.access_token)
 }
 
+#[derive(Deserialize)]
+struct RefreshedToken {
+    access_token: String,
+    expires_in: u64,
+    refresh_token: Option<String>,
+    scope: Option<String>,
+}
+
+fn ensure_token(
+    db: &Connection,
+    vault: &Vault,
+    account: &Snapshot,
+    now: f64,
+    exchange: impl FnOnce(&str, &str, Option<&str>) -> Result<RefreshedToken, SyncError>,
+) -> Result<(String, String), SyncError> {
+    let clear = vault
+        .unseal(&account.secret)
+        .map_err(|_| SyncError::Credential)?;
+    if let Ok(token) = cached_token(&clear, now) {
+        return Ok((token.into(), account.secret.clone()));
+    }
+    let mut grant: serde_json::Value =
+        serde_json::from_str(&clear).map_err(|_| SyncError::Credential)?;
+    let clean_token = |value: &str| {
+        !value.is_empty() && value.len() <= 32 * 1024 && value.bytes().all(|b| b.is_ascii_graphic())
+    };
+    let refresh = grant
+        .get("refresh_token")
+        .and_then(|v| v.as_str())
+        .filter(|v| clean_token(v))
+        .ok_or(SyncError::Credential)?;
+    let scope = grant
+        .get("scope")
+        .and_then(|v| v.as_str())
+        .filter(|v| !v.is_empty());
+    if !clean_token(&account.client_id) {
+        return Err(SyncError::Credential);
+    }
+    let fresh = exchange(&account.client_id, refresh, scope)?;
+    if !clean_token(&fresh.access_token)
+        || !(121..=86_400).contains(&fresh.expires_in)
+        || fresh
+            .refresh_token
+            .as_ref()
+            .is_some_and(|v| !clean_token(v))
+    {
+        return Err(SyncError::AuthorizationUnavailable);
+    }
+    grant["access_token"] = serde_json::json!(fresh.access_token);
+    grant["expires_at"] = serde_json::json!(now + fresh.expires_in as f64);
+    if let Some(refresh) = fresh.refresh_token {
+        grant["refresh_token"] = serde_json::json!(refresh);
+    }
+    if let Some(scope) = fresh.scope.filter(|s| !s.is_empty()) {
+        grant["scope"] = serde_json::json!(scope);
+    }
+    let secret = vault.seal(&grant.to_string());
+    if db.execute("UPDATE accounts SET secret=? WHERE id=? AND provider='microsoft' AND email=? AND client_id=? AND secret=?",
+        params![secret, account.account_id, account.email, account.client_id, account.secret])? != 1 {
+        return Err(SyncError::WorkspaceChanged);
+    }
+    Ok((fresh.access_token, secret))
+}
+
 #[derive(PartialEq, Eq)]
 struct Inbox {
     local_id: Option<i64>,
@@ -222,7 +319,6 @@ impl Snapshot {
     fn same_account(&self, other: &Self) -> bool {
         self.account_id == other.account_id
             && self.email == other.email
-            && self.secret == other.secret
             && self.client_id == other.client_id
             && self.inbox == other.inbox
     }
@@ -898,6 +994,95 @@ mod tests {
                 .unwrap();
             assert_eq!(count, 0);
         }
+    }
+
+    fn fixture_vault(path: &Path) -> Vault {
+        std::fs::write(
+            path.join("vault.key"),
+            "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+        )
+        .unwrap();
+        Vault::open(path).unwrap()
+    }
+
+    #[test]
+    fn expired_credentials_are_refreshed_and_kept_compatible() {
+        let directory = tempfile::tempdir().unwrap();
+        let vault = fixture_vault(directory.path());
+        let db = Connection::open_in_memory().unwrap();
+        schema(&db);
+        let old = vault.seal(r#"{"access_token":"old","expires_at":0,"refresh_token":"refresh","scope":"Mail.Read","extra":true}"#);
+        db.execute("UPDATE accounts SET secret=? WHERE id=1", [&old])
+            .unwrap();
+        let account = snapshot(&db, 1).unwrap();
+        let (token, stored) =
+            ensure_token(&db, &vault, &account, 100., |client, refresh, scope| {
+                assert_eq!(
+                    (client, refresh, scope),
+                    ("client", "refresh", Some("Mail.Read"))
+                );
+                Ok(RefreshedToken {
+                    access_token: "new".into(),
+                    expires_in: 3600,
+                    refresh_token: Some("rotated".into()),
+                    scope: None,
+                })
+            })
+            .unwrap();
+        assert_eq!(token, "new");
+        assert_eq!(snapshot(&db, 1).unwrap().secret, stored);
+        let clear: Value = serde_json::from_str(&vault.unseal(&stored).unwrap()).unwrap();
+        assert_eq!(
+            clear,
+            json!({"access_token":"new","expires_at":3700.0,"refresh_token":"rotated","scope":"Mail.Read","extra":true})
+        );
+        let updated = snapshot(&db, 1).unwrap();
+        assert_eq!(
+            ensure_token(&db, &vault, &updated, 101., |_, _, _| panic!(
+                "cached grant did not require a network request"
+            ))
+            .unwrap()
+            .0,
+            "new"
+        );
+    }
+
+    #[test]
+    fn refresh_does_not_recreate_disconnected_accounts_or_overwrite_newer_grants() {
+        let directory = tempfile::tempdir().unwrap();
+        let vault = fixture_vault(directory.path());
+        let db = Connection::open_in_memory().unwrap();
+        schema(&db);
+        let old = vault.seal(r#"{"access_token":"old","expires_at":0,"refresh_token":"refresh"}"#);
+        db.execute("UPDATE accounts SET secret=? WHERE id=1", [&old])
+            .unwrap();
+        let account = snapshot(&db, 1).unwrap();
+        assert_eq!(
+            ensure_token(&db, &vault, &account, 100., |_, _, scope| {
+                assert_eq!(scope, None);
+                db.execute("UPDATE accounts SET secret='replacement' WHERE id=1", [])
+                    .unwrap();
+                Ok(RefreshedToken {
+                    access_token: "new".into(),
+                    expires_in: 3600,
+                    refresh_token: None,
+                    scope: None,
+                })
+            }),
+            Err(SyncError::WorkspaceChanged)
+        );
+        assert_eq!(snapshot(&db, 1).unwrap().secret, "replacement");
+        db.execute("DELETE FROM accounts WHERE id=1", []).unwrap();
+        assert_eq!(
+            ensure_token(&db, &vault, &account, 100., |_, _, _| Ok(RefreshedToken {
+                access_token: "new".into(),
+                expires_in: 3600,
+                refresh_token: None,
+                scope: None
+            })),
+            Err(SyncError::WorkspaceChanged)
+        );
+        assert!(matches!(snapshot(&db, 1), Err(SyncError::Account)));
     }
 
     #[test]

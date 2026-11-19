@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0-alpha.10
+
+- Outlook Inbox sync now refreshes expired access tokens on its background worker, using the existing grant and vault. A refresh cannot overwrite credentials changed by another client or recreate a disconnected account.
+
 ## 0.2.0-alpha.9
 
 - Added a manual Outlook Inbox import that follows all server pages, without a total message or page cap. Each page is validated and committed independently without replacing cached messages or queued provider changes.
