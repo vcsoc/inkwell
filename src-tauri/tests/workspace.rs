@@ -108,6 +108,41 @@ fn reads_bookmarked_folders_and_existing_wal_without_mutating_the_store() {
 
     let mut editor = Workspace::open_for_contacts(&path).unwrap();
     let old = db.contacts().unwrap().pop().unwrap();
+    let fixture = "data:image/jpeg;base64,/9j/AA==".to_owned();
+    editor
+        .set_contact_avatar(old.id, &old.fields.email, Some(fixture.clone()))
+        .unwrap();
+    assert_eq!(
+        db.contacts().unwrap()[0].avatar.as_deref(),
+        Some(fixture.as_str())
+    );
+    assert!(
+        editor
+            .set_contact_avatar(old.id, "wrong@example.test", None)
+            .is_err()
+    );
+    assert!(
+        editor
+            .set_contact_avatar(
+                old.id,
+                &old.fields.email,
+                Some("data:image/svg+xml,unsafe".into())
+            )
+            .is_err()
+    );
+    let filters = inkwell_tauri::MailFilters {
+        starred: true,
+        from: Some("2026-01-01".into()),
+        ..Default::default()
+    };
+    assert!(filters.valid());
+    assert_eq!(
+        db.filtered_messages("archive", "", 0, "folder", &filters)
+            .unwrap()
+            .rows[0]
+            .id,
+        2
+    );
     let mut updated = old.fields.clone();
     updated.notes = "New note".into();
     editor

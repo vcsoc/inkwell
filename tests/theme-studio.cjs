@@ -6,14 +6,14 @@ const http = require('node:http');
 const path = require('node:path');
 
 (async () => {
-  const files = { '/': ['index.html', 'text/html'], '/style.css': ['style.css', 'text/css'],
+  const files = { '/': ['index.html', 'text/html'], '/style.css': ['style.css', 'text/css'], '/calendar-workspace.css': ['calendar-workspace.css', 'text/css'],
     '/waypoint.css': ['waypoint.css', 'text/css'], '/app.js': ['app.js', 'text/javascript'],
     '/theme-files.js': ['theme-files.js', 'text/javascript'], '/theme.js': ['theme.js', 'text/javascript'], '/drafts.js': ['drafts.js', 'text/javascript'], '/calendar.js': ['calendar.js', 'text/javascript'] };
   const server = http.createServer(async (request, response) => {
     const item = files[request.url];
     if (!item) { response.writeHead(404).end(); return; }
     response.setHeader('Content-Type', item[1]);
-    response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'");
+    response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:");
     response.end(await fs.readFile(path.resolve(__dirname, '../ui', item[0])));
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -36,6 +36,7 @@ const path = require('node:path');
         if (name === 'save_local_event') { events = [{ id: 1, editable: true, ...args.fields }]; return 1; }
         if (name === 'delete_local_event') { events = []; return; }
         if (name === 'contacts') return contacts;
+        if (name === 'set_contact_avatar') { contacts = contacts.map((row) => row.id === args.id ? { ...row, avatar: args.avatar } : row); window.avatarFixture = args.avatar; return; }
         if (name === 'save_contact') { contacts = [{ id: 1, ...args.fields }]; return 1; }
         if (name === 'delete_contact') { contacts = []; return; }
         if (name === 'folders') return [{ key: 'inbox', label: 'Inbox' }];
@@ -94,6 +95,21 @@ const path = require('node:path');
     await button('Save contact').click();
     await page.getByRole('heading', { name: 'Fixture Contact' }).waitFor();
     assert.equal(await page.locator('.people-card').count(), 1);
+    const card = page.locator('.people-card');
+    assert.ok((await card.boundingBox()).height >= 310);
+    await card.locator('input[type=file]').setInputFiles({ name: 'avatar.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAE0lEQVR4nGNkaGDACpiwCw9WCQBqCACQJ5at+QAAAABJRU5ErkJggg==', 'base64') });
+    await card.locator('.people-avatar img').waitFor();
+    assert.match(await page.evaluate(() => window.avatarFixture), /^data:image\/jpeg;base64,/);
+    await button('Remove photo').click();
+    await card.locator('.people-avatar img').waitFor({ state: 'detached' });
+    await card.evaluate((el) => {
+      const canvas = document.createElement('canvas'); canvas.width = canvas.height = 8;
+      const bytes = atob(canvas.toDataURL('image/png').split(',')[1]);
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(new File([Uint8Array.from(bytes, (char) => char.charCodeAt(0))], 'dropped.png', { type: 'image/png' }));
+      el.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer }));
+    });
+    await card.locator('.people-avatar img').waitFor();
     assert.equal(await button('Jump to contacts: F').isEnabled(), true);
     await page.getByLabel('Find a person').fill('not found');
     await page.getByText('No matching contacts.').waitFor();
@@ -109,11 +125,16 @@ const path = require('node:path');
     await button('Delete').click();
     await page.getByText('Fixture Contact', { exact: true }).waitFor({ state: 'detached' });
     await button('Mail').click();
+    await page.getByLabel('Unread', { exact: true }).check();
+    await page.getByLabel('Mail order').selectOption('oldest');
+    await page.waitForFunction(() => window.searchFixture?.filters?.unread && window.searchFixture.filters.oldest);
+    await button('Clear').click();
+    await page.waitForFunction(() => !window.searchFixture?.filters?.unread && !window.searchFixture.filters.oldest);
     await page.getByLabel('Search mail', { exact: true }).fill('tag:work');
     await page.getByLabel('Search scope', { exact: true }).selectOption('subfolders');
     await button('Search').click();
     await page.waitForFunction(() => window.searchFixture?.search === 'tag:work' && window.searchFixture.scope === 'subfolders');
-    await button('Fixture message', { exact: false }).click().catch(() => page.locator('.mail-row').first().click());
+    await page.locator('.mail-row').first().click();
     await button('Create event from email').click();
     assert.equal(await page.getByLabel('Title', { exact: true }).inputValue(), 'Fixture message');
     await page.locator('#cancel-event').click();
@@ -136,21 +157,31 @@ const path = require('node:path');
     await button('Delete draft').click();
     await page.waitForFunction(() => window.deletedDraft?.id === 10);
     await button('Calendar').click();
+    await page.locator('.calendar-month').waitFor();
+    const bounds = await page.locator('.calendar-workspace').boundingBox();
+    assert.ok(bounds.width > 900 && bounds.height > 700);
     await button('Next month').click();
-    for (const view of ['Week', 'Day', 'Agenda', 'Month']) await page.getByLabel('Calendar view').selectOption(view);
+    for (const view of ['Week', 'Day']) {
+      await page.getByLabel('Calendar view').selectOption(view);
+      await page.locator('.calendar-timeline').waitFor();
+    }
+    for (const view of ['Agenda', 'Month']) await page.getByLabel('Calendar view').selectOption(view);
     await button('Today').click();
     await button('New event').click();
     await page.getByLabel('Title', { exact: true }).fill('Calendar smoke');
     await button('Save event').click();
+    const eventChip = () => page.getByRole('button', { name: /^Calendar smoke \|/ });
+    await eventChip().click();
     await page.getByRole('heading', { name: 'Calendar smoke' }).waitFor();
     await button('Edit event').click();
     await page.getByLabel('Location', { exact: true }).fill('Library');
     await button('Save event').click();
+    await eventChip().click();
     await page.getByText('Library', { exact: false }).waitFor();
     page.once('dialog', (dialog) => dialog.accept());
     await button('Edit event').click();
     await button('Delete event').click();
-    await page.getByText('No events on this day.').waitFor();
+    await eventChip().waitFor({ state: 'detached' });
     assert.deepEqual(errors, []);
     console.log('Theme Studio smoke passed: exact default/dark tokens, preview/revert, legacy YAML, save/relaunch, export payload, library, narrow viewport, People, search scopes, draft autosave, and calendar create/edit/delete.');
   } finally {

@@ -21,24 +21,65 @@ window.InkwellCalendar = (() => {
   const weekdays = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
   const startOfWeek = (date) => shift(date, -date.getDay());
   const agendaDays = 30;
+  const minutesPerDay = 24 * 60;
+  const wallMinute = (date) => date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60;
+  const percentOfDay = (minutes) => `${minutes / minutesPerDay * 100}%`;
+
+  function timedBlocks(day, entries) {
+    const midnight = parse(dateKey(day)), tomorrow = shift(midnight, 1);
+    const blocks = entries.filter((event) => !event.all_day).map((event) => {
+      const start = event.startDate <= midnight ? 0 : wallMinute(event.startDate);
+      let end = event.endDate >= tomorrow ? minutesPerDay : wallMinute(event.endDate);
+      // A fall-back clock change can put the wall-clock end before the start.
+      if (end <= start) end = Math.min(minutesPerDay, start + (event.endDate - event.startDate) / 60000);
+      return { event, start, end };
+    }).sort((a, b) => a.start - b.start || b.end - a.end);
+    let group = [], lanes = [], groupEnd = 0;
+    function finishGroup() {
+      for (const block of group) block.lanes = lanes.length;
+      group = []; lanes = []; groupEnd = 0;
+    }
+    for (const block of blocks) {
+      if (block.start >= groupEnd) finishGroup();
+      const free = lanes.findIndex((end) => end <= block.start);
+      block.lane = free === -1 ? lanes.length : free;
+      lanes[block.lane] = block.end;
+      groupEnd = Math.max(groupEnd, block.end);
+      group.push(block);
+    }
+    finishGroup();
+    return blocks;
+  }
   function mount(root) {
     let selected = new Date(), ticket = 0, view = 'Month', records = [];
     const month = () => new Date(selected.getFullYear(), selected.getMonth(), 1);
     const newEvent = () => edit(null, selected, load);
-    const bar = node('div', null, 'theme-actions');
-    const title = node('h2');
-    const grid = node('div', null, 'calendar-grid');
-    const agenda = node('section', null, 'calendar-agenda');
-    const status = node('p'); status.setAttribute('role', 'status');
-    const previous = button('Previous', () => move(-1));
-    const next = button('Next', () => move(1));
+    const workspace = node('section', null, 'calendar-workspace');
+    workspace.setAttribute('aria-labelledby', 'calendar-period');
+    const bar = node('div', null, 'calendar-toolbar');
+    const navigation = node('div', null, 'calendar-controls');
+    const options = node('div', null, 'calendar-controls');
+    const title = node('h2', null, 'calendar-period'); title.id = 'calendar-period';
+    const surface = node('div', null, 'calendar-surface');
+    surface.setAttribute('role', 'region');
+    surface.setAttribute('aria-labelledby', title.id);
+    surface.tabIndex = 0;
+    const details = node('dialog', null, 'calendar-details');
+    details.setAttribute('aria-labelledby', 'calendar-details-title');
+    const status = node('p', null, 'calendar-status'); status.setAttribute('role', 'status');
+    const previous = button('\u2039', () => move(-1), 'calendar-arrow');
+    const next = button('\u203a', () => move(1), 'calendar-arrow');
+    const timelineScroll = new Map();
     const picker = node('input'); picker.type = 'date'; picker.setAttribute('aria-label', 'Go to date');
     picker.onchange = () => { if (picker.value) { selected = parse(picker.value); void load(); } };
     const mode = node('select'); mode.setAttribute('aria-label', 'Calendar view');
     mode.append(...['Month', 'Week', 'Day', 'Agenda'].map((name) => node('option', name)));
     mode.onchange = () => { view = mode.value; void load(); };
-    bar.append(previous, button('Today', () => move(0)), next, picker, mode, button('New event', newEvent, 'primary'));
-    root.append(bar, title, status, grid, agenda);
+    navigation.append(button('Today', () => move(0)), previous, next);
+    options.append(picker, mode, button('New event', newEvent, 'primary'));
+    bar.append(navigation, title, options);
+    workspace.append(bar, status, surface, details);
+    root.append(workspace);
     function move(delta) {
       if (!delta) selected = new Date();
       else if (view === 'Month') {
@@ -58,71 +99,165 @@ window.InkwellCalendar = (() => {
       const endOfDay = shift(startOfDay, 1);
       return records.filter((event) => event.startDate < endOfDay && event.endDate > startOfDay);
     }
+    function openDay(day) {
+      selected = day;
+      view = mode.value = 'Day';
+      void load();
+    }
+    function dayButton(day, label) {
+      const key = dateKey(day);
+      const el = button(label, () => openDay(day), 'calendar-date');
+      el.dataset.date = key;
+      el.setAttribute('aria-label', dayLabel.format(day));
+      if (key === dateKey(new Date())) el.setAttribute('aria-current', 'date');
+      return el;
+    }
+    function eventDescription(event) {
+      if (event.all_day) {
+        return `All day | ${shortDate.formatRange(event.startDate, shift(event.endDate, -1))}`;
+      }
+      if (dateKey(event.startDate) === dateKey(event.endDate)) {
+        return `${shortDate.format(event.startDate)} | ${timeLabel.formatRange(event.startDate, event.endDate)}`;
+      }
+      return `${shortDate.format(event.startDate)}, ${timeLabel.format(event.startDate)} - ${shortDate.format(event.endDate)}, ${timeLabel.format(event.endDate)}`;
+    }
+    function eventRow(event, day) {
+      const row = node('article', null, 'record');
+      row.append(node('h3', event.title), node('p', [eventDescription(event), event.location].filter(Boolean).join(' | ')));
+      if (event.notes) row.append(node('p', event.notes, 'contact-notes'));
+      row.append(event.editable ? button('Edit event', () => {
+        if (details.open) details.close();
+        edit(event, day, load);
+      }) : node('p', 'Open in the legacy app to edit.'));
+      return row;
+    }
+    function showDetails(day, entries) {
+      const heading = node('h2', dayLabel.format(day)); heading.id = 'calendar-details-title';
+      const header = node('div', null, 'calendar-details-header');
+      header.append(heading, button('Close', () => details.close()));
+      details.replaceChildren(header, ...entries.map((event) => eventRow(event, day)));
+      details.showModal();
+    }
+    function eventButton(event, day, style, label = event.title) {
+      const el = button(label, () => showDetails(day, [event]), style);
+      el.title = `${event.title} | ${eventDescription(event)}`;
+      el.setAttribute('aria-label', el.title);
+      if (event.all_day) el.classList.add('calendar-all-day');
+      return el;
+    }
+    function chips(cell, day, entries, limit) {
+      for (const event of entries.slice(0, limit)) {
+        const label = event.all_day || dateKey(event.startDate) !== dateKey(day)
+          ? event.title : `${timeLabel.format(event.startDate)} ${event.title}`;
+        cell.append(eventButton(event, day, 'calendar-chip', label));
+      }
+      if (entries.length > limit) {
+        const more = button(`+${entries.length - limit} more`, () => showDetails(day, entries), 'calendar-more');
+        more.setAttribute('aria-label', `${more.textContent} on ${dayLabel.format(day)}`);
+        cell.append(more);
+      }
+    }
+    function drawMonth(dates) {
+      const grid = node('div', null, 'calendar-month');
+      for (const day of dates.slice(0, 7)) grid.append(node('div', weekdays.format(day), 'calendar-weekday'));
+      for (const day of dates) {
+        const cell = node('div', null, 'calendar-month-cell');
+        if (day.getMonth() !== month().getMonth()) cell.classList.add('calendar-outside');
+        cell.append(dayButton(day, String(day.getDate())));
+        chips(cell, day, forDay(day), 2);
+        grid.append(cell);
+      }
+      surface.append(grid);
+    }
+    function drawTimeline(dates) {
+      const timeline = node('div', null, 'calendar-timeline');
+      timeline.style.setProperty('--calendar-days', dates.length);
+      const header = node('div', null, 'calendar-timeline-header');
+      header.append(node('div', 'Local time', 'calendar-time-caption'));
+      for (const day of dates) {
+        const cell = node('div', null, 'calendar-timeline-date');
+        cell.append(node('span', weekdays.format(day), 'calendar-weekday'));
+        if (view === 'Week') cell.append(dayButton(day, String(day.getDate())));
+        else {
+          const date = node('span', String(day.getDate()), 'calendar-date');
+          if (dateKey(day) === dateKey(new Date())) date.setAttribute('aria-current', 'date');
+          cell.append(date);
+        }
+        header.append(cell);
+      }
+      header.append(node('div', 'All day', 'calendar-time-caption'));
+      const track = node('div', null, 'calendar-time-grid');
+      const ruler = node('div', null, 'calendar-hour-ruler');
+      for (let hour = 0; hour < 24; hour++) {
+        const label = node('span', timeLabel.format(new Date(2000, 0, 1, hour)), 'calendar-hour');
+        label.style.top = percentOfDay(hour * 60);
+        ruler.append(label);
+      }
+      track.append(ruler);
+      for (const day of dates) {
+        const entries = forDay(day);
+        const allDay = node('div', null, 'calendar-all-day-cell');
+        chips(allDay, day, entries.filter((event) => event.all_day), 2);
+        header.append(allDay);
+        const column = node('div', null, 'calendar-hour-column');
+        column.setAttribute('role', 'group');
+        column.setAttribute('aria-label', dayLabel.format(day));
+        column.onclick = (e) => {
+          if (e.target !== column) return;
+          const rect = column.getBoundingClientRect();
+          const minute = Math.max(0, Math.min(1425, Math.floor((e.clientY - rect.top) / rect.height * 96) * 15));
+          const start = parse(dateKey(day)); start.setMinutes(minute);
+          edit(null, day, load, { start });
+        };
+        for (const { event, start, end, lane, lanes } of timedBlocks(day, entries)) {
+          const label = dateKey(event.startDate) === dateKey(day) ? `${timeLabel.format(event.startDate)} ${event.title}` : event.title;
+          const el = eventButton(event, day, 'calendar-time-event', label);
+          Object.assign(el.style, {
+            top: percentOfDay(start), height: percentOfDay(end - start),
+            insetInlineStart: `${lane / lanes * 100}%`, width: `${100 / lanes}%`,
+          });
+          column.append(el);
+        }
+        track.append(column);
+      }
+      timeline.append(header, track);
+      surface.append(timeline);
+      return track.offsetHeight / 3; // Start at 08:00 local time.
+    }
     function draw() {
       const [first, days] = range();
+      const dates = Array.from({ length: days }, (_, i) => shift(first, i));
       picker.value = dateKey(selected);
       previous.setAttribute('aria-label', `Previous ${view.toLowerCase()}`);
       next.setAttribute('aria-label', `Next ${view.toLowerCase()}`);
       title.textContent = view === 'Month' ? monthLabel.format(month()) : view === 'Day'
-        ? dayLabel.format(selected) : shortDate.formatRange(first, shift(first, days - 1));
-      const focusedDay = grid.contains(document.activeElement) && document.activeElement.dataset.date;
-      grid.replaceChildren();
-      if (view === 'Month' || view === 'Week') {
-        for (let i = 0; i < 7; i++) grid.append(node('span', weekdays.format(shift(first, i)), 'calendar-weekday'));
-        for (let i = 0; i < days; i++) {
-          const day = shift(first, i), key = dateKey(day), entries = forDay(day);
-          const el = button(String(day.getDate()), () => {
-            const changedMonth = day.getMonth() !== selected.getMonth();
-            selected = day;
-            if (view === 'Month' && changedMonth) void load();
-            else draw();
-          }, 'calendar-day');
-          el.style.minWidth = '0';
-          el.dataset.date = key;
-          const visible = entries.slice(0, view === 'Month' ? 3 : 5);
-          for (const event of visible) {
-            const chip = node('small', event.title);
-            Object.assign(chip.style, { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' });
-            chip.title = event.title;
-            el.append(chip);
-          }
-          if (entries.length > visible.length) el.append(node('small', `+${entries.length - visible.length} more`));
-          el.setAttribute('aria-label', [dayLabel.format(day), ...(entries.length ? [`${entries.length} events`, ...visible.map((event) => event.title)] : [])].join(', '));
-          el.setAttribute('aria-pressed', String(key === dateKey(selected)));
-          if (key === dateKey(new Date())) el.setAttribute('aria-current', 'date');
-          if (view === 'Month' && day.getMonth() !== month().getMonth()) el.classList.add('outside');
-          grid.append(el);
-        }
-        if (focusedDay) grid.querySelector(`[data-date="${focusedDay}"]`)?.focus({ preventScroll: true });
-      }
-      agenda.replaceChildren();
-      function list(day, entries) {
-        agenda.append(node('h2', dayLabel.format(day)));
-        for (const event of entries) {
-          const row = node('article', null, 'record');
-          const time = event.all_day ? 'All day' : dateKey(event.startDate) !== dateKey(day)
-            ? `Continues from ${shortDate.format(event.startDate)}`
-            : dateKey(event.endDate) === dateKey(day) ? `${timeLabel.format(event.startDate)} - ${timeLabel.format(event.endDate)}` : timeLabel.format(event.startDate);
-          row.append(node('h3', event.title), node('p', [time, event.location].filter(Boolean).join(' | ')));
-          if (event.notes) row.append(node('p', event.notes, 'contact-notes'));
-          row.append(event.editable ? button('Edit event', () => edit(event, selected, load)) : node('p', 'Open in the legacy app to edit.'));
-          agenda.append(row);
-        }
-      }
-      if (view === 'Agenda') {
-        for (let i = 0; i < days; i++) {
-          const day = shift(first, i), entries = forDay(day);
-          if (entries.length) list(day, entries);
+        ? dayLabel.format(selected) : shortDate.formatRange(first, dates.at(-1));
+      const focusedDay = surface.contains(document.activeElement) && document.activeElement.dataset.date;
+      const previousView = surface.dataset.mode;
+      const sameView = previousView === view;
+      if (previousView === 'Week' || previousView === 'Day') timelineScroll.set(previousView, surface.scrollTop);
+      const left = sameView ? surface.scrollLeft : 0;
+      surface.dataset.mode = view;
+      surface.replaceChildren();
+      if (view === 'Month') drawMonth(dates);
+      else if (view === 'Week' || view === 'Day') {
+        const initialTop = drawTimeline(dates);
+        surface.scrollTop = timelineScroll.get(view) ?? initialTop;
+      } else {
+        const agenda = node('section', null, 'calendar-list');
+        for (const day of dates) {
+          const entries = forDay(day);
+          if (entries.length) agenda.append(node('h2', dayLabel.format(day)), ...entries.map((event) => eventRow(event, day)));
         }
         if (!agenda.hasChildNodes() && !status.textContent) agenda.append(node('p', 'No events in this date range.'));
-      } else {
-        const entries = forDay(selected);
-        list(selected, entries);
-        if (!entries.length && !status.textContent) agenda.append(node('p', 'No events on this day.'));
+        surface.append(agenda);
       }
+      if (!sameView && view !== 'Week' && view !== 'Day') surface.scrollTop = 0;
+      surface.scrollLeft = left;
+      if (focusedDay) (surface.querySelector(`[data-date="${focusedDay}"]`) || surface).focus({ preventScroll: true });
     }
     async function load() {
-      if (!grid.isConnected) return;
+      if (!surface.isConnected) return;
       const id = ++ticket;
       const [first, days] = range();
       records = [];
@@ -131,11 +266,12 @@ window.InkwellCalendar = (() => {
       try {
         // The backend bounds use stored date prefixes, not browser-local dates.
         const data = await invoke('events', { start: dateKey(shift(first, -1)), end: dateKey(shift(first, days + 1)) });
-        if (id !== ticket || !grid.isConnected) return;
+        if (id !== ticket || !surface.isConnected) return;
         records = data.map((event) => ({ ...event, startDate: parse(event.start, event.all_day), endDate: parse(event.end, event.all_day) }))
+          .filter((event) => event.endDate > event.startDate)
           .sort((a, b) => Number(b.all_day) - Number(a.all_day) || a.startDate - b.startDate);
         status.textContent = ''; draw();
-      } catch (error) { if (id === ticket && grid.isConnected) status.textContent = String(error); }
+      } catch (error) { if (id === ticket && surface.isConnected) status.textContent = String(error); }
     }
     void load();
   }
@@ -158,7 +294,7 @@ window.InkwellCalendar = (() => {
       input.location.value = event?.location ?? (typeof seed.location === 'string' ? seed.location.slice(0, 500) : '');
       input.notes.value = event?.notes ?? (typeof seed.notes === 'string' ? seed.notes.slice(0, 10000) : '');
       allDay.checked = event?.all_day || false;
-      const defaultStart = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate(), 9);
+      const defaultStart = seed.start instanceof Date ? seed.start : new Date(selected.getFullYear(), selected.getMonth(), selected.getDate(), 9);
       assignDates(event ? parse(event.start, event.all_day) : defaultStart, event ? parse(event.end, event.all_day) : new Date(defaultStart.getTime() + 3600000));
       allDay.onchange = () => {
         const start = parse(input.start.value), end = parse(input.end.value);

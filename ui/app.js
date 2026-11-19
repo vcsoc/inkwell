@@ -38,6 +38,7 @@ function folders() {
 function select(view, folder) {
   if (state.view === 'theme' && view !== 'theme') window.InkwellTheme.revert();
   state.view = view;
+  $('mail-filters').hidden = view !== 'mail';
   if (folder) state.folder = folder;
   state.offset = 0;
   state.search = '';
@@ -117,7 +118,9 @@ async function load() {
   $('rows').replaceChildren();
   $('pages').hidden = true;
   try {
-    const result = await (view === 'mail' ? invoke('messages', { folder, search, offset, scope }) : invoke('contacts'));
+    const controls = $('mail-filters').elements;
+    const filters = { unread: controls.unread.checked, starred: controls.starred.checked, from: controls.from.value || null, to: controls.to.value || null, oldest: controls.order.value === 'oldest' };
+    const result = await (view === 'mail' ? invoke('messages', { folder, search, offset, scope, filters }) : invoke('contacts'));
     if (ticket !== state.list) return;
     if (view === 'contacts') {
       renderPeople(result);
@@ -241,19 +244,62 @@ function contactRow(row) {
   const result = element('article', null, 'people-card');
   const header = element('div', null, 'people-card-header');
   const initials = row.name.trim().split(/\s+/).slice(0, 2).map((part) => [...part][0]).join('').toLocaleUpperCase();
-  const avatar = element('span', initials, 'people-avatar'); avatar.setAttribute('aria-hidden', 'true');
+  const avatar = action('', () => picker.click()); avatar.className = 'people-avatar';
+  avatar.setAttribute('aria-label', `Change photo for ${row.name}`); avatar.title = 'Change photo or drop an image here';
+  function paint() {
+    avatar.replaceChildren();
+    if (/^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/=]+$/.test(row.avatar || '')) {
+      const image = element('img'); image.src = row.avatar; image.alt = '';
+      image.onerror = () => { avatar.textContent = initials; }; avatar.append(image);
+    } else avatar.textContent = initials;
+    removePhoto.hidden = !row.avatar;
+  }
+  const picker = element('input'); picker.type = 'file'; picker.accept = 'image/jpeg,image/png,image/webp'; picker.hidden = true;
+  let savingPhoto = false;
+  async function savePhoto(file) {
+    if (savingPhoto) return;
+    savingPhoto = true;
+    try {
+      let data = null;
+      if (file) {
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10_000_000) throw Error('Choose a JPEG, PNG or WebP image under 10 MB.');
+        const bitmap = await createImageBitmap(file);
+        try {
+          const canvas = element('canvas'); canvas.width = canvas.height = 256;
+          const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 256, 256);
+          const size = Math.min(bitmap.width, bitmap.height);
+          ctx.drawImage(bitmap, (bitmap.width - size) / 2, (bitmap.height - size) / 2, size, size, 0, 0, 256, 256);
+          data = canvas.toDataURL('image/jpeg', .85);
+        } finally { bitmap.close(); }
+      }
+      await invoke('set_contact_avatar', { id: row.id, email: row.email, avatar: data }); row.avatar = data; paint();
+    } catch (err) { if (result.isConnected) $('status').textContent = err?.message || errorMessage(err); }
+    finally { savingPhoto = false; picker.value = ''; }
+  }
+  picker.onchange = () => { if (picker.files[0]) void savePhoto(picker.files[0]); };
+  result.ondragover = (event) => { if ([...event.dataTransfer.types].includes('Files')) { event.preventDefault(); result.classList.add('photo-drop'); } };
+  result.ondragleave = (event) => { if (!result.contains(event.relatedTarget)) result.classList.remove('photo-drop'); };
+  result.ondrop = (event) => { event.preventDefault(); result.classList.remove('photo-drop'); if (event.dataTransfer.files[0]) void savePhoto(event.dataTransfer.files[0]); };
   const identity = element('div');
   identity.append(element('h3', row.name), element('p', row.email, 'metadata'));
   if (row.company) identity.append(element('p', row.company, 'people-company'));
   header.append(avatar, identity); result.append(header);
   if (row.notes) result.append(element('p', row.notes, 'contact-notes metadata'));
   const controls = element('div', null, 'theme-actions');
-  controls.append(action('Compose to contact', () => window.InkwellDrafts.show(null, { recipient: row.email })), action('Edit', () => openContact(row)), action('Delete', async () => {
+  controls.classList.add('people-card-actions');
+  const icon = (label, path, callback) => {
+    const button = action('', callback); button.title = label; button.setAttribute('aria-label', label);
+    const ns = 'http://www.w3.org/2000/svg'; const svg = document.createElementNS(ns, 'svg'); const stroke = document.createElementNS(ns, 'path');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); stroke.setAttribute('d', path); svg.append(stroke); button.append(svg);
+    return button;
+  };
+  const removePhoto = icon('Remove photo', 'M6 6l12 12M18 6L6 18', () => void savePhoto(null));
+  controls.append(icon('Compose to contact', 'M3 5h18v14H3zM3 6l9 7 9-7', () => window.InkwellDrafts.show(null, { recipient: row.email })), icon('Edit', 'M4 20l4-1 12-12-3-3L5 16zM14 7l3 3', () => openContact(row)), removePhoto, icon('Delete', 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13', async () => {
     if (!window.confirm(`Delete ${row.name} from Contacts?`)) return;
     try { await invoke('delete_contact', { id: row.id, prior: row }); if (state.view === 'contacts') await load(); }
     catch (error) { if (state.view === 'contacts') $('status').textContent = errorMessage(error); }
   }));
-  result.append(controls);
+  result.append(picker, controls); paint();
   return result;
 }
 $('cancel-contact').onclick = () => { if (!contactBusy) contactDialog.close(); };
@@ -273,6 +319,10 @@ contactForm.onsubmit = async (event) => {
 };
 for (const button of $('sections').querySelectorAll('button')) button.onclick = () => select(button.dataset.view);
 $('refresh').onclick = () => { if (state.view !== 'theme') void refresh(); };
+function applyMailFilters() { state.offset = 0; clearReader(); if (state.view === 'mail') void load(); }
+$('mail-filters').onchange = applyMailFilters;
+$('mail-filters').onreset = () => setTimeout(applyMailFilters, 0);
+$('mail-filters').onsubmit = (event) => { event.preventDefault(); applyMailFilters(); };
 $('search-form').onsubmit = (event) => {
   event.preventDefault();
   state.search = $('search').value;

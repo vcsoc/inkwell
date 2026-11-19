@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use inkwell_tauri::{
-    Folder, Message, MessagePage, StoreError, Workspace,
+    Folder, MailFilters, Message, MessagePage, StoreError, Workspace,
     calendar::{Event, EventFields},
     contacts::{Contact, ContactFields},
     drafts::{DraftFields, DraftVersion},
@@ -30,12 +30,18 @@ async fn messages(
     search: String,
     offset: u32,
     scope: Option<String>,
+    filters: Option<MailFilters>,
 ) -> Result<MessagePage, String> {
     let scope = scope.unwrap_or_else(|| "folder".into());
     if !matches!(scope.as_str(), "folder" | "subfolders" | "all") {
         return Err("Unknown search scope.".into());
     }
-    read(move |workspace| workspace.scoped_messages(&folder, &search, offset, &scope)).await
+    let filters = filters.unwrap_or_default();
+    if !filters.valid() {
+        return Err("Check the mail filter dates.".into());
+    }
+    read(move |workspace| workspace.filtered_messages(&folder, &search, offset, &scope, &filters))
+        .await
 }
 #[tauri::command]
 async fn message(id: i64) -> Result<Message, String> {
@@ -67,6 +73,10 @@ async fn save_contact(
 #[tauri::command]
 async fn delete_contact(id: i64, prior: ContactFields) -> Result<(), String> {
     contact_write(move |workspace| workspace.delete_contact(id, prior)).await
+}
+#[tauri::command]
+async fn set_contact_avatar(id: i64, email: String, avatar: Option<String>) -> Result<(), String> {
+    contact_write(move |workspace| workspace.set_contact_avatar(id, &email, avatar)).await
 }
 #[tauri::command]
 async fn plain_draft(id: i64) -> Result<Option<(DraftVersion, DraftFields)>, String> {
@@ -226,6 +236,7 @@ fn main() {
             contacts,
             save_contact,
             delete_contact,
+            set_contact_avatar,
             plain_draft,
             save_draft,
             delete_plain_draft,

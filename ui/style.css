@@ -24,6 +24,11 @@ button.primary:hover, #search-form button:hover { filter: brightness(.92); }
 button:disabled { opacity: .48; cursor: default; }
 :focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
 .masthead { min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 16px; border-bottom: 1px solid var(--border); }
+.mail-filters { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 10px; }
+.mail-filters label { display: flex; align-items: center; gap: 4px; font-size: .85em; }
+.mail-filters input[type='checkbox'] { min-height: auto; accent-color: var(--sidebar-primary); }
+.mail-filters input[type='date'], .mail-filters button, .mail-filters select { min-height: 30px; font-size: .85em; }
+@media (max-width: 900px) { .mail-filters { order: 3; width: 100%; justify-content: start; } .masthead { flex-wrap: wrap; } }
 .wordmark { font: bold 32px/1 Georgia, serif; letter-spacing: -.075em; }
 .wordmark span { color: var(--brand-hexagon); font: 600 .5em/1 var(--body-font, sans-serif); letter-spacing: 0; margin-inline-start: .12em; vertical-align: super; }
 .edition, .section-label { color: var(--muted-foreground); font-size: 11px; font-weight: 600; letter-spacing: .09em; }
@@ -98,17 +103,33 @@ body:not([data-view='mail'])[data-view] #index { grid-column: 2 / -1; }
 .people-alphabet button:disabled { opacity: .42; }
 .people-groups section + section { margin-top: var(--gap); }
 .people-groups h2 { margin: 2px 0 8px; scroll-margin-top: 12px; color: var(--muted-foreground); }
-.people-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 232px), 1fr)); gap: 10px; }
-.people-card { border: 1px solid var(--border); border-radius: calc(var(--radius) + 6px); padding: var(--gap); background: var(--card); }
-.people-card-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
-.people-avatar { flex: 0 0 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: var(--accent-foreground); background: var(--accent); font-weight: 600; font-size: 12px; }
+.people-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 244px), 296px)); gap: 12px; }
+.people-card { box-sizing: border-box; min-height: 310px; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: calc(var(--radius) + 6px); padding: 18px; background: var(--card); }
+.people-card.photo-drop { outline: 2px dashed var(--sidebar-primary); outline-offset: -4px; }
+.people-card-header { display: grid; justify-items: center; text-align: center; gap: 12px; margin: 8px 0 12px; }
+.people-avatar { width: 86px; height: 86px; padding: 0; overflow: hidden; border-radius: 50%; display: grid; place-items: center; color: var(--accent-foreground); background: var(--accent); font-weight: 650; font-size: 27px; }
+.people-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.people-card-actions { margin-top: auto; padding-top: 12px; justify-content: end; border-top: 1px solid var(--border); }
+.people-card-actions button { display: grid; place-items: center; width: 32px; height: 32px; min-height: 32px; padding: 6px; }
+.people-card-actions svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 .people-card h3, .people-card-header p { margin: 0 0 3px; }
 .people-card h3 { font-size: 1.05rem; }
 .people-company { font-size: .9em; }
 .saved-theme { display: grid; gap: 8px; padding: 8px; margin-top: 8px; border: 1px solid var(--border); border-radius: var(--radius); }
-.saved-theme-preview { display: grid; grid-template-columns: 1fr 2fr; min-height: 74px; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; background: var(--background); color: var(--foreground); font-size: 10px; }
-.saved-theme-rail { padding: 8px; background: var(--sidebar); color: var(--sidebar-foreground); border-inline-end: 1px solid var(--sidebar-border); }
-.saved-theme-pane { display: grid; justify-items: start; align-content: center; gap: 6px; padding: 8px; background: var(--card); color: var(--foreground); }
+.saved-theme-preview { display: grid; grid-template-columns: .8fr 1fr 1.15fr; grid-template-rows: 32px minmax(110px, auto); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--background); color: var(--foreground); font-size: 9px; line-height: 1.25; }
+.saved-theme-top { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding: 5px 8px; }
+.saved-theme-top b { font: bold 14px Georgia, serif; }
+.saved-theme-rail, .saved-theme-pane, .saved-theme-reader { min-width: 0; display: grid; align-content: start; gap: 5px; padding: 6px; }
+.saved-theme-rail { background: var(--sidebar); color: var(--sidebar-foreground); border-inline-end: 1px solid var(--border); }
+.saved-theme-rail span { padding: 3px; }
+.saved-theme-rail span:first-child { background: var(--sidebar-accent); color: var(--sidebar-accent-foreground); border-inline-start: 2px solid var(--sidebar-primary); border-radius: 3px; }
+.saved-theme-pane { background: var(--card); border-inline-end: 1px solid var(--border); }
+.saved-theme-message { display: grid; gap: 2px; padding: 3px; }
+.saved-theme-message:nth-child(2) { background: var(--accent); color: var(--accent-foreground); border-radius: 3px; }
+.saved-theme-message span, .saved-theme-reader > span { font-size: 8px; }
+.saved-theme-reader p { margin: 2px 0; color: var(--muted-foreground); }
+.saved-theme-colors { display: flex; flex-wrap: wrap; gap: 2px; }
+.saved-theme-colors span { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--border); }
 .saved-theme-action { padding: 3px 5px; border-radius: 4px; background: var(--primary); color: var(--primary-foreground); }
 .saved-theme-controls { display: flex; justify-content: end; gap: 5px; }
 .theme-icon { display: inline-grid; place-items: center; width: 32px; min-height: 32px; padding: 4px; }

@@ -65,6 +65,28 @@ pub fn workspace_database() -> Option<PathBuf> {
 
 pub struct Workspace(Connection);
 
+#[derive(Default, serde::Deserialize)]
+#[serde(default)]
+pub struct MailFilters {
+    pub unread: bool,
+    pub starred: bool,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub oldest: bool,
+}
+impl MailFilters {
+    pub fn valid(&self) -> bool {
+        let valid = |date: &Option<String>| {
+            date.as_ref().is_none_or(|value| {
+                value.len() == 10 && chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").is_ok()
+            })
+        };
+        valid(&self.from)
+            && valid(&self.to)
+            && !matches!((&self.from,&self.to),(Some(a),Some(b)) if a>b)
+    }
+}
+
 #[derive(Serialize)]
 pub struct Folder {
     pub key: String,
@@ -160,6 +182,17 @@ impl Workspace {
         offset: u32,
         scope: &str,
     ) -> Result<MessagePage> {
+        self.filtered_messages(folder, search, offset, scope, &MailFilters::default())
+    }
+
+    pub fn filtered_messages(
+        &self,
+        folder: &str,
+        search: &str,
+        offset: u32,
+        scope: &str,
+        filters: &MailFilters,
+    ) -> Result<MessagePage> {
         let mut bindings: Vec<Value> = Vec::new();
         let mut cte = "";
         let destination =
@@ -228,9 +261,28 @@ impl Workspace {
         }
         clause = format!("({clause})");
         search::append(search, &mut clause, &mut bindings);
+        if filters.unread {
+            clause.push_str(" AND unread=1");
+        }
+        if filters.starred {
+            clause.push_str(" AND starred=1");
+        }
+        if let Some(date) = &filters.from {
+            clause.push_str(" AND substr(date,1,10)>=?");
+            bindings.push(date.clone().into());
+        }
+        if let Some(date) = &filters.to {
+            clause.push_str(" AND substr(date,1,10)<=?");
+            bindings.push(date.clone().into());
+        }
+        let order = if filters.oldest {
+            "date ASC,id ASC"
+        } else {
+            "date DESC,id DESC"
+        };
         bindings.extend([i64::from(PAGE_SIZE + 1).into(), i64::from(offset).into()]);
         let sql = format!(
-            "{cte}SELECT id,sender,subject,date,unread,starred FROM messages WHERE {clause} ORDER BY date DESC,id DESC LIMIT ? OFFSET ?"
+            "{cte}SELECT id,sender,subject,date,unread,starred FROM messages WHERE {clause} ORDER BY {order} LIMIT ? OFFSET ?"
         );
         let mut statement = self.0.prepare(&sql)?;
         let read = |row: &Row<'_>| {

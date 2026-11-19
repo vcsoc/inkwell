@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-alpha.8
+
+- Expanded Calendar to the full workspace, with a continuous month grid and hour-aligned day and week views.
+- Gave People fixed-size cards, bottom icon actions, and persistent contact photos with file picker and drag-and-drop support.
+- Rebuilt saved-theme thumbnails as miniature inboxes with a sidebar, message list, reader, and palette swatches.
+- Added a mail filter bar with unread and starred filters, an inclusive date range, and newest/oldest ordering.
+
 ## 0.2.0-alpha.7
 
 - Added alphabetized People index cards and a vertical jump index.

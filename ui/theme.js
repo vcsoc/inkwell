@@ -187,10 +187,24 @@ window.InkwellTheme = (() => {
         for (const [field, [, token]] of Object.entries(palette)) if (theme[field]) preview.style.setProperty(`--${token}`, theme[field]);
         preview.style.fontFamily = fonts[theme.font];
         preview.setAttribute('aria-hidden', 'true');
-        const rail = element('div', 'Inbox', 'saved-theme-rail');
+        const top = element('div', null, 'saved-theme-top');
+        top.append(element('b', 'inkwell\u00ae'), element('span', 'Compose', 'saved-theme-action'));
+        const rail = element('div', null, 'saved-theme-rail');
+        for (const name of ['Inbox', 'Starred', 'Sent', 'Archive']) rail.append(element('span', name));
         const pane = element('div', null, 'saved-theme-pane');
-        pane.append(element('strong', 'Sample message'), element('span', 'Compose', 'saved-theme-action'));
-        preview.append(rail, pane);
+        pane.append(element('strong', 'Inbox'));
+        for (const [sender, subject] of [['Maya Chen', 'Design notes'], ['Jordan Lee', 'Next week'], ['Sam Rivera', 'A quick update']]) {
+          const message = element('div', null, 'saved-theme-message');
+          message.append(element('b', sender), element('span', subject)); pane.append(message);
+        }
+        const reader = element('div', null, 'saved-theme-reader');
+        reader.append(element('b', 'Design notes'), element('span', 'Maya Chen'), element('p', 'A few ideas for our next meeting.'));
+        const colors = element('div', null, 'saved-theme-colors');
+        for (const token of ['background', 'sidebar', 'primary', 'accent', 'brand-hexagon']) {
+          const chip = element('span'); chip.style.background = `var(--${token})`; colors.append(chip);
+        }
+        reader.append(colors);
+        preview.append(top, rail, pane, reader);
         const controls = element('div', null, 'saved-theme-controls');
         const applyButton = button('', () => {
           try { persist(theme, library); draft = { ...saved }; update(); renderLibrary(); notice.textContent = 'Theme applied.'; }
