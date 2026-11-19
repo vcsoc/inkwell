@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0-alpha.12
+
+- Made the idle wordmark mostly neutral. Active sync brings out the gradient and shows an underline that clears when syncing stops.
+- Kept all navigation destinations visible as a centered icon rail when the sidebar is collapsed, with hover names and accessible labels.
+
 ## 0.2.0-alpha.11
 
 - Moved sync status to a dismissible workspace notification bar separate from the topbar and sidebar.

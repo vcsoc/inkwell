@@ -14,8 +14,10 @@
 [hidden] { display: none !important; }
 body { margin: 0; height: 100dvh; display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); --sidebar-width: clamp(160px, 18vw, 265px); }
 body[data-sidebar='collapsed'] { --sidebar-width: 116px; }
-body[data-sidebar='collapsed'] #workspace-sidebar { visibility: hidden; }
-body[data-sidebar='collapsed'] { background: linear-gradient(to right, var(--sidebar) 116px, var(--background) 116px); }
+body[data-sidebar='collapsed'] #workspace-sidebar { padding-inline: 6px; }
+body[data-sidebar='collapsed'] #workspace-sidebar .section-label { display: none; }
+body[data-sidebar='collapsed'] #workspace-sidebar .nav-item { justify-content: center; padding-inline: 0; }
+body[data-sidebar='collapsed'] #workspace-sidebar .nav-label { display: none; }
 button, input, select { font: inherit; color: inherit; }
 button, select, input { border: 1px solid var(--input); border-radius: var(--radius); min-height: 36px; padding: 5px 10px; }
 button, select { background: var(--secondary); color: var(--secondary-foreground); }
@@ -35,13 +37,15 @@ button:disabled { opacity: .48; cursor: default; }
 .mail-filters input[type='checkbox'] { min-height: auto; accent-color: var(--sidebar-primary); }
 .mail-filters input[type='date'] { width: 105px; }
 .wordmark { position: relative; font: bold 38px/1 Georgia, serif; letter-spacing: -.075em; color: var(--sidebar-foreground); }
-.wordmark span { color: var(--brand-hexagon); font: 600 .45em/1 var(--body-font, sans-serif); letter-spacing: 0; margin-inline-start: .12em; vertical-align: super; }
+.wordmark-mark { color: var(--sidebar-foreground); opacity: .84; font: 600 .45em/1 var(--body-font, sans-serif); letter-spacing: 0; margin-inline-start: .12em; vertical-align: super; }
+.wordmark-name { position: relative; }
 @supports (background-clip: text) {
-  .wordmark { color: transparent; background-image: linear-gradient(100deg, var(--sidebar-foreground) 8%, var(--brand-hexagon) 35%, #3b82f6 51%, var(--sidebar-foreground) 76%); background-size: 230% 100%; background-clip: text; animation: brand-gradient 9s linear infinite alternate; }
+  .wordmark-name::after { content: attr(data-text) / ''; position: absolute; inset: 0; pointer-events: none; color: transparent; background-image: linear-gradient(100deg, var(--sidebar-foreground), var(--brand-hexagon) 38%, #3b82f6 58%, var(--sidebar-foreground)); background-size: 200% 100%; background-position: 45% 0; background-clip: text; opacity: .12; transition: opacity .35s ease; }
+  html[data-syncing='true'] .wordmark-name::after { opacity: 1; animation: brand-gradient 5s linear infinite alternate; }
 }
 @keyframes brand-gradient { from { background-position: 0% 0; } to { background-position: 100% 0; } }
-@media (prefers-reduced-motion: reduce) { .wordmark { animation: none; } }
 html[data-syncing='true'] .wordmark::after { content: ''; position: absolute; inset: auto 0 -3px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--brand-hexagon), #3b82f6); }
+@media (prefers-reduced-motion: reduce) { .wordmark .wordmark-name::after { animation: none !important; transition: none; } }
 .notification-bar { grid-area: 2 / 2; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 3px 10px; background: var(--muted); color: var(--foreground); border-bottom: 1px solid var(--border); font-size: .85em; overflow-wrap: anywhere; }
 .notification-bar span { flex: 1; }
 .notification-bar button { min-height: 24px; padding: 1px 7px; }
@@ -56,7 +60,9 @@ nav { display: grid; gap: 4px; margin: 8px 0 16px; }
 nav button { position: relative; text-align: left; min-height: var(--nav-height); border-color: transparent; background: transparent; color: inherit; font-weight: 500; }
 nav button:hover, nav button[aria-current='true'], nav button[aria-pressed='true'] { background: var(--sidebar-accent); color: var(--sidebar-accent-foreground); }
 nav button[aria-current='true']::before, nav button[aria-pressed='true']::before { content: ''; position: absolute; inset: 5px auto 5px 0; width: 3px; border-radius: 3px; background: var(--sidebar-primary); }
-.folder { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#workspace-sidebar .nav-item { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.nav-icon { width: 17px; height: 17px; flex: 0 0 17px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.nav-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 nav .section-label { margin-top: 12px; overflow-wrap: anywhere; }
 h1, h2 { font-family: var(--heading-font, inherit); font-weight: 600; letter-spacing: -.03em; }
 h1 { margin: 0 0 8px; font-size: 24px; }

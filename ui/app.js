@@ -18,6 +18,33 @@ function clearReader() {
   $('reader').replaceChildren(element('p', 'Select a message to read it here.', 'placeholder'));
   document.body.classList.remove('message-open');
 }
+const navPaths = {
+  mail: 'M3 5h18v14H3zM3 6l9 7 9-7',
+  calendar: 'M4 6h16v15H4zM8 3v6m8-6v6M4 11h16M8 15h2m4 0h2m-8 3h2',
+  contacts: 'M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M14 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zm6 14v-2a4 4 0 0 0-2-3.5M17 3.3a4 4 0 0 1 0 7.4',
+  theme: 'M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1.5-3.3 1.5 1.5 0 0 1 1.1-2.5H18a3 3 0 0 0 3-3A9 9 0 0 0 12 3zM7.5 11h.01M10 7.5h.01m4 0h.01m3 3h.01',
+  inbox: 'M3 14l3-8h12l3 8v6H3zM3 14h5l2 3h4l2-3h5',
+  starred: 'm12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z',
+  sent: 'm21 3-6 18-4-8-8-4zM11 13 21 3',
+  drafts: 'M5 3h9l5 5v13H5zM14 3v6h5M8 13h8m-8 4h6',
+  archive: 'M4 4h16v5H4zM6 9v12h12V9m-8 4h4',
+  trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13m-8 4v5m4-5v5',
+  folder: 'M3 7V5h6l2 2h10v13H3z',
+};
+function decorateNavigation(row, label, key) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const icon = document.createElementNS(ns, 'svg');
+  const path = document.createElementNS(ns, 'path');
+  icon.setAttribute('viewBox', '0 0 24 24');
+  icon.setAttribute('aria-hidden', 'true');
+  icon.classList.add('nav-icon');
+  path.setAttribute('d', Object.hasOwn(navPaths, key) ? navPaths[key] : navPaths.folder);
+  icon.append(path);
+  row.classList.add('nav-item');
+  row.setAttribute('aria-label', label);
+  row.title = label;
+  row.replaceChildren(icon, element('span', label, 'nav-label'));
+}
 function folders() {
   const contents = document.createDocumentFragment();
   let group = null;
@@ -28,7 +55,7 @@ function folders() {
     }
     const row = element('button', folder.label, 'folder');
     row.type = 'button';
-    row.title = folder.label;
+    decorateNavigation(row, folder.label, folder.key);
     row.setAttribute('aria-current', String(state.view === 'mail' && folder.key === state.folder));
     row.onclick = () => select('mail', folder.key);
     contents.append(row);
@@ -344,7 +371,10 @@ contactForm.onsubmit = async (event) => {
   } catch (error) { $('contact-status').textContent = errorMessage(error); }
   finally { contactBusy = false; for (const button of buttons) button.disabled = false; }
 };
-for (const button of $('sections').querySelectorAll('button')) button.onclick = () => select(button.dataset.view);
+for (const button of $('sections').querySelectorAll('button')) {
+  decorateNavigation(button, button.textContent.trim(), button.dataset.view);
+  button.onclick = () => select(button.dataset.view);
+}
 $('refresh').onclick = () => { if (state.view !== 'theme') void refresh(); };
 const syncButton = $('sync-inbox');
 const syncStatus = $('sync-status');
@@ -354,7 +384,6 @@ $('dismiss-sync').onclick = () => { noticeDismissed = true; syncNotice.hidden = 
 const sidebarToggle = $('toggle-sidebar');
 function setSidebar(collapsed) {
   document.body.dataset.sidebar = collapsed ? 'collapsed' : 'expanded';
-  $('workspace-sidebar').inert = collapsed;
   sidebarToggle.setAttribute('aria-expanded', String(!collapsed));
   sidebarToggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
   sidebarToggle.title = sidebarToggle.getAttribute('aria-label');
