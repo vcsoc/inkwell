@@ -37,24 +37,23 @@ test('logo activity accounts for overlapping requests and clears after failure',
   await expect(page.locator('#mail-activity')).toHaveCSS('clip-path', 'inset(50%)');
 });
 
-test('logo sync indication respects reduced motion and stops when idle', async ({ page }) => {
+test('logo underline is static during sync and disappears when idle', async ({ page }) => {
   await demo(page);
-  await expect(page.locator('html')).toHaveAttribute('data-busy', 'false');
-  await page.evaluate(() => (document.documentElement.dataset.syncing = 'true'));
-  await expect.poll(() => logoAnimation(page)).toBe('inkwell-logo-activity');
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect.poll(() => logoAnimation(page)).toBe('none');
-  await expect
-    .poll(() =>
-      page.locator('.brand-logo').evaluate((el) => getComputedStyle(el, '::after').opacity),
-    )
-    .toBe('1');
-  await page.evaluate(() => (document.documentElement.dataset.syncing = 'false'));
-  await expect
-    .poll(() =>
-      page.locator('.brand-logo').evaluate((el) => getComputedStyle(el, '::after').opacity),
-    )
-    .toBe('0');
+  const underline = () =>
+    page.locator('.brand').evaluate((element) => {
+      const style = getComputedStyle(element, '::after');
+      return { content: style.content, height: style.height, animation: style.animationName };
+    });
+  await expect.poll(underline).toMatchObject({ content: 'none' });
+  for (const flag of ['syncing', 'directSync']) {
+    await page.evaluate((flag) => (document.documentElement.dataset[flag] = 'true'), flag);
+    await expect.poll(underline).toEqual({ content: '""', height: '2px', animation: 'none' });
+    await expect.poll(() => logoAnimation(page)).toBe('none');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect.poll(underline).toEqual({ content: '""', height: '2px', animation: 'none' });
+    await page.evaluate((flag) => (document.documentElement.dataset[flag] = 'false'), flag);
+    await expect.poll(underline).toMatchObject({ content: 'none' });
+  }
 });
 
 test('server hierarchy, deep links and top search scopes work on desktop and mobile', async ({

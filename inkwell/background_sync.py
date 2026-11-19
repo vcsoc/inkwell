@@ -325,8 +325,11 @@ class BackgroundSync:
             try:
                 resources.close()
             finally:
-                self.update(active=False, current="", finished=time.time())
-                self.sync_lock.release()
+                # An idle snapshot must not be visible before the transport is free.
+                with self.lock:
+                    self.sync_lock.release()
+                    self.state.update(active=False, current="", finished=time.time())
+                    self.state["revision"] += 1
 
     def stop(self):
         self.cancel.set()

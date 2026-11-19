@@ -83,6 +83,25 @@ def test_worker_coalesces_requests_and_holds_shared_transport_lock(client, monke
     job.sync_lock.release()
 
 
+def test_worker_keeps_active_status_until_transport_lock_is_released(client, monkeypatch):
+    job = setup(monkeypatch, lambda *args, **kwargs: 0)
+    states_at_release = []
+    transport_lock = job.sync_lock
+
+    class ObservedLock:
+        def acquire(self, blocking=True):
+            return transport_lock.acquire(blocking=blocking)
+
+        def release(self):
+            states_at_release.append(job.state["active"])
+            transport_lock.release()
+
+    job.sync_lock = ObservedLock()
+    job.start()
+    assert not finish(job)["active"]
+    assert states_at_release == [True]
+
+
 def test_failure_does_not_skip_other_folders_and_failed_folder_retries_backfill(
     client, monkeypatch
 ):

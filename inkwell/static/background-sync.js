@@ -13,8 +13,13 @@ window.InkwellBackgroundSync = ({
   let active = false,
     timer = null,
     last = '',
-    polling = false,
-    completed = 0;
+    request = null,
+    requestMode = null,
+    completed = 0,
+    refreshPending = false,
+    refreshing = false,
+    providerPolling = false;
+  const deadline = () => ({ signal: AbortSignal.timeout(10000) });
   const badge = document.createElement('div');
   badge.id = 'sync-progress';
   badge.className = 'sync-footer';
@@ -28,8 +33,10 @@ window.InkwellBackgroundSync = ({
   providerBadge.hidden = true;
   badge.after(providerBadge);
   const pollProvider = async () => {
+    if (providerPolling) return;
+    providerPolling = true;
     try {
-      const status = await api('/provider-sync');
+      const status = await api('/provider-sync', deadline());
       const needsAccess = status.authorization_required && !status.explicit_local_only;
       providerBadge.hidden =
         !status.pending && !status.failed && !status.cancelled && !needsAccess && !status.completed;
@@ -54,12 +61,29 @@ window.InkwellBackgroundSync = ({
           ? 'Open Mail accounts and approve Grant mail/calendar access. Moves and deletion will not silently change only the local copy.'
           : 'Microsoft Graph changes retry automatically while Inkwell is running.');
     } catch {
-      providerBadge.hidden = true;
+      // Keep the last known provider write result until the server answers again.
+    } finally {
+      providerPolling = false;
     }
   };
   void pollProvider();
   setInterval(pollProvider, 5000);
-  const apply = async (status) => {
+  const refreshWorkspace = async () => {
+    if (refreshing) return;
+    refreshing = true;
+    try {
+      while (refreshPending) {
+        refreshPending = false;
+        await refresh();
+      }
+    } catch {
+      // Retry on the next status response without blocking the status poll.
+      refreshPending = true;
+    } finally {
+      refreshing = false;
+    }
+  };
+  const apply = (status) => {
     active = status.active;
     document.documentElement.dataset.syncing = String(active);
     badge.hidden = !active && !status.errors.length && !status.pending;
@@ -77,41 +101,64 @@ window.InkwellBackgroundSync = ({
     const revision = status.id + ':' + status.revision;
     if (revision !== last) {
       last = revision;
-      await refresh();
+      refreshPending = true;
     }
+    if (refreshPending) void refreshWorkspace();
     if (!active && status.id > completed) {
       completed = status.id;
-      if (status.added > 0) await onComplete(status);
+      if (status.added > 0)
+        void Promise.resolve()
+          .then(() => onComplete(status))
+          .catch(() => {});
+    }
+  };
+  // Serialize the GET and POST snapshots so an older response cannot replace newer status.
+  const run = (mode, reportError = false) => {
+    if (request) {
+      if (mode === 'full' && requestMode !== 'full')
+        return request.then(() => run(mode, reportError));
+      if (mode === 'start' && requestMode === 'poll')
+        return request.then(() => (active ? undefined : run(mode, reportError)));
+      return request;
     }
     clearTimeout(timer);
-    if (active) timer = setTimeout(poll, 2000);
+    requestMode = mode;
+    request = (async () => {
+      let failed = false;
+      try {
+        apply(
+          await api('/sync/jobs' + (mode === 'full' ? '?full=true' : ''), {
+            ...deadline(),
+            method: mode === 'poll' ? 'GET' : 'POST',
+          }),
+        );
+      } catch (error) {
+        failed = true;
+        active = false;
+        document.documentElement.dataset.syncing = 'false';
+        badge.hidden = false;
+        badge.title = '';
+        badge.textContent = 'Sync status unavailable · retrying automatically';
+        if (reportError) toast(error.message);
+      } finally {
+        request = requestMode = null;
+        timer = setTimeout(tick, failed ? 5000 : active ? 2000 : 15000, failed);
+      }
+    })();
+    return request;
   };
-  const poll = async () => {
-    if (polling) return;
-    polling = true;
-    try {
-      await apply(await api('/sync/jobs'));
-    } catch {
-      timer = setTimeout(poll, 5000);
-    } finally {
-      polling = false;
-    }
+  const tick = (recovering = false) => {
+    if (active || recovering) void run('poll');
+    else if (hasAccounts()) void run('start');
+    else timer = setTimeout(tick, 15000);
   };
-  const controller = {
+  timer = setTimeout(tick, 15000);
+  window.addEventListener('online', () => void run('poll'));
+  return {
     get active() {
       return active;
     },
-    async start(full = false) {
-      try {
-        await apply(await api('/sync/jobs' + (full ? '?full=true' : ''), { method: 'POST' }));
-      } catch (error) {
-        toast(error.message);
-      }
-    },
-    poll,
+    start: (full = false) => run(full ? 'full' : 'start', full),
+    poll: () => run('poll'),
   };
-  setInterval(() => {
-    if (hasAccounts() && !active && !polling) void controller.start();
-  }, 15000);
-  return controller;
 };

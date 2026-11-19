@@ -152,11 +152,15 @@ function toast(message) {
   toastTimer = setTimeout(() => $('#toast').classList.add('hidden'), 6500);
 }
 let pendingWork = 0;
+let directSyncs = 0;
 function activity() {
   document.documentElement.dataset.busy = String(pendingWork > 0);
   $('#mail-activity')?.setAttribute('aria-hidden', String(pendingWork === 0));
 }
 async function api(path, options = {}) {
+  const directSync =
+    options.method === 'POST' && (path === '/sync' || /^\/remote-folders\/\d+\/sync$/.test(path));
+  if (directSync) document.documentElement.dataset.directSync = String(++directSyncs > 0);
   pendingWork++;
   activity();
   try {
@@ -165,7 +169,11 @@ async function api(path, options = {}) {
       headers: { 'Content-Type': 'application/json', 'X-Inkwell': '1', ...options.headers },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
     });
-    const data = await response.json().catch(() => ({ detail: 'Unexpected server response' }));
+    const data = await response.json().catch(() => {
+      options.signal?.throwIfAborted();
+      if (response.ok) throw new Error('Unexpected server response');
+      return { detail: 'Unexpected server response' };
+    });
     if (!response.ok)
       throw new Error(
         Array.isArray(data.detail)
@@ -174,6 +182,7 @@ async function api(path, options = {}) {
       );
     return data;
   } finally {
+    if (directSync) document.documentElement.dataset.directSync = String(--directSyncs > 0);
     pendingWork--;
     activity();
   }
@@ -752,14 +761,18 @@ InkwellFolderMenu(
     toast('Folder color saved.');
   },
 );
+let countsRequest = 0;
 async function refreshCounts() {
+  const ticket = ++countsRequest;
+  const options = { signal: AbortSignal.timeout(25000) };
   const [counts, accounts, remoteFolders, localFolders, pinnedFolders] = await Promise.all([
-    api('/counts'),
-    api('/accounts'),
-    api('/remote-folders'),
-    api('/local-folders'),
-    api('/pinned-folders'),
+    api('/counts', options),
+    api('/accounts', options),
+    api('/remote-folders', options),
+    api('/local-folders', options),
+    api('/pinned-folders', options),
   ]);
+  if (ticket !== countsRequest) return;
   Object.assign(state, { counts, accounts, remoteFolders, localFolders, pinnedFolders });
   installLocalFolders(localFolders);
   navigation();
@@ -997,11 +1010,29 @@ function paintMailFooter(messages, collection) {
   $('#next-page').disabled =
     state.total !== null ? state.offset + messages.length >= state.total : messages.length < 100;
 }
-async function renderMail({ listOnly = false } = {}) {
+let foregroundMailRequest = null;
+async function renderMail({ listOnly = false, background = false } = {}) {
   const generation = state.generation;
+  if (background && (foregroundMailRequest !== null || !$('#message-list'))) return;
   const ticket = (state.mailRequest = (state.mailRequest || 0) + 1);
-  const catalog = await api('/tags');
-  if (generation !== state.generation || ticket !== state.mailRequest) return;
+  if (!background) foregroundMailRequest = ticket;
+  const isCurrent = () => generation === state.generation && ticket === state.mailRequest;
+  try {
+    await loadMail({ listOnly, isCurrent, signal: AbortSignal.timeout(25000) });
+  } catch (error) {
+    if (!isCurrent()) return;
+    if (background) throw error;
+    if ($('#message-list')) throw error;
+    $('#workspace').innerHTML =
+      `<div class="empty-state"><h2>Could not load mail</h2><p role="alert">${esc(error.name === 'TimeoutError' ? 'The mail service took too long to respond.' : error.message)}</p><button class="secondary" id="retry-load-mail">Retry</button></div>`;
+    on($('#retry-load-mail'), 'click', () => renderMail());
+  } finally {
+    if (foregroundMailRequest === ticket) foregroundMailRequest = null;
+  }
+}
+async function loadMail({ listOnly, isCurrent, signal }) {
+  const catalog = await api('/tags', { signal });
+  if (!isCurrent()) return;
   state.tagCatalog = catalog;
   if (state.quick?.tag_id && !catalog.some((t) => t.id === state.quick.tag_id))
     state.quick.tag_id = null;
@@ -1009,6 +1040,7 @@ async function renderMail({ listOnly = false } = {}) {
   const collection =
     state.view === 'collection'
       ? await api('/collections/query', {
+          signal,
           method: 'POST',
           body: {
             ...filters,
@@ -1023,8 +1055,9 @@ async function renderMail({ listOnly = false } = {}) {
     ? collection
     : await api(
         `/messages?folder=${state.view}&q=${encodeURIComponent(state.query)}&offset=${state.offset}&scope=${state.searchScope}&summary=true&${new URLSearchParams(filters)}${state.remoteFolder ? '&remote_folder_id=' + state.remoteFolder.id : ''}`,
+        { signal },
       );
-  if (generation !== state.generation || ticket !== state.mailRequest) return;
+  if (!isCurrent()) return;
   const messages = Array.isArray(response) ? response : response.messages;
   state.total = Array.isArray(response) ? null : response.total;
   state.messages = messages;
@@ -1647,14 +1680,11 @@ const backgroundSync = InkwellBackgroundSync({
   api,
   toast,
   refresh: async () => {
+    if (!state.routerReady) return;
     await refreshCounts();
     if (state.view === 'calendar' && !$('#modal').open) await renderCalendar();
-    if (
-      !state.composer &&
-      !$('#modal').open &&
-      !['settings', 'calendar', 'contacts', 'tags', 'rules'].includes(state.view)
-    )
-      await renderMail({ listOnly: true });
+    if (!state.composer && !$('#modal').open && document.documentElement.dataset.mail === 'true')
+      await renderMail({ listOnly: true, background: true });
   },
 });
 async function pollNotJunkMail() {
@@ -2407,7 +2437,7 @@ async function bootstrap() {
             !$('#modal').open &&
             !state.composer
           )
-            await renderMail({ listOnly: true });
+            await renderMail({ listOnly: true, background: true });
         })
         .catch((error) => {
           toast(error.message);

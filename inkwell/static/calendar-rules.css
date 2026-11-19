@@ -146,6 +146,8 @@ html button.calendar-source-pill[aria-pressed='true'] {
   }
 }
 html .brand {
+  --brand-height: 65px;
+  position: relative;
   display: block;
   width: 100%;
   margin: 0 0 24px;
@@ -154,9 +156,26 @@ html .brand {
 .brand-logo {
   display: block;
   width: 100%;
-  height: 65px;
+  height: var(--brand-height);
   background: var(--ink);
   mask: url('/static/logo.png') center/contain no-repeat;
+}
+/* Place the underline outside the masked wordmark so it remains fully visible. */
+html:is([data-syncing='true'], [data-direct-sync='true']) .brand::after {
+  content: '';
+  position: absolute;
+  top: calc(var(--brand-height) + 2px);
+  left: 50%;
+  translate: -50% 0;
+  width: min(100%, calc(var(--brand-height) * 1688 / 659));
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ink);
+  pointer-events: none;
+}
+html:is([data-syncing='true'], [data-direct-sync='true']) .brand .brand-logo::after {
+  animation: none;
+  opacity: 0;
 }
 html .calendar-grid,
 html .calendar-day,
@@ -432,7 +451,7 @@ html .calendar-agenda-panel .agenda-row.is-today {
   html .calendar-event {
     font-size: calc(var(--font-size) - 4px);
   }
-  .brand-logo {
-    height: 60px;
+  html .brand {
+    --brand-height: 60px;
   }
 }
