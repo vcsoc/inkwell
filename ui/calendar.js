@@ -50,8 +50,10 @@ window.InkwellCalendar = (() => {
     finishGroup();
     return blocks;
   }
-  function mount(root) {
-    let selected = new Date(), ticket = 0, view = 'Month', records = [];
+  function mount(root, date) {
+    const requested = date ? parse(date, true) : null;
+    let selected = requested && Number.isFinite(+requested) ? requested : new Date();
+    let ticket = 0, view = requested && Number.isFinite(+requested) ? 'Day' : 'Month', records = [];
     const month = () => new Date(selected.getFullYear(), selected.getMonth(), 1);
     const newEvent = () => edit(null, selected, load);
     const workspace = node('section', null, 'calendar-workspace');
@@ -74,6 +76,7 @@ window.InkwellCalendar = (() => {
     picker.onchange = () => { if (picker.value) { selected = parse(picker.value); void load(); } };
     const mode = node('select'); mode.setAttribute('aria-label', 'Calendar view');
     mode.append(...['Month', 'Week', 'Day', 'Agenda'].map((name) => node('option', name)));
+    mode.value = view;
     mode.onchange = () => { view = mode.value; void load(); };
     navigation.append(button('Today', () => move(0)), previous, next);
     options.append(picker, mode, button('New event', newEvent, 'primary'));

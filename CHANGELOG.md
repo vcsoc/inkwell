@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0-alpha.11
+
+- Moved sync status to a dismissible workspace notification bar separate from the topbar and sidebar.
+- Added topbar workspace search for cached mail, people, calendar entries, and folders, with mail-only scopes retained.
+- Made toolbar controls compact and aligned. Added collapsible navigation and a larger, always-visible gradient wordmark with an active-sync underline.
+
 ## 0.2.0-alpha.10
 
 - Outlook Inbox sync now refreshes expired access tokens on its background worker, using the existing grant and vault. A refresh cannot overwrite credentials changed by another client or recreate a disconnected account.

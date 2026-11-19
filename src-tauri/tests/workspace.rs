@@ -167,6 +167,19 @@ fn reads_bookmarked_folders_and_existing_wal_without_mutating_the_store() {
     let new_id = editor.save_contact(None, None, updated).unwrap();
     assert_eq!(db.contacts().unwrap()[0].id, new_id);
     assert_eq!(db.events(None, None).unwrap().len(), 1);
+    assert_eq!(
+        db.workspace_results("First").unwrap().contacts[0].target,
+        "1"
+    );
+    assert_eq!(
+        db.workspace_results("Here").unwrap().events[0].target,
+        "2026-01-01"
+    );
+    assert_eq!(
+        db.workspace_results("arch").unwrap().folders[0].target,
+        "archive"
+    );
+    assert!(db.workspace_results("%").unwrap().contacts.is_empty());
     let mut calendar = Workspace::open_for_calendar(&path).unwrap();
     let fields = || inkwell_tauri::calendar::EventFields {
         title: "Local event".into(),

@@ -42,6 +42,7 @@ const path = require('node:path');
         if (name === 'save_contact') { contacts = [{ id: 1, ...args.fields }]; return 1; }
         if (name === 'delete_contact') { contacts = []; return; }
         if (name === 'folders') return [{ key: 'inbox', label: 'Inbox' }];
+        if (name === 'workspace_results') return { contacts: [{ title: 'Contact result', detail: 'fixture@example.test', target: '1' }], events: [{ title: 'Calendar result', detail: 'Library', target: '2026-01-03' }], folders: [{ title: 'Inbox folder', detail: '', target: 'inbox' }] };
         if (name === 'messages') { window.searchFixture = args; return { rows: [{ id: 1, subject: 'Fixture message', sender: 'sender@example.test', date: '2026-01-01' }], more: false }; }
         if (name === 'export_theme') { window.exportFixture = args; return true; }
         return [];
@@ -127,8 +128,17 @@ const path = require('node:path');
     await button('Delete').click();
     await page.getByText('Fixture Contact', { exact: true }).waitFor({ state: 'detached' });
     await button('Mail').click();
+    await button('Collapse sidebar').click();
+    assert.equal(await page.locator('#workspace-sidebar').isVisible(), false);
+    assert.equal(await page.locator('.wordmark').isVisible(), true);
+    await button('Expand sidebar').click();
     await button('Sync Outlook Inbox').click();
     await page.getByText('Syncing Outlook Inbox:', { exact: false }).waitFor();
+    assert.equal(await page.locator('.masthead #sync-status').count(), 0);
+    const sidebar = await page.locator('#workspace-sidebar').boundingBox();
+    const notice = await page.locator('#sync-notice').boundingBox();
+    assert.ok(notice.x >= sidebar.x + sidebar.width - 1);
+    assert.equal(await page.locator('.wordmark').evaluate((el) => getComputedStyle(el, '::after').height), '2px');
     await page.getByLabel('Unread', { exact: true }).check();
     await page.evaluate(() => { window.fixtureSyncDone = true; });
     await page.getByText('Outlook Inbox sync complete: 20 pages scanned, 111 messages added.', { exact: true }).waitFor();
@@ -136,7 +146,16 @@ const path = require('node:path');
     await page.waitForFunction(() => window.searchFixture?.filters?.unread && window.searchFixture.filters.oldest);
     await button('Clear').click();
     await page.waitForFunction(() => !window.searchFixture?.filters?.unread && !window.searchFixture.filters.oldest);
-    await page.getByLabel('Search mail', { exact: true }).fill('tag:work');
+    assert.equal(await page.locator('.masthead #search').count(), 1);
+    await page.getByLabel('Search scope').selectOption('workspace');
+    await page.getByLabel('Search workspace', { exact: true }).fill('fixture');
+    await button('Search').click();
+    for (const title of ['Contact result', 'Calendar result', 'Inbox folder']) await page.getByText(title, { exact: true }).waitFor();
+    await page.waitForFunction(() => window.searchFixture?.search === 'fixture' && window.searchFixture.scope === 'all');
+    await page.locator('.search-hit').filter({ hasText: 'Calendar result' }).click();
+    assert.equal(await page.getByLabel('Calendar view').inputValue(), 'Day');
+    await button('Mail').click();
+    await page.getByLabel('Search workspace', { exact: true }).fill('tag:work');
     await page.getByLabel('Search scope', { exact: true }).selectOption('subfolders');
     await button('Search').click();
     await page.waitForFunction(() => window.searchFixture?.search === 'tag:work' && window.searchFixture.scope === 'subfolders');

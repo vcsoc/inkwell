@@ -44,6 +44,10 @@ async fn messages(
         .await
 }
 #[tauri::command]
+async fn workspace_results(query: String) -> Result<inkwell_tauri::WorkspaceResults, String> {
+    read(move |workspace| workspace.workspace_results(&query)).await
+}
+#[tauri::command]
 async fn message(id: i64) -> Result<Message, String> {
     read(move |workspace| workspace.message(id)).await
 }
@@ -311,6 +315,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             folders,
             messages,
+            workspace_results,
             message,
             contacts,
             save_contact,

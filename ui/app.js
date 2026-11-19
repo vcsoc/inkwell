@@ -35,16 +35,18 @@ function folders() {
   }
   $('folders').replaceChildren(contents);
 }
-function select(view, folder) {
+function select(view, folder, options = {}) {
   if (state.view === 'theme' && view !== 'theme') window.InkwellTheme.revert();
   state.view = view;
-  $('mail-filters').hidden = view !== 'mail';
+  $('mail-filters').hidden = !['mail', 'search'].includes(view);
   if (folder) state.folder = folder;
   state.offset = 0;
-  state.search = '';
-  state.scope = 'folder';
-  $('search').value = '';
-  $('search-scope').value = 'folder';
+  state.search = options.query || '';
+  state.scope = options.scope || 'folder';
+  state.date = options.date;
+  state.person = options.person;
+  $('search').value = state.search;
+  $('search-scope').value = options.scope || 'workspace';
   folders();
   for (const button of $('sections').querySelectorAll('button')) {
     button.setAttribute('aria-pressed', String(button.dataset.view === view));
@@ -97,7 +99,6 @@ async function load() {
   const { view, folder, search, offset, scope } = state;
   if (view === 'theme') {
     $('title').textContent = 'Theme Studio';
-    $('search-form').hidden = true;
     $('pages').hidden = true;
     $('status').textContent = '';
     $('rows').replaceChildren();
@@ -106,30 +107,55 @@ async function load() {
   }
   if (view === 'calendar') {
     $('title').textContent = 'Calendar';
-    $('search-form').hidden = $('pages').hidden = true;
+    $('pages').hidden = true;
     $('status').textContent = '';
     $('rows').replaceChildren();
-    window.InkwellCalendar.mount($('rows'));
+    window.InkwellCalendar.mount($('rows'), state.date);
     return;
   }
-  $('title').textContent = view === 'mail' ? state.folders.find((item) => item.key === folder)?.label || 'Inbox' : 'People';
-  $('search-form').hidden = view !== 'mail';
+  const isMail = ['mail', 'search'].includes(view);
+  $('title').textContent = view === 'search' ? 'Workspace search' : view === 'mail' ? state.folders.find((item) => item.key === folder)?.label || 'Inbox' : 'People';
   $('status').textContent = 'Reading workspace...';
   $('rows').replaceChildren();
   $('pages').hidden = true;
   try {
     const controls = $('mail-filters').elements;
     const filters = { unread: controls.unread.checked, starred: controls.starred.checked, from: controls.from.value || null, to: controls.to.value || null, oldest: controls.order.value === 'oldest' };
-    const result = await (view === 'mail' ? invoke('messages', { folder, search, offset, scope, filters }) : invoke('contacts'));
+    const [result, hits] = await Promise.all([
+      isMail ? invoke('messages', { folder, search, offset, scope: view === 'search' ? 'all' : scope, filters }) : invoke('contacts'),
+      view === 'search' && !offset ? invoke('workspace_results', { query: search }) : null,
+    ]);
     if (ticket !== state.list) return;
     if (view === 'contacts') {
       renderPeople(result);
+      if (state.person) {
+        const person = result.find((item) => String(item.id) === state.person);
+        state.person = null;
+        if (person) openContact(person);
+      }
       return;
     }
     const rows = result.rows.map(mailRow);
-    $('rows').replaceChildren(...rows);
-    $('status').textContent = rows.length ? '' : 'Nothing to show here.';
-    if (view === 'mail') {
+    const groups = [];
+    if (hits) {
+      const addGroup = (label, items, activate) => {
+        if (!items.length) return;
+        const group = element('section', null, 'search-group');
+        group.append(element('h2', label));
+        for (const hit of items) {
+          const row = action('', () => activate(hit)); row.className = 'search-hit';
+          row.append(element('strong', hit.title), element('span', hit.detail, 'metadata')); group.append(row);
+        }
+        groups.push(group);
+      };
+      addGroup('People', hits.contacts, (hit) => select('contacts', null, { person: hit.target }));
+      addGroup('Calendar', hits.events, (hit) => select('calendar', null, { date: hit.target }));
+      addGroup('Folders', hits.folders, (hit) => select('mail', hit.target));
+    }
+    if (view === 'search' && rows.length) groups.push(element('h2', 'Mail'));
+    $('rows').replaceChildren(...groups, ...rows);
+    $('status').textContent = rows.length || groups.length ? '' : 'Nothing to show here.';
+    if (isMail) {
       $('pages').hidden = !(offset || result.more);
       $('previous').disabled = offset === 0;
       $('next').disabled = !result.more;
@@ -153,7 +179,8 @@ async function openMessage(id, row) {
     $('reader').replaceChildren(back, element('h2', message.subject || '(No subject)'),
       element('p', `${message.sender} to ${message.recipient}`, 'metadata'),
       element('time', formatDate(message.date), 'metadata'), element('div', message.body, 'message-body'));
-    if (state.folder !== 'drafts') {
+    const draftFolder = (message.folder || state.folder) === 'drafts';
+    if (!draftFolder) {
       const controls = element('div', null, 'theme-actions');
       const quoted = (message.body || '').split('\n').map((line) => `> ${line}`).join('\n');
       controls.append(action('Reply as draft', () => window.InkwellDrafts.show(null, {
@@ -169,7 +196,7 @@ async function openMessage(id, row) {
       })));
       $('reader').prepend(controls);
     }
-    if (state.folder === 'drafts') {
+    if (draftFolder) {
       const draft = await invoke('plain_draft', { id });
       if (ticket !== state.reader) return;
       if (draft) $('reader').prepend(action('Edit draft', () => window.InkwellDrafts.show(draft)));
@@ -321,12 +348,29 @@ for (const button of $('sections').querySelectorAll('button')) button.onclick = 
 $('refresh').onclick = () => { if (state.view !== 'theme') void refresh(); };
 const syncButton = $('sync-inbox');
 const syncStatus = $('sync-status');
-let syncTimer;
+const syncNotice = $('sync-notice');
+let syncTimer, noticeDismissed = false;
+$('dismiss-sync').onclick = () => { noticeDismissed = true; syncNotice.hidden = true; };
+const sidebarToggle = $('toggle-sidebar');
+function setSidebar(collapsed) {
+  document.body.dataset.sidebar = collapsed ? 'collapsed' : 'expanded';
+  $('workspace-sidebar').inert = collapsed;
+  sidebarToggle.setAttribute('aria-expanded', String(!collapsed));
+  sidebarToggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+  sidebarToggle.title = sidebarToggle.getAttribute('aria-label');
+}
+let initiallyCollapsed = false;
+try { initiallyCollapsed = (localStorage.getItem('inkwell.sidebar') ?? (innerWidth <= 520 ? 'collapsed' : 'expanded')) === 'collapsed'; } catch {}
+setSidebar(initiallyCollapsed);
+sidebarToggle.onclick = () => {
+  setSidebar(sidebarToggle.getAttribute('aria-expanded') === 'true');
+  try { localStorage.setItem('inkwell.sidebar', document.body.dataset.sidebar); } catch {}
+};
 function showInboxJob(job) {
   if (!job) return;
   syncButton.disabled = job.running;
   document.documentElement.dataset.syncing = String(job.running);
-  syncStatus.hidden = false;
+  syncNotice.hidden = noticeDismissed;
   const counts = `${job.pages} pages scanned, ${job.inserted} messages added`;
   syncStatus.textContent = job.running ? `Syncing Outlook Inbox: ${counts}` : job.errors.length
     ? `Inbox sync incomplete: ${counts}. ${job.errors.join(' ')}` : `Outlook Inbox sync complete: ${counts}.`;
@@ -337,28 +381,27 @@ function showInboxJob(job) {
 async function pollInboxJob() {
   try { showInboxJob(await invoke('inbox_job_status')); }
   catch (error) {
-    syncStatus.hidden = false;
+    syncNotice.hidden = noticeDismissed;
     syncStatus.textContent = 'Outlook sync status unavailable; retrying.';
     syncTimer = setTimeout(pollInboxJob, 2500);
   }
 }
 syncButton.onclick = async () => {
   syncButton.disabled = true;
+  noticeDismissed = false;
   try { showInboxJob(await invoke('start_inbox_job')); }
-  catch (error) { syncButton.disabled = false; syncStatus.hidden = false; syncStatus.textContent = errorMessage(error); }
+  catch (error) { syncButton.disabled = false; syncNotice.hidden = false; syncStatus.textContent = errorMessage(error); }
 };
 void pollInboxJob();
-function applyMailFilters() { state.offset = 0; clearReader(); if (state.view === 'mail') void load(); }
+function applyMailFilters() { state.offset = 0; clearReader(); if (['mail', 'search'].includes(state.view)) void load(); }
 $('mail-filters').onchange = applyMailFilters;
 $('mail-filters').onreset = () => setTimeout(applyMailFilters, 0);
 $('mail-filters').onsubmit = (event) => { event.preventDefault(); applyMailFilters(); };
 $('search-form').onsubmit = (event) => {
   event.preventDefault();
-  state.search = $('search').value;
-  state.scope = $('search-scope').value;
-  state.offset = 0;
-  clearReader();
-  void load();
+  const query = $('search').value.trim();
+  const scope = $('search-scope').value;
+  select(scope === 'workspace' && query ? 'search' : 'mail', state.folder, { query, scope });
 };
 $('previous').onclick = () => { state.offset = Math.max(0, state.offset - pageSize); clearReader(); void load(); };
 $('next').onclick = () => { state.offset += pageSize; clearReader(); void load(); };

@@ -14,8 +14,16 @@
     <script src="app.js" defer></script>
   </head>
   <body>
-    <header class="masthead">
+    <div class="brand-cell">
       <div class="wordmark">inkwell<span>&reg;</span></div>
+    </div>
+    <header class="masthead">
+      <button id="toggle-sidebar" type="button" aria-controls="workspace-sidebar" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar">&#9776;</button>
+      <form id="search-form" role="search">
+        <input type="search" id="search" aria-label="Search workspace" placeholder="Search workspace" maxlength="200">
+        <select id="search-scope" aria-label="Search scope"><option value="workspace">Workspace</option><option value="all">All mail</option><option value="folder">This folder</option><option value="subfolders">Include subfolders</option></select>
+        <button type="submit">Search</button>
+      </form>
       <form id="mail-filters" aria-label="Mail filters" class="mail-filters">
         <label class="filter-toggle"><input name="unread" type="checkbox"> Unread</label>
         <label class="filter-toggle"><input name="starred" type="checkbox"> Starred</label>
@@ -25,10 +33,8 @@
         <button type="reset">Clear</button>
       </form>
       <div class="theme-actions"><button id="new-draft" class="primary" type="button">Compose</button><button id="sync-inbox" type="button" title="Import Outlook Inbox mail that is not already cached">Sync Outlook Inbox</button><button id="refresh" type="button" title="Reload local workspace data">Refresh</button></div>
-      <span id="sync-status" class="sync-status" role="status" hidden></span>
     </header>
-    <main>
-      <aside aria-label="Workspace navigation">
+    <aside id="workspace-sidebar" aria-label="Workspace navigation">
         <div class="section-label">WORKSPACE</div>
         <nav id="sections" aria-label="Workspace sections">
           <button data-view="mail" type="button" aria-pressed="true">Mail</button>
@@ -37,16 +43,14 @@
           <button data-view="theme" type="button" aria-pressed="false">Theme Studio</button>
         </nav>
         <nav id="folders" aria-label="Mail folders"></nav>
-      </aside>
+    </aside>
+    <div id="sync-notice" class="notification-bar" hidden>
+      <span id="sync-status" role="status"></span>
+      <button id="dismiss-sync" type="button" aria-label="Dismiss notification" title="Dismiss notification">&times;</button>
+    </div>
+    <main>
       <section id="index" aria-labelledby="title">
-        <div class="view-header">
-          <h1 id="title">Inbox</h1>
-          <form id="search-form" role="search">
-            <input type="search" id="search" aria-label="Search mail" placeholder="Search mail or tag:work" maxlength="200">
-            <select id="search-scope" aria-label="Search scope"><option value="folder">This folder</option><option value="subfolders">Include subfolders</option><option value="all">All mail</option></select>
-            <button type="submit">Search</button>
-          </form>
-        </div>
+        <div class="view-header"><h1 id="title">Inbox</h1></div>
         <p id="status" role="status"></p>
         <div id="rows"></div>
         <div id="pages" hidden>

@@ -1778,7 +1778,7 @@ dependencies = [
 
 [[package]]
 name = "inkwell-tauri"
-version = "0.2.0-alpha.10"
+version = "0.2.0-alpha.11"
 dependencies = [
  "arboard",
  "chrono",

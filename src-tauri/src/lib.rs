@@ -65,6 +65,65 @@ pub fn workspace_database() -> Option<PathBuf> {
 
 pub struct Workspace(Connection);
 
+#[derive(serde::Serialize)]
+pub struct WorkspaceHit {
+    pub title: String,
+    pub detail: String,
+    pub target: String,
+}
+#[derive(serde::Serialize)]
+pub struct WorkspaceResults {
+    pub contacts: Vec<WorkspaceHit>,
+    pub events: Vec<WorkspaceHit>,
+    pub folders: Vec<WorkspaceHit>,
+}
+
+impl Workspace {
+    pub fn workspace_results(&self, query: &str) -> Result<WorkspaceResults> {
+        let query: String = query.trim().chars().take(200).collect();
+        let pattern = format!(
+            "%{}%",
+            query
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
+        );
+        let hit = |r: &Row<'_>| {
+            Ok(WorkspaceHit {
+                title: r.get(0)?,
+                detail: r.get(1)?,
+                target: r.get(2)?,
+            })
+        };
+        if query.is_empty() {
+            return Ok(WorkspaceResults {
+                contacts: vec![],
+                events: vec![],
+                folders: vec![],
+            });
+        }
+        let contacts = self.collect("SELECT name,email,CAST(id AS TEXT) FROM contacts WHERE name LIKE ?1 ESCAPE '\\' OR email LIKE ?1 ESCAPE '\\' OR company LIKE ?1 ESCAPE '\\' OR notes LIKE ?1 ESCAPE '\\' ORDER BY name COLLATE NOCASE,id LIMIT 25", [&pattern], hit)?;
+        let events = self.collect("SELECT title,location,substr(start,1,10) FROM events WHERE (provider_calendar_id IS NULL OR EXISTS (SELECT 1 FROM outlook_calendars WHERE id=events.provider_calendar_id AND selected=1 AND removed=0)) AND (title LIKE ?1 ESCAPE '\\' OR location LIKE ?1 ESCAPE '\\' OR notes LIKE ?1 ESCAPE '\\') ORDER BY start DESC,id DESC LIMIT 25", [&pattern], hit)?;
+        let key = query.to_lowercase();
+        let folders = self
+            .folders()?
+            .into_iter()
+            .filter(|f| f.label.to_lowercase().contains(&key))
+            .take(25)
+            .map(|f| WorkspaceHit {
+                title: f.label,
+                detail: f.account.unwrap_or_default(),
+                target: f.key,
+            })
+            .collect();
+        Ok(WorkspaceResults {
+            contacts,
+            events,
+            folders,
+        })
+    }
+}
+
 #[derive(Default, serde::Deserialize)]
 #[serde(default)]
 pub struct MailFilters {
@@ -109,6 +168,7 @@ pub struct MessagePage {
 }
 #[derive(Serialize)]
 pub struct Message {
+    pub folder: String,
     pub sender: String,
     pub recipient: String,
     pub subject: String,
@@ -305,7 +365,7 @@ impl Workspace {
 
     pub fn message(&self, id: i64) -> Result<Message> {
         self.0.query_row(
-            "SELECT sender,recipient,subject,date,body FROM messages WHERE id=?",
+            "SELECT sender,recipient,subject,date,body,folder FROM messages WHERE id=?",
             [id],
             |r| {
                 Ok(Message {
@@ -314,6 +374,7 @@ impl Workspace {
                     subject: r.get(2)?,
                     date: r.get(3)?,
                     body: r.get(4)?,
+                    folder: r.get(5)?,
                 })
             },
         )
