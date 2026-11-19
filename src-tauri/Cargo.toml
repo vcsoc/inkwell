@@ -1,6 +1,6 @@
 [package]
 name = "inkwell-tauri"
-version = "0.2.0-alpha.5"
+version = "0.2.0-alpha.6"
 edition = "2024"
 license = "GPL-3.0-only"
 build = "build.rs"

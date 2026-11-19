@@ -25,7 +25,7 @@ button:disabled { opacity: .48; cursor: default; }
 :focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
 .masthead { min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 16px; border-bottom: 1px solid var(--border); }
 .wordmark { font: bold 32px/1 Georgia, serif; letter-spacing: -.075em; }
-.wordmark span { color: var(--brand-hexagon); }
+.wordmark span { color: var(--brand-hexagon); font: 600 .5em/1 var(--body-font, sans-serif); letter-spacing: 0; margin-inline-start: .12em; vertical-align: super; }
 .edition, .section-label { color: var(--muted-foreground); font-size: 11px; font-weight: 600; letter-spacing: .09em; }
 main { flex: 1; min-height: 0; display: grid; grid-template-columns: clamp(160px, 22%, 280px) minmax(17rem, 33%) 1fr; }
 aside, #index, #reader { min-width: 0; overflow: auto; padding: var(--gap); overflow-wrap: anywhere; }

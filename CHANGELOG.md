@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0-alpha.6
+
+- Renamed the Rust desktop preview to inkwell with a circled R in its window title, wordmark, and launcher icon.
+- Added a managed per-user Linux launcher and `inkwellr` command alongside the existing Electron installation.
+
 ## 0.2.0-alpha.5
 
 - Added a month calendar with day agendas and create, edit, and delete for unlinked non-recurring events. Outlook calendar selection is respected; connected events are not edited by the preview.

@@ -1,6 +1,15 @@
-# Inkwell Desktop Preview
+# inkwell&reg; Desktop Preview
 
 A new Rust and Tauri 2 desktop application for Linux, macOS, and Windows. The previous Electron/Python project, tests, docs and release workflow are preserved in [`archive/`](archive/README.md). The preview is not a replacement for the installed Electron app yet.
+
+## Install on Linux
+
+```sh
+cargo build --locked --release --manifest-path src-tauri/Cargo.toml
+scripts/install-linux.sh src-tauri/target/release/inkwell-tauri
+```
+
+Open **inkwell&reg;** in the app launcher, or run `~/.local/bin/inkwellr`. It installs alongside Electron Inkwell and preserves the existing workspace and older installed releases.
 
 ## Open an existing workspace
 

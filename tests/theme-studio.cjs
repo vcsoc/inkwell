@@ -40,6 +40,8 @@ const path = require('node:path');
       } } };
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
+    assert.equal(await page.title(), 'inkwell\u00ae');
+    assert.equal(await page.locator('.wordmark').textContent(), 'inkwell\u00ae');
     const color = (name) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue('--' + n).trim(), name);
     assert.equal(await color('background'), 'oklch(1 0 0)');
     assert.equal(await color('brand-hexagon'), '#13a3b2');

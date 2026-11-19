@@ -182,5 +182,5 @@ fn main() {
             export_theme
         ])
         .run(tauri::generate_context!())
-        .expect("could not launch Inkwell Preview");
+        .expect("could not launch inkwellr");
 }
