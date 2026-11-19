@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0-alpha.5
+
+- Added a month calendar with day agendas and create, edit, and delete for unlinked non-recurring events. Outlook calendar selection is respected; connected events are not edited by the preview.
+- Added People search and the ability to start a draft addressed to a contact.
+- Added reply and forward as plain-text drafts in the message reader. The preview still does not send mail.
+
 ## 0.2.0-alpha.4
 
 - Added a plain-text local composer with autosave and support for reopening compatible drafts from the existing workspace.

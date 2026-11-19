@@ -36,10 +36,10 @@ window.InkwellDrafts = (() => {
     const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
     return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
   }
-  function show(data) {
+  function show(data, seed = {}) {
     if (dialog.open || busy) return;
     [version, key] = data ? [data[0], data[0].key] : [null, newKey()];
-    const fields = data?.[1] || {};
+    const fields = data?.[1] || seed;
     for (const name of ['recipient', 'cc', 'bcc', 'subject', 'body']) form.elements[name].value = fields[name] || '';
     baseline = JSON.stringify(read());
     status.textContent = '';

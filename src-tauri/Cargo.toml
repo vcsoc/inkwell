@@ -1,6 +1,6 @@
 [package]
 name = "inkwell-tauri"
-version = "0.2.0-alpha.4"
+version = "0.2.0-alpha.5"
 edition = "2024"
 license = "GPL-3.0-only"
 build = "build.rs"
@@ -10,6 +10,7 @@ default = ["desktop"]
 desktop = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-dialog"]
 
 [dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["std"] }
 dirs = "6"
 fernet = { version = "0.2.2", default-features = false, features = ["rustcrypto"] }
 rusqlite = { version = "0.39", features = ["bundled", "functions"] }

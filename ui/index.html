@@ -9,6 +9,7 @@
     <script src="theme-files.js"></script>
     <script src="theme.js"></script>
     <script src="drafts.js" defer></script>
+    <script src="calendar.js" defer></script>
     <script src="app.js" defer></script>
   </head>
   <body>
@@ -46,6 +47,19 @@
       </section>
       <section id="reader" aria-label="Message reader"><p class="placeholder">Select a message to read it here.</p></section>
     </main>
+    <dialog id="event-dialog" aria-labelledby="event-title">
+      <form id="event-form">
+        <h2 id="event-title">New event</h2>
+        <label>Title<input name="title" required maxlength="200"></label>
+        <label class="inline-check"><input type="checkbox" name="all_day"> All day</label>
+        <label>Starts<input name="start" type="datetime-local" required></label>
+        <label>Ends (exclusive for all-day events)<input name="end" type="datetime-local" required></label>
+        <label>Location<input name="location" maxlength="500"></label>
+        <label>Notes<textarea name="notes" rows="4" maxlength="10000"></textarea></label>
+        <p id="event-status" role="status"></p>
+        <div class="theme-actions"><button type="submit" class="primary">Save event</button><button type="button" id="cancel-event">Cancel</button><button type="button" id="delete-event" hidden>Delete event</button></div>
+      </form>
+    </dialog>
     <dialog id="draft-dialog" aria-labelledby="draft-title">
       <form id="draft-form">
         <h2 id="draft-title">Compose a draft</h2>

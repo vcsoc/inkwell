@@ -27,6 +27,6 @@ fn check() -> Result<(), inkwell_tauri::StoreError> {
         }
     }
     db.contacts()?;
-    db.events()?;
+    db.events(None, None)?;
     Ok(())
 }

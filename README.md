@@ -4,7 +4,7 @@ A new Rust and Tauri 2 desktop application for Linux, macOS, and Windows. The pr
 
 ## Open an existing workspace
 
-The preview opens `~/.inkwell/inkwell.db`. Provider mail, accounts, and calendar access are read-only. The preview can edit contacts and address history and save account-free plain-text drafts in the existing SQLite schema. It uses schema 22 from Inkwell 0.1.21 directly. If your workspace is elsewhere, set `INKWELL_DATA_DIR` to the folder containing `inkwell.db` before starting. There is no import, migration, change to `vault.key`, or new workspace creation. If you transfer a workspace to another computer, first quit the legacy app or take a consistent SQLite backup; do not copy a live database without its WAL.
+The preview opens `~/.inkwell/inkwell.db`. Provider mail and accounts are read-only. The preview can edit contacts and address history, save account-free plain-text drafts, and edit non-recurring calendar events in workspaces without a connected calendar write target. It uses schema 22 from Inkwell 0.1.21 directly. If your workspace is elsewhere, set `INKWELL_DATA_DIR` to the folder containing `inkwell.db` before starting. There is no import, migration, change to `vault.key`, or new workspace creation. If you transfer a workspace to another computer, first quit the legacy app or take a consistent SQLite backup; do not copy a live database without its WAL.
 
 With Rust stable and the [Tauri 2 system prerequisites](https://v2.tauri.app/start/prerequisites/) installed:
 
@@ -12,7 +12,7 @@ With Rust stable and the [Tauri 2 system prerequisites](https://v2.tauri.app/sta
 cargo run --locked --manifest-path src-tauri/Cargo.toml
 ```
 
-The preview reads local and server folders, messages as inert plain text, and calendar events. It can create, edit, and delete local contacts. Mail pages show up to 50 messages and calendar up to 500 events. Refresh re-reads the database; it does not sync. Mail search supports folder scopes, literal text, and tags (`tag:work`, `tag:"Exact name"`, or `#work`). Advanced filters are not yet ported. Client data never enters a local HTTP server. CI checks this build on Linux, macOS, and Windows; macOS and Windows runtime and installer behavior still need platform testing.
+The preview reads local and server folders, messages as inert plain text, and calendar events. It can create, edit, and delete local contacts. Mail pages show up to 50 messages. The calendar fetches the visible month; recurrence expansion and reminders are not yet ported. Refresh re-reads the database; it does not sync. Mail search supports folder scopes, literal text, and tags (`tag:work`, `tag:"Exact name"`, or `#work`). Advanced filters are not yet ported. Client data never enters a local HTTP server. CI checks this build on Linux, macOS, and Windows; macOS and Windows runtime and installer behavior still need platform testing.
 
 ## Theme Studio
 

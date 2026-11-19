@@ -1,7 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use inkwell_tauri::{
-    Event, Folder, Message, MessagePage, StoreError, Workspace,
+    Folder, Message, MessagePage, StoreError, Workspace,
+    calendar::{Event, EventFields},
     contacts::{Contact, ContactFields},
     drafts::{DraftFields, DraftVersion},
     workspace_database,
@@ -92,8 +93,31 @@ async fn save_draft(
     .map_err(|error| error.to_string())
 }
 #[tauri::command]
-async fn events() -> Result<Vec<Event>, String> {
-    read(Workspace::events).await
+async fn events(start: Option<String>, end: Option<String>) -> Result<Vec<Event>, String> {
+    read(move |workspace| workspace.events(start.as_deref(), end.as_deref())).await
+}
+async fn calendar_write<T: Send + 'static>(
+    operation: impl FnOnce(&mut Workspace) -> Result<T, StoreError> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = workspace_database().ok_or(StoreError::Missing)?;
+        operation(&mut Workspace::open_for_calendar(&path)?)
+    })
+    .await
+    .map_err(|_| "Could not start the calendar update.".to_owned())?
+    .map_err(|e| e.to_string())
+}
+#[tauri::command]
+async fn save_local_event(
+    id: Option<i64>,
+    prior: Option<EventFields>,
+    fields: EventFields,
+) -> Result<i64, String> {
+    calendar_write(move |db| db.save_local_event(id, prior, fields)).await
+}
+#[tauri::command]
+async fn delete_local_event(id: i64, prior: EventFields) -> Result<(), String> {
+    calendar_write(move |db| db.delete_local_event(id, prior)).await
 }
 
 #[tauri::command]
@@ -153,6 +177,8 @@ fn main() {
             plain_draft,
             save_draft,
             events,
+            save_local_event,
+            delete_local_event,
             export_theme
         ])
         .run(tauri::generate_context!())

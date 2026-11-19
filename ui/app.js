@@ -103,19 +103,35 @@ async function load() {
     window.InkwellTheme.mount($('rows'));
     return;
   }
-  $('title').textContent = view === 'mail' ? state.folders.find((item) => item.key === folder)?.label || 'Inbox' : view === 'calendar' ? 'Calendar' : 'Contacts';
+  if (view === 'calendar') {
+    $('title').textContent = 'Calendar';
+    $('search-form').hidden = $('pages').hidden = true;
+    $('status').textContent = '';
+    $('rows').replaceChildren();
+    window.InkwellCalendar.mount($('rows'));
+    return;
+  }
+  $('title').textContent = view === 'mail' ? state.folders.find((item) => item.key === folder)?.label || 'Inbox' : 'People';
   $('search-form').hidden = view !== 'mail';
   $('status').textContent = 'Reading workspace...';
   $('rows').replaceChildren();
   $('pages').hidden = true;
   try {
-    const result = await (view === 'mail' ? invoke('messages', { folder, search, offset, scope }) : invoke(view === 'calendar' ? 'events' : 'contacts'));
+    const result = await (view === 'mail' ? invoke('messages', { folder, search, offset, scope }) : invoke('contacts'));
     if (ticket !== state.list) return;
-    const rows = view === 'mail' ? result.rows.map(mailRow) : view === 'calendar'
-      ? result.map((row) => item(row.title, [formatDate(row.start), row.location].filter(Boolean).join(' | ')))
-      : result.map(contactRow);
-    if (view === 'contacts') $('rows').replaceChildren(action('New contact', () => openContact()), ...rows);
-    else $('rows').replaceChildren(...rows);
+    const rows = view === 'mail' ? result.rows.map(mailRow) : result.map(contactRow);
+    if (view === 'contacts') {
+      const tools = element('div', null, 'theme-actions');
+      const filter = element('input'); filter.type = 'search'; filter.placeholder = 'Find a person';
+      filter.setAttribute('aria-label', 'Find a person');
+      tools.append(action('New contact', () => openContact()), filter);
+      filter.oninput = () => {
+        const query = filter.value.trim().toLocaleLowerCase();
+        rows.forEach((row, i) => { row.hidden = ![result[i].name, result[i].email, result[i].company, result[i].notes].some((value) => value?.toLocaleLowerCase().includes(query)); });
+        $('status').textContent = rows.some((row) => !row.hidden) ? '' : 'No matching contacts.';
+      };
+      $('rows').replaceChildren(tools, ...rows);
+    } else $('rows').replaceChildren(...rows);
     $('status').textContent = rows.length ? '' : 'Nothing to show here.';
     if (view === 'mail') {
       $('pages').hidden = !(offset || result.more);
@@ -141,6 +157,18 @@ async function openMessage(id, row) {
     $('reader').replaceChildren(back, element('h2', message.subject || '(No subject)'),
       element('p', `${message.sender} to ${message.recipient}`, 'metadata'),
       element('time', formatDate(message.date), 'metadata'), element('div', message.body, 'message-body'));
+    if (state.folder !== 'drafts') {
+      const controls = element('div', null, 'theme-actions');
+      const quoted = (message.body || '').split('\n').map((line) => `> ${line}`).join('\n');
+      controls.append(action('Reply as draft', () => window.InkwellDrafts.show(null, {
+        recipient: message.sender, subject: /^re:/i.test(message.subject) ? message.subject : `Re: ${message.subject}`,
+        body: `\n\n${message.sender} wrote:\n${quoted}`,
+      })), action('Forward as draft', () => window.InkwellDrafts.show(null, {
+        subject: /^(?:fw|fwd):/i.test(message.subject) ? message.subject : `Fwd: ${message.subject}`,
+        body: `\n\nForwarded message\nFrom: ${message.sender}\nTo: ${message.recipient}\nSubject: ${message.subject}\n\n${message.body}`,
+      })));
+      $('reader').prepend(controls);
+    }
     if (state.folder === 'drafts') {
       const draft = await invoke('plain_draft', { id });
       if (ticket !== state.reader) return;
@@ -172,7 +200,7 @@ function contactRow(row) {
   const result = item(row.name, [row.email, row.company].filter(Boolean).join(' | '));
   if (row.notes) result.append(element('p', row.notes, 'contact-notes'));
   const controls = element('div', null, 'theme-actions');
-  controls.append(action('Edit', () => openContact(row)), action('Delete', async () => {
+  controls.append(action('Compose to contact', () => window.InkwellDrafts.show(null, { recipient: row.email })), action('Edit', () => openContact(row)), action('Delete', async () => {
     if (!window.confirm(`Delete ${row.name} from Contacts?`)) return;
     try { await invoke('delete_contact', { id: row.id, prior: row }); if (state.view === 'contacts') await load(); }
     catch (error) { if (state.view === 'contacts') $('status').textContent = errorMessage(error); }

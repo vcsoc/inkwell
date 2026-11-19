@@ -5,6 +5,7 @@ use std::{
     time::Duration,
 };
 
+pub mod calendar;
 pub mod contacts;
 pub mod drafts;
 mod search;
@@ -91,13 +92,6 @@ pub struct Message {
     pub subject: String,
     pub date: String,
     pub body: String,
-}
-#[derive(Serialize)]
-pub struct Event {
-    pub title: String,
-    pub start: String,
-    pub end: String,
-    pub location: String,
 }
 
 impl Workspace {
@@ -268,20 +262,6 @@ impl Workspace {
                     subject: r.get(2)?,
                     date: r.get(3)?,
                     body: r.get(4)?,
-                })
-            },
-        )
-    }
-    pub fn events(&self) -> Result<Vec<Event>> {
-        self.collect(
-            "SELECT title,start,end,location FROM events ORDER BY start DESC,id DESC LIMIT 500",
-            [],
-            |r| {
-                Ok(Event {
-                    title: r.get(0)?,
-                    start: r.get(1)?,
-                    end: r.get(2)?,
-                    location: r.get(3)?,
                 })
             },
         )

@@ -35,7 +35,9 @@ fn reads_bookmarked_folders_and_existing_wal_without_mutating_the_store() {
          CREATE TABLE local_folders(id INTEGER, name TEXT, parent TEXT);
          CREATE TABLE contacts(id INTEGER PRIMARY KEY, name TEXT, email TEXT, company TEXT, notes TEXT);
          CREATE TABLE address_history(address TEXT PRIMARY KEY COLLATE NOCASE,name TEXT,last_used TEXT);
-         CREATE TABLE events(id INTEGER, title TEXT, start TEXT, end TEXT, location TEXT);
+         CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT);
+         CREATE TABLE outlook_calendars(id INTEGER PRIMARY KEY,selected INTEGER,removed INTEGER);
+         CREATE TABLE events(id INTEGER PRIMARY KEY, title TEXT, start TEXT, end TEXT, location TEXT, notes TEXT DEFAULT '', all_day INTEGER DEFAULT 0, timezone TEXT DEFAULT 'UTC', recurrence TEXT DEFAULT '{}', provider_account_id INTEGER, provider_event_id TEXT, provider_calendar_id INTEGER);
          CREATE TABLE messages(id INTEGER PRIMARY KEY, folder TEXT, sender TEXT, recipient TEXT,
            subject TEXT, body TEXT, date TEXT, unread INT, starred INT, remote_folder_id INT,
            local_destination_id INT, local_folder_override INT);
@@ -43,7 +45,7 @@ fn reads_bookmarked_folders_and_existing_wal_without_mutating_the_store() {
          INSERT INTO remote_folders VALUES (2,1,'Archive','archive','a',''), (3,1,'Inbox','inbox','b',''), (4,1,'Archive/Child','','c','a');
          INSERT INTO local_folders VALUES (1,'Working','archive');
          INSERT INTO contacts VALUES (1,'First','first@example.test','Example','');
-         INSERT INTO events VALUES (1,'Event','2026-01-01','2026-01-02','Here');
+         INSERT INTO events(id,title,start,end,location) VALUES (1,'Event','2026-01-01','2026-01-02','Here');
          INSERT INTO messages VALUES
            (1,'remote','A','B','100% done','<script>literal text</script>','2026-01-01',1,0,2,NULL,0),
            (2,'remote','A','B','Inbox to archive','Other','2026-01-01',0,1,3,2,1),
@@ -129,7 +131,35 @@ fn reads_bookmarked_folders_and_existing_wal_without_mutating_the_store() {
     editor.delete_contact(old.id, updated.clone()).unwrap();
     let new_id = editor.save_contact(None, None, updated).unwrap();
     assert_eq!(db.contacts().unwrap()[0].id, new_id);
-    assert_eq!(db.events().unwrap().len(), 1);
+    assert_eq!(db.events(None, None).unwrap().len(), 1);
+    let mut calendar = Workspace::open_for_calendar(&path).unwrap();
+    let fields = || inkwell_tauri::calendar::EventFields {
+        title: "Local event".into(),
+        start: "2026-01-03".into(),
+        end: "2026-01-04".into(),
+        location: "Here".into(),
+        notes: "".into(),
+        all_day: true,
+    };
+    let id = calendar.save_local_event(None, None, fields()).unwrap();
+    let event = db
+        .events(Some("2026-01-03"), Some("2026-02-01"))
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert_eq!(event.fields.start, "2026-01-03T00:00:00+00:00");
+    writer
+        .execute(
+            "INSERT INTO settings VALUES ('provider_sync_account','1')",
+            [],
+        )
+        .unwrap();
+    assert!(calendar.save_local_event(None, None, fields()).is_err());
+    assert!(calendar.delete_local_event(id, event.fields).is_err());
+    assert!(!db.events(None, None).unwrap()[1].editable);
+    writer.execute("DELETE FROM settings", []).unwrap();
+    let event = db.events(None, None).unwrap().pop().unwrap();
+    calendar.delete_local_event(id, event.fields).unwrap();
     assert_eq!(
         writer
             .query_row("SELECT unread FROM messages WHERE id=1", [], |row| row

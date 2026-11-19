@@ -58,11 +58,18 @@ h2 { margin: 8px 0; font-size: 16px; }
 .message-body { white-space: pre-wrap; line-height: 1.6; margin-top: var(--gap); }
 .record { border-bottom: 1px solid var(--border); padding-block: var(--row-pad); }
 .contact-notes { white-space: pre-wrap; }
-#contact-dialog, #draft-dialog { width: min(420px, calc(100vw - 24px)); background: var(--card); color: var(--foreground); border: 1px solid var(--border); border-radius: var(--radius); }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.calendar-weekday { text-align: center; font-size: .8rem; color: var(--muted-foreground); }
+.calendar-day { display: grid; align-content: start; gap: 4px; min-height: 52px; padding: 5px 2px; }
+.calendar-day small { font-size: .72rem; }
+.calendar-day.outside { color: var(--muted-foreground); }
+.calendar-agenda { margin-top: var(--gap); }
+#event-form .inline-check { display: flex; align-items: center; }
+#contact-dialog, #draft-dialog, #event-dialog { width: min(420px, calc(100vw - 24px)); background: var(--card); color: var(--foreground); border: 1px solid var(--border); border-radius: var(--radius); }
 #draft-dialog { width: min(620px, calc(100vw - 24px)); }
-#contact-dialog::backdrop, #draft-dialog::backdrop { background: #0006; }
-#contact-form, #contact-form label, #draft-form, #draft-form label { display: grid; gap: 8px; min-width: 0; }
-#contact-form textarea, #draft-form textarea { background: var(--background); color: inherit; font: inherit; padding: 8px; border: 1px solid var(--input); border-radius: var(--radius); }
+#contact-dialog::backdrop, #draft-dialog::backdrop, #event-dialog::backdrop { background: #0006; }
+#contact-form, #contact-form label, #draft-form, #draft-form label, #event-form, #event-form label { display: grid; gap: 8px; min-width: 0; }
+#contact-form textarea, #draft-form textarea, #event-form textarea { background: var(--background); color: inherit; font: inherit; padding: 8px; border: 1px solid var(--input); border-radius: var(--radius); }
 @media (max-width: 470px) { .masthead .edition { display: none; } }
 body:not([data-view='mail'])[data-view] #reader, .back { display: none; }
 body:not([data-view='mail'])[data-view] #index { grid-column: 2 / -1; }

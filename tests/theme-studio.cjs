@@ -8,7 +8,7 @@ const path = require('node:path');
 (async () => {
   const files = { '/': ['index.html', 'text/html'], '/style.css': ['style.css', 'text/css'],
     '/waypoint.css': ['waypoint.css', 'text/css'], '/app.js': ['app.js', 'text/javascript'],
-    '/theme-files.js': ['theme-files.js', 'text/javascript'], '/theme.js': ['theme.js', 'text/javascript'], '/drafts.js': ['drafts.js', 'text/javascript'] };
+    '/theme-files.js': ['theme-files.js', 'text/javascript'], '/theme.js': ['theme.js', 'text/javascript'], '/drafts.js': ['drafts.js', 'text/javascript'], '/calendar.js': ['calendar.js', 'text/javascript'] };
   const server = http.createServer(async (request, response) => {
     const item = files[request.url];
     if (!item) { response.writeHead(404).end(); return; }
@@ -24,9 +24,12 @@ const path = require('node:path');
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.addInitScript(() => {
-      let contacts = [];
+      let contacts = [], events = [];
       window.__TAURI__ = { core: { invoke: async (name, args) => {
         if (name === 'save_draft') { window.draftFixture = args; return { id: 10, key: args.key, revision: (args.expected?.revision || 0) + 1 }; }
+        if (name === 'events') return events;
+        if (name === 'save_local_event') { events = [{ id: 1, editable: true, ...args.fields }]; return 1; }
+        if (name === 'delete_local_event') { events = []; return; }
         if (name === 'contacts') return contacts;
         if (name === 'save_contact') { contacts = [{ id: 1, ...args.fields }]; return 1; }
         if (name === 'delete_contact') { contacts = []; return; }
@@ -80,8 +83,14 @@ const path = require('node:path');
     await page.getByLabel('Email', { exact: true }).fill('contact@example.test');
     await button('Save contact').click();
     await page.getByText('Fixture Contact', { exact: true }).waitFor();
+    await page.getByLabel('Find a person').fill('not found');
+    await page.getByText('No matching contacts.').waitFor();
+    await page.getByLabel('Find a person').clear();
+    await button('Compose to contact').click();
+    assert.equal(await page.getByLabel('To', { exact: true }).inputValue(), 'contact@example.test');
+    await button('Close').click();
     await button('Edit').click();
-    await page.getByLabel('Notes', { exact: true }).fill('Fixture note');
+    await page.locator('#contact-dialog').getByLabel('Notes', { exact: true }).fill('Fixture note');
     await button('Save contact').click();
     await page.getByText('Fixture note', { exact: true }).waitFor();
     page.once('dialog', (dialog) => dialog.accept());
@@ -100,8 +109,23 @@ const path = require('node:path');
     await page.waitForFunction(() => window.draftFixture.fields.body === 'Second version' && window.draftFixture.expected?.revision === 1);
     await page.getByText('Draft saved locally.', { exact: true }).waitFor();
     await button('Close').click();
+    await button('Calendar').click();
+    await button('Next month').click();
+    await button('Today').click();
+    await button('New event').click();
+    await page.getByLabel('Title', { exact: true }).fill('Calendar smoke');
+    await button('Save event').click();
+    await page.getByRole('heading', { name: 'Calendar smoke' }).waitFor();
+    await button('Edit event').click();
+    await page.getByLabel('Location', { exact: true }).fill('Library');
+    await button('Save event').click();
+    await page.getByText('Library', { exact: false }).waitFor();
+    page.once('dialog', (dialog) => dialog.accept());
+    await button('Edit event').click();
+    await button('Delete event').click();
+    await page.getByText('No events on this day.').waitFor();
     assert.deepEqual(errors, []);
-    console.log('Theme Studio smoke passed: exact default/dark tokens, preview/revert, legacy YAML, save/relaunch, export payload, library, narrow viewport, contact editing, and search scope.');
+    console.log('Theme Studio smoke passed: exact default/dark tokens, preview/revert, legacy YAML, save/relaunch, export payload, library, narrow viewport, People, search scopes, draft autosave, and calendar create/edit/delete.');
   } finally {
     await browser?.close();
     server.close();
