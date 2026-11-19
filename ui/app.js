@@ -119,19 +119,12 @@ async function load() {
   try {
     const result = await (view === 'mail' ? invoke('messages', { folder, search, offset, scope }) : invoke('contacts'));
     if (ticket !== state.list) return;
-    const rows = view === 'mail' ? result.rows.map(mailRow) : result.map(contactRow);
     if (view === 'contacts') {
-      const tools = element('div', null, 'theme-actions');
-      const filter = element('input'); filter.type = 'search'; filter.placeholder = 'Find a person';
-      filter.setAttribute('aria-label', 'Find a person');
-      tools.append(action('New contact', () => openContact()), filter);
-      filter.oninput = () => {
-        const query = filter.value.trim().toLocaleLowerCase();
-        rows.forEach((row, i) => { row.hidden = ![result[i].name, result[i].email, result[i].company, result[i].notes].some((value) => value?.toLocaleLowerCase().includes(query)); });
-        $('status').textContent = rows.some((row) => !row.hidden) ? '' : 'No matching contacts.';
-      };
-      $('rows').replaceChildren(tools, ...rows);
-    } else $('rows').replaceChildren(...rows);
+      renderPeople(result);
+      return;
+    }
+    const rows = result.rows.map(mailRow);
+    $('rows').replaceChildren(...rows);
     $('status').textContent = rows.length ? '' : 'Nothing to show here.';
     if (view === 'mail') {
       $('pages').hidden = !(offset || result.more);
@@ -167,6 +160,10 @@ async function openMessage(id, row) {
         subject: /^(?:fw|fwd):/i.test(message.subject) ? message.subject : `Fwd: ${message.subject}`,
         body: `\n\nForwarded message\nFrom: ${message.sender}\nTo: ${message.recipient}\nSubject: ${message.subject}\n\n${message.body}`,
       })));
+      controls.append(action('Create event from email', () => window.InkwellCalendar.openFromMail({
+        title: (message.subject || 'Email follow-up').slice(0, 200),
+        notes: [`From: ${message.sender}`, `Received: ${formatDate(message.date)}`, '', message.body].join('\n').slice(0, 10000),
+      })));
       $('reader').prepend(controls);
     }
     if (state.folder === 'drafts') {
@@ -196,9 +193,60 @@ function openContact(row = null) {
   for (const field of ['name', 'email', 'company', 'notes']) contactForm.elements[field].value = row?.[field] || '';
   contactDialog.showModal();
 }
+const peopleAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ#';
+const peopleSort = new Intl.Collator(undefined, { sensitivity: 'base' });
+function renderPeople(contacts) {
+  const tools = element('div', null, 'theme-actions people-tools');
+  const filter = element('input'); filter.type = 'search'; filter.placeholder = 'Find a person';
+  filter.setAttribute('aria-label', 'Find a person');
+  tools.append(action('New contact', () => openContact()), filter);
+  const directory = element('div', null, 'people-directory');
+  const index = element('nav', null, 'people-alphabet'); index.setAttribute('aria-label', 'Contact alphabet');
+  const groups = element('div', null, 'people-groups');
+  directory.append(index, groups);
+  const sorted = [...contacts].sort((a, b) => peopleSort.compare(a.name, b.name));
+  function render() {
+    index.replaceChildren(); groups.replaceChildren();
+    const buckets = new Map();
+    const query = filter.value.trim().toLocaleLowerCase();
+    for (const person of sorted) {
+      if (query && ![person.name, person.email, person.company, person.notes].some((value) => value?.toLocaleLowerCase().includes(query))) continue;
+      const letter = person.name.trim().normalize('NFD').replace(/\p{M}/gu, '').charAt(0).toUpperCase();
+      const key = /^[A-Z]$/.test(letter) ? letter : '#';
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(person);
+    }
+    for (const letter of peopleAlphabet) {
+      const people = buckets.get(letter);
+      const jump = action(letter, () => {
+        header.focus({ preventScroll: true });
+        header.scrollIntoView({ block: 'start' });
+      });
+      jump.setAttribute('aria-label', `Jump to contacts: ${letter === '#' ? 'other names' : letter}`);
+      jump.disabled = !people; index.append(jump);
+      const header = element('h2', letter); header.tabIndex = -1;
+      if (!people) continue;
+      const section = element('section'); const cards = element('div', null, 'people-cards');
+      for (const person of people) cards.append(contactRow(person));
+      section.append(header, cards); groups.append(section);
+    }
+    if (!buckets.size) groups.append(element('p', query ? 'No matching contacts.' : 'No contacts yet.', 'metadata'));
+    $('status').textContent = '';
+  }
+  $('rows').replaceChildren(tools, directory);
+  filter.oninput = render;
+  render();
+}
 function contactRow(row) {
-  const result = item(row.name, [row.email, row.company].filter(Boolean).join(' | '));
-  if (row.notes) result.append(element('p', row.notes, 'contact-notes'));
+  const result = element('article', null, 'people-card');
+  const header = element('div', null, 'people-card-header');
+  const initials = row.name.trim().split(/\s+/).slice(0, 2).map((part) => [...part][0]).join('').toLocaleUpperCase();
+  const avatar = element('span', initials, 'people-avatar'); avatar.setAttribute('aria-hidden', 'true');
+  const identity = element('div');
+  identity.append(element('h3', row.name), element('p', row.email, 'metadata'));
+  if (row.company) identity.append(element('p', row.company, 'people-company'));
+  header.append(avatar, identity); result.append(header);
+  if (row.notes) result.append(element('p', row.notes, 'contact-notes metadata'));
   const controls = element('div', null, 'theme-actions');
   controls.append(action('Compose to contact', () => window.InkwellDrafts.show(null, { recipient: row.email })), action('Edit', () => openContact(row)), action('Delete', async () => {
     if (!window.confirm(`Delete ${row.name} from Contacts?`)) return;

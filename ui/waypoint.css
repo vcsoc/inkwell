@@ -1,5 +1,5 @@
 /* Exact semantic colors from the Waypoint dashboard design reference. */
-:root {
+:root, .saved-theme-preview {
   --radius: 0.5rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.13 0.028 261.692);
@@ -36,7 +36,7 @@
   --sidebar-ring: oklch(0.707 0.022 261.325);
   --brand-hexagon: #13a3b2;
 }
-:root[data-scheme="dark"] {
+:root[data-scheme="dark"], .saved-theme-preview[data-scheme="dark"] {
   --background: oklch(0.248 0 0);
   --foreground: oklch(0.964 0 0);
   --card: oklch(0.248 0 0);

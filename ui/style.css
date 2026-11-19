@@ -91,7 +91,32 @@ body:not([data-view='mail'])[data-view] #index { grid-column: 2 / -1; }
 .sample-action { background: var(--primary); color: var(--primary-foreground); }
 .sample-danger { color: var(--destructive); border: 1px solid var(--destructive); }
 .theme-ratios { display: grid; gap: 4px; font-size: 12px; }
-.theme-library .theme-actions + .theme-actions { margin-top: 8px; }
+.people-tools { margin-bottom: 10px; }
+.people-directory { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; align-items: start; }
+.people-alphabet { position: sticky; top: 0; margin: 0; gap: 1px; max-height: calc(100dvh - 100px); overflow: auto; }
+.people-alphabet button { min-height: 22px; padding: 1px 4px; text-align: center; border-radius: 4px; }
+.people-alphabet button:disabled { opacity: .42; }
+.people-groups section + section { margin-top: var(--gap); }
+.people-groups h2 { margin: 2px 0 8px; scroll-margin-top: 12px; color: var(--muted-foreground); }
+.people-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 232px), 1fr)); gap: 10px; }
+.people-card { border: 1px solid var(--border); border-radius: calc(var(--radius) + 6px); padding: var(--gap); background: var(--card); }
+.people-card-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+.people-avatar { flex: 0 0 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: var(--accent-foreground); background: var(--accent); font-weight: 600; font-size: 12px; }
+.people-card h3, .people-card-header p { margin: 0 0 3px; }
+.people-card h3 { font-size: 1.05rem; }
+.people-company { font-size: .9em; }
+.saved-theme { display: grid; gap: 8px; padding: 8px; margin-top: 8px; border: 1px solid var(--border); border-radius: var(--radius); }
+.saved-theme-preview { display: grid; grid-template-columns: 1fr 2fr; min-height: 74px; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; background: var(--background); color: var(--foreground); font-size: 10px; }
+.saved-theme-rail { padding: 8px; background: var(--sidebar); color: var(--sidebar-foreground); border-inline-end: 1px solid var(--sidebar-border); }
+.saved-theme-pane { display: grid; justify-items: start; align-content: center; gap: 6px; padding: 8px; background: var(--card); color: var(--foreground); }
+.saved-theme-action { padding: 3px 5px; border-radius: 4px; background: var(--primary); color: var(--primary-foreground); }
+.saved-theme-controls { display: flex; justify-content: end; gap: 5px; }
+.theme-icon { display: inline-grid; place-items: center; width: 32px; min-height: 32px; padding: 4px; }
+.theme-icon svg { width: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.theme-apply, .theme-apply:hover:not(:disabled), .theme-apply[aria-pressed='true'] { color: var(--success); }
+.theme-delete, .theme-delete:hover:not(:disabled) { color: var(--destructive); }
+.draft-context { position: fixed; display: grid; z-index: 2; min-width: 132px; padding: 4px; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 4px 12px #0003; }
+.draft-context button { text-align: start; border-color: transparent; background: transparent; color: inherit; }
 @media (max-width: 900px) {
   .theme-grid { grid-template-columns: minmax(0, 1fr); }
   .theme-grid > * { min-width: 0; }

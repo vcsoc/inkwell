@@ -149,6 +149,18 @@ impl Workspace {
         }
     }
 
+    pub fn delete_plain_draft(&mut self, expected: DraftVersion) -> Result<(), StoreError> {
+        let rows = self.0.execute("DELETE FROM messages WHERE id=? AND draft_key=? AND draft_revision=? AND folder='drafts' AND account_id IS NULL AND remote_key IS NULL AND sender='Me' AND html_body IS NULL AND NOT EXISTS (SELECT 1 FROM outgoing_files WHERE message_id=messages.id AND files!='[]')", params![expected.id, expected.key, expected.revision])?;
+        if rows != 1 {
+            return Err(StoreError::Invalid(CONFLICT));
+        }
+        Ok(())
+    }
+
+    pub fn recent_sent_addresses(&self) -> rusqlite::Result<Vec<[String; 3]>> {
+        self.collect("SELECT recipient,cc,bcc FROM messages WHERE folder='sent' OR (folder IN ('inbox','remote') AND CASE WHEN local_folder_override=1 THEN local_destination_id ELSE remote_folder_id END IN (SELECT id FROM remote_folders WHERE well_known='sentitems')) ORDER BY date DESC,id DESC LIMIT 500", [], |row| Ok([row.get(0)?, row.get(1)?, row.get(2)?]))
+    }
+
     pub fn plain_draft(&self, id: i64) -> Result<Option<(DraftVersion, DraftFields)>, StoreError> {
         Ok(self.0.query_row("SELECT draft_key,draft_revision,recipient,cc,bcc,subject,body FROM messages WHERE id=? AND folder='drafts' AND draft_key IS NOT NULL AND draft_revision>=1 AND account_id IS NULL AND remote_key IS NULL AND sender='Me' AND html_body IS NULL AND NOT EXISTS (SELECT 1 FROM outgoing_files WHERE message_id=messages.id AND files!='[]')", [id], |row| {
             Ok((DraftVersion { id, key: row.get(0)?, revision: row.get(1)? }, DraftFields { recipient: row.get(2)?, cc: row.get(3)?, bcc: row.get(4)?, subject: row.get(5)?, body: row.get(6)? }))

@@ -169,18 +169,42 @@ window.InkwellTheme = (() => {
         return element('span', `${label}: ${ratio.toFixed(2)}:1${ratio < 4.5 ? ' (low contrast)' : ''}`);
       }));
     }
+    function iconButton(button, label, path) {
+      const ns = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(ns, 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');
+      const stroke = document.createElementNS(ns, 'path'); stroke.setAttribute('d', path);
+      svg.append(stroke); button.append(svg);
+      button.setAttribute('aria-label', label); button.title = label;
+    }
     function renderLibrary() {
       libraryList.replaceChildren(element('h2', 'Saved themes'));
       if (!library.length) libraryList.append(element('p', 'No saved themes yet.'));
       for (const theme of library) {
-        const row = element('div', null, 'theme-actions');
-        row.append(element('strong', theme.name), button(`Apply ${theme.name}`, () => {
-          try { persist(theme, library); draft = { ...saved }; update(); notice.textContent = 'Theme applied.'; }
+        const row = element('article', null, 'saved-theme');
+        const preview = element('div', null, 'saved-theme-preview');
+        preview.dataset.scheme = theme.mode === 'system' ? (system.matches ? 'dark' : 'light') : theme.mode;
+        for (const [field, [, token]] of Object.entries(palette)) if (theme[field]) preview.style.setProperty(`--${token}`, theme[field]);
+        preview.style.fontFamily = fonts[theme.font];
+        preview.setAttribute('aria-hidden', 'true');
+        const rail = element('div', 'Inbox', 'saved-theme-rail');
+        const pane = element('div', null, 'saved-theme-pane');
+        pane.append(element('strong', 'Sample message'), element('span', 'Compose', 'saved-theme-action'));
+        preview.append(rail, pane);
+        const controls = element('div', null, 'saved-theme-controls');
+        const applyButton = button('', () => {
+          try { persist(theme, library); draft = { ...saved }; update(); renderLibrary(); notice.textContent = 'Theme applied.'; }
           catch { notice.textContent = 'Theme could not be saved on this device.'; }
-        }), button(`Delete ${theme.name}`, () => {
+        }, 'theme-icon theme-apply');
+        const deleteButton = button('', () => {
           try { persist(saved, library.filter((item) => item !== theme)); renderLibrary(); notice.textContent = 'Theme deleted from library.'; }
           catch { notice.textContent = 'Theme could not be deleted.'; }
-        }));
+        }, 'theme-icon theme-delete');
+        iconButton(applyButton, `Apply ${theme.name}`, 'M5 12l4 4L19 6');
+        iconButton(deleteButton, `Delete ${theme.name}`, 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5m4-5v5');
+        applyButton.setAttribute('aria-pressed', String(JSON.stringify(theme) === JSON.stringify(saved)));
+        controls.append(applyButton, deleteButton);
+        row.append(preview, element('strong', theme.name), controls);
         libraryList.append(row);
       }
     }

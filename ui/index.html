@@ -64,13 +64,14 @@
       <form id="draft-form">
         <h2 id="draft-title">Compose a draft</h2>
         <p>Plain text. Saved to your local Drafts folder; sending is not enabled in this preview.</p>
-        <label>To<input name="recipient" maxlength="8192" autocomplete="off"></label>
-        <label>Cc<input name="cc" maxlength="8192" autocomplete="off"></label>
-        <label>Bcc<input name="bcc" maxlength="8192" autocomplete="off"></label>
+        <label>To<input name="recipient" maxlength="8192" autocomplete="off" list="draft-to-addresses"></label>
+        <label>Cc<input name="cc" maxlength="8192" autocomplete="off" list="draft-cc-addresses"></label>
+        <label>Bcc<input name="bcc" maxlength="8192" autocomplete="off" list="draft-bcc-addresses"></label>
+        <datalist id="draft-to-addresses"></datalist><datalist id="draft-cc-addresses"></datalist><datalist id="draft-bcc-addresses"></datalist>
         <label>Subject<input name="subject" maxlength="998" autocomplete="off"></label>
         <label>Message<textarea name="body" maxlength="500000" rows="10"></textarea></label>
         <p id="draft-status" role="status"></p>
-        <div class="theme-actions"><button type="submit" class="primary">Save draft</button><button type="button" id="close-draft">Close</button></div>
+        <div class="theme-actions"><button type="submit" class="primary">Save draft</button><button type="button" id="close-draft">Close</button><button type="button" id="delete-draft">Delete draft</button></div>
       </form>
     </dialog>
     <dialog id="contact-dialog" aria-labelledby="contact-title">

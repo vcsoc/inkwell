@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0-alpha.7
+
+- Added alphabetized People index cards and a vertical jump index.
+- Added saved theme thumbnails and icon controls for applying and deleting themes.
+- Expanded Calendar to month, week, day and agenda views with event titles and a Create event from email action.
+- Added contact and sent-address suggestions to To, Cc and Bcc, faster autosave with save-on-close, draft deletion, and a text-editing context menu. On Linux, selection translation can use the legacy app's installed offline model and runtime.
+- Provider calendar sync, invitations, sending and rich image composition are not part of this preview.
+
 ## 0.2.0-alpha.6
 
 - Renamed the Rust desktop preview to inkwell with a circled R in its window title, wordmark, and launcher icon.

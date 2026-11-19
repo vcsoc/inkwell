@@ -92,6 +92,58 @@ async fn save_draft(
     .map_err(|_| "Could not save the draft.".to_owned())?
     .map_err(|error| error.to_string())
 }
+mod local_translation;
+
+#[tauri::command]
+async fn translate_draft(text: String, language: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || local_translation::translate(&text, &language))
+        .await
+        .map_err(|_| "Could not start local translation.".to_owned())?
+        .map_err(str::to_owned)
+}
+#[tauri::command]
+async fn draft_clipboard(text: Option<String>) -> Result<String, String> {
+    static CLIPBOARD: std::sync::Mutex<Option<arboard::Clipboard>> = std::sync::Mutex::new(None);
+    if text.as_ref().is_some_and(|value| value.len() > 2_000_000) {
+        return Err("Clipboard selection is too large.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut active = CLIPBOARD.lock().map_err(|_| "Clipboard is unavailable.")?;
+        if active.is_none() {
+            *active = Some(arboard::Clipboard::new().map_err(|_| "Clipboard is unavailable.")?);
+        }
+        let Some(clipboard) = active.as_mut() else {
+            return Err("Clipboard is unavailable.");
+        };
+        if let Some(text) = text {
+            clipboard
+                .set_text(text)
+                .map_err(|_| "Could not copy text.")?;
+            Ok(String::new())
+        } else {
+            clipboard
+                .get_text()
+                .map_err(|_| "No text is available to paste.")
+        }
+    })
+    .await
+    .map_err(|_| "Clipboard is unavailable.".to_owned())?
+    .map_err(str::to_owned)
+}
+#[tauri::command]
+async fn recent_sent_addresses() -> Result<Vec<[String; 3]>, String> {
+    read(Workspace::recent_sent_addresses).await
+}
+#[tauri::command]
+async fn delete_plain_draft(expected: DraftVersion) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = workspace_database().ok_or(StoreError::Missing)?;
+        Workspace::open_for_drafts(&path)?.delete_plain_draft(expected)
+    })
+    .await
+    .map_err(|_| "Could not delete the draft.".to_owned())?
+    .map_err(|e| e.to_string())
+}
 #[tauri::command]
 async fn events(start: Option<String>, end: Option<String>) -> Result<Vec<Event>, String> {
     read(move |workspace| workspace.events(start.as_deref(), end.as_deref())).await
@@ -176,6 +228,10 @@ fn main() {
             delete_contact,
             plain_draft,
             save_draft,
+            delete_plain_draft,
+            draft_clipboard,
+            translate_draft,
+            recent_sent_addresses,
             events,
             save_local_event,
             delete_local_event,

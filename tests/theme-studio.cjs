@@ -27,6 +27,11 @@ const path = require('node:path');
       let contacts = [], events = [];
       window.__TAURI__ = { core: { invoke: async (name, args) => {
         if (name === 'save_draft') { window.draftFixture = args; return { id: 10, key: args.key, revision: (args.expected?.revision || 0) + 1 }; }
+        if (name === 'recent_sent_addresses') return [['Sent Person <sent@example.test>', '', '']];
+        if (name === 'draft_clipboard') return 'Clipboard fixture';
+        if (name === 'translate_draft') return 'Texte de test';
+        if (name === 'delete_plain_draft') { window.deletedDraft = args.expected; return; }
+        if (name === 'message') return { subject: 'Fixture message', sender: 'sender@example.test', recipient: 'you@example.test', date: '2026-01-01', body: 'Fixture notes' };
         if (name === 'events') return events;
         if (name === 'save_local_event') { events = [{ id: 1, editable: true, ...args.fields }]; return 1; }
         if (name === 'delete_local_event') { events = []; return; }
@@ -34,7 +39,7 @@ const path = require('node:path');
         if (name === 'save_contact') { contacts = [{ id: 1, ...args.fields }]; return 1; }
         if (name === 'delete_contact') { contacts = []; return; }
         if (name === 'folders') return [{ key: 'inbox', label: 'Inbox' }];
-        if (name === 'messages') { window.searchFixture = args; return { rows: [], more: false }; };
+        if (name === 'messages') { window.searchFixture = args; return { rows: [{ id: 1, subject: 'Fixture message', sender: 'sender@example.test', date: '2026-01-01' }], more: false }; }
         if (name === 'export_theme') { window.exportFixture = args; return true; }
         return [];
       } } };
@@ -62,6 +67,9 @@ const path = require('node:path');
     assert.equal(await color('sidebar-size'), '18px');
     await button('Save theme').click();
     await button('Apply Test studio').waitFor();
+    assert.equal(await page.locator('.saved-theme-preview').count(), 1);
+    assert.equal(await button('Apply Test studio').locator('svg').count(), 1);
+    assert.equal(await button('Delete Test studio').locator('svg').count(), 1);
     await page.reload();
     assert.equal(await color('background'), '#223344');
     await button('Theme Studio').click();
@@ -84,7 +92,9 @@ const path = require('node:path');
     await page.getByLabel('Name', { exact: true }).fill('Fixture Contact');
     await page.getByLabel('Email', { exact: true }).fill('contact@example.test');
     await button('Save contact').click();
-    await page.getByText('Fixture Contact', { exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Fixture Contact' }).waitFor();
+    assert.equal(await page.locator('.people-card').count(), 1);
+    assert.equal(await button('Jump to contacts: F').isEnabled(), true);
     await page.getByLabel('Find a person').fill('not found');
     await page.getByText('No matching contacts.').waitFor();
     await page.getByLabel('Find a person').clear();
@@ -103,16 +113,31 @@ const path = require('node:path');
     await page.getByLabel('Search scope', { exact: true }).selectOption('subfolders');
     await button('Search').click();
     await page.waitForFunction(() => window.searchFixture?.search === 'tag:work' && window.searchFixture.scope === 'subfolders');
+    await button('Fixture message', { exact: false }).click().catch(() => page.locator('.mail-row').first().click());
+    await button('Create event from email').click();
+    assert.equal(await page.getByLabel('Title', { exact: true }).inputValue(), 'Fixture message');
+    await page.locator('#cancel-event').click();
     await button('Compose').click();
+    await page.waitForFunction(() => [...document.querySelector('#draft-to-addresses').options].some((option) => option.value === 'sent@example.test'));
+    assert.equal(await page.locator('#draft-cc-addresses option').count(), 1);
+    assert.equal(await page.locator('#draft-bcc-addresses option').count(), 1);
     await page.getByLabel('Subject', { exact: true }).fill('Draft smoke');
     await page.getByText('Draft saved locally.', { exact: true }).waitFor();
     assert.equal(await page.evaluate(() => window.draftFixture.fields.subject), 'Draft smoke');
     await page.getByLabel('Message', { exact: true }).fill('Second version');
     await page.waitForFunction(() => window.draftFixture.fields.body === 'Second version' && window.draftFixture.expected?.revision === 1);
     await page.getByText('Draft saved locally.', { exact: true }).waitFor();
-    await button('Close').click();
+    const body = page.getByLabel('Message', { exact: true });
+    await body.evaluate((el) => { el.focus(); el.select(); });
+    await body.dispatchEvent('contextmenu', { clientX: 250, clientY: 250 });
+    await page.getByLabel('Translate selection').selectOption('fr');
+    assert.equal(await body.inputValue(), 'Texte de test');
+    await page.once('dialog', (dialog) => dialog.accept());
+    await button('Delete draft').click();
+    await page.waitForFunction(() => window.deletedDraft?.id === 10);
     await button('Calendar').click();
     await button('Next month').click();
+    for (const view of ['Week', 'Day', 'Agenda', 'Month']) await page.getByLabel('Calendar view').selectOption(view);
     await button('Today').click();
     await button('New event').click();
     await page.getByLabel('Title', { exact: true }).fill('Calendar smoke');
