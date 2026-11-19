@@ -8,7 +8,7 @@ const path = require('node:path');
 (async () => {
   const files = { '/': ['index.html', 'text/html'], '/style.css': ['style.css', 'text/css'],
     '/waypoint.css': ['waypoint.css', 'text/css'], '/app.js': ['app.js', 'text/javascript'],
-    '/theme-files.js': ['theme-files.js', 'text/javascript'], '/theme.js': ['theme.js', 'text/javascript'] };
+    '/theme-files.js': ['theme-files.js', 'text/javascript'], '/theme.js': ['theme.js', 'text/javascript'], '/drafts.js': ['drafts.js', 'text/javascript'] };
   const server = http.createServer(async (request, response) => {
     const item = files[request.url];
     if (!item) { response.writeHead(404).end(); return; }
@@ -26,6 +26,7 @@ const path = require('node:path');
     await page.addInitScript(() => {
       let contacts = [];
       window.__TAURI__ = { core: { invoke: async (name, args) => {
+        if (name === 'save_draft') { window.draftFixture = args; return { id: 10, key: args.key, revision: (args.expected?.revision || 0) + 1 }; }
         if (name === 'contacts') return contacts;
         if (name === 'save_contact') { contacts = [{ id: 1, ...args.fields }]; return 1; }
         if (name === 'delete_contact') { contacts = []; return; }
@@ -91,6 +92,14 @@ const path = require('node:path');
     await page.getByLabel('Search scope', { exact: true }).selectOption('subfolders');
     await button('Search').click();
     await page.waitForFunction(() => window.searchFixture?.search === 'tag:work' && window.searchFixture.scope === 'subfolders');
+    await button('Compose').click();
+    await page.getByLabel('Subject', { exact: true }).fill('Draft smoke');
+    await page.getByText('Draft saved locally.', { exact: true }).waitFor();
+    assert.equal(await page.evaluate(() => window.draftFixture.fields.subject), 'Draft smoke');
+    await page.getByLabel('Message', { exact: true }).fill('Second version');
+    await page.waitForFunction(() => window.draftFixture.fields.body === 'Second version' && window.draftFixture.expected?.revision === 1);
+    await page.getByText('Draft saved locally.', { exact: true }).waitFor();
+    await button('Close').click();
     assert.deepEqual(errors, []);
     console.log('Theme Studio smoke passed: exact default/dark tokens, preview/revert, legacy YAML, save/relaunch, export payload, library, narrow viewport, contact editing, and search scope.');
   } finally {

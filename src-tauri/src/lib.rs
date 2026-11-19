@@ -6,6 +6,7 @@ use std::{
 };
 
 pub mod contacts;
+pub mod drafts;
 mod search;
 pub mod vault;
 

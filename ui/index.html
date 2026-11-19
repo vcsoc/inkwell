@@ -8,13 +8,14 @@
     <link rel="stylesheet" href="style.css">
     <script src="theme-files.js"></script>
     <script src="theme.js"></script>
+    <script src="drafts.js" defer></script>
     <script src="app.js" defer></script>
   </head>
   <body>
     <header class="masthead">
       <div class="wordmark">inkwell<span>.</span></div>
       <div class="edition">DESKTOP PREVIEW <b> / </b> NO MAIL SYNC</div>
-      <button id="refresh" type="button">Refresh</button>
+      <div class="theme-actions"><button id="new-draft" class="primary" type="button">Compose</button><button id="refresh" type="button">Refresh</button></div>
     </header>
     <main>
       <aside aria-label="Workspace navigation">
@@ -45,6 +46,19 @@
       </section>
       <section id="reader" aria-label="Message reader"><p class="placeholder">Select a message to read it here.</p></section>
     </main>
+    <dialog id="draft-dialog" aria-labelledby="draft-title">
+      <form id="draft-form">
+        <h2 id="draft-title">Compose a draft</h2>
+        <p>Plain text. Saved to your local Drafts folder; sending is not enabled in this preview.</p>
+        <label>To<input name="recipient" maxlength="8192" autocomplete="off"></label>
+        <label>Cc<input name="cc" maxlength="8192" autocomplete="off"></label>
+        <label>Bcc<input name="bcc" maxlength="8192" autocomplete="off"></label>
+        <label>Subject<input name="subject" maxlength="998" autocomplete="off"></label>
+        <label>Message<textarea name="body" maxlength="500000" rows="10"></textarea></label>
+        <p id="draft-status" role="status"></p>
+        <div class="theme-actions"><button type="submit" class="primary">Save draft</button><button type="button" id="close-draft">Close</button></div>
+      </form>
+    </dialog>
     <dialog id="contact-dialog" aria-labelledby="contact-title">
       <form id="contact-form">
         <h2 id="contact-title">Contact</h2>

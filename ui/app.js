@@ -141,6 +141,12 @@ async function openMessage(id, row) {
     $('reader').replaceChildren(back, element('h2', message.subject || '(No subject)'),
       element('p', `${message.sender} to ${message.recipient}`, 'metadata'),
       element('time', formatDate(message.date), 'metadata'), element('div', message.body, 'message-body'));
+    if (state.folder === 'drafts') {
+      const draft = await invoke('plain_draft', { id });
+      if (ticket !== state.reader) return;
+      if (draft) $('reader').prepend(action('Edit draft', () => window.InkwellDrafts.show(draft)));
+      else $('reader').prepend(element('p', 'Open this draft in the legacy app to edit it.', 'metadata'));
+    }
   } catch (error) {
     if (ticket === state.reader) $('reader').replaceChildren(back, element('p', errorMessage(error), 'placeholder'));
   }
@@ -201,4 +207,7 @@ $('search-form').onsubmit = (event) => {
 };
 $('previous').onclick = () => { state.offset = Math.max(0, state.offset - pageSize); clearReader(); void load(); };
 $('next').onclick = () => { state.offset += pageSize; clearReader(); void load(); };
+window.addEventListener('inkwell-draft-saved', () => {
+  if (state.view === 'mail' && state.folder === 'drafts') { clearReader(); void load(); }
+});
 void refresh();

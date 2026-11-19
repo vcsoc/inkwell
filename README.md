@@ -4,7 +4,7 @@ A new Rust and Tauri 2 desktop application for Linux, macOS, and Windows. The pr
 
 ## Open an existing workspace
 
-The preview opens `~/.inkwell/inkwell.db`. Mail, accounts, and calendar access are read-only; contact editing writes only to the existing Contacts and address-history tables. It uses schema 22 from Inkwell 0.1.21 directly. If your workspace is elsewhere, set `INKWELL_DATA_DIR` to the folder containing `inkwell.db` before starting. There is no import, migration, change to `vault.key`, or new workspace creation. If you transfer a workspace to another computer, first quit the legacy app or take a consistent SQLite backup; do not copy a live database without its WAL.
+The preview opens `~/.inkwell/inkwell.db`. Provider mail, accounts, and calendar access are read-only. The preview can edit contacts and address history and save account-free plain-text drafts in the existing SQLite schema. It uses schema 22 from Inkwell 0.1.21 directly. If your workspace is elsewhere, set `INKWELL_DATA_DIR` to the folder containing `inkwell.db` before starting. There is no import, migration, change to `vault.key`, or new workspace creation. If you transfer a workspace to another computer, first quit the legacy app or take a consistent SQLite backup; do not copy a live database without its WAL.
 
 With Rust stable and the [Tauri 2 system prerequisites](https://v2.tauri.app/start/prerequisites/) installed:
 

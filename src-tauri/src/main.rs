@@ -3,6 +3,7 @@
 use inkwell_tauri::{
     Event, Folder, Message, MessagePage, StoreError, Workspace,
     contacts::{Contact, ContactFields},
+    drafts::{DraftFields, DraftVersion},
     workspace_database,
 };
 
@@ -67,6 +68,30 @@ async fn delete_contact(id: i64, prior: ContactFields) -> Result<(), String> {
     contact_write(move |workspace| workspace.delete_contact(id, prior)).await
 }
 #[tauri::command]
+async fn plain_draft(id: i64) -> Result<Option<(DraftVersion, DraftFields)>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = workspace_database().ok_or(StoreError::Missing)?;
+        Workspace::open(&path)?.plain_draft(id)
+    })
+    .await
+    .map_err(|_| "Could not open the draft.".to_owned())?
+    .map_err(|error| error.to_string())
+}
+#[tauri::command]
+async fn save_draft(
+    key: String,
+    expected: Option<DraftVersion>,
+    fields: DraftFields,
+) -> Result<DraftVersion, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = workspace_database().ok_or(StoreError::Missing)?;
+        Workspace::open_for_drafts(&path)?.save_draft(key, expected, fields)
+    })
+    .await
+    .map_err(|_| "Could not save the draft.".to_owned())?
+    .map_err(|error| error.to_string())
+}
+#[tauri::command]
 async fn events() -> Result<Vec<Event>, String> {
     read(Workspace::events).await
 }
@@ -125,6 +150,8 @@ fn main() {
             contacts,
             save_contact,
             delete_contact,
+            plain_draft,
+            save_draft,
             events,
             export_theme
         ])

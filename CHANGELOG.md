@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0-alpha.4
+
+- Added a plain-text local composer with autosave and support for reopening compatible drafts from the existing workspace.
+- Draft saves use shared revisions and reject stale edits. Drafts with formatted content, attachments, or a provider identity are left for the legacy editor.
+- Sending and provider sync remain unavailable in the preview.
+
 ## 0.2.0-alpha.3
 
 - Added scoped mail search with Unicode-normalized tag queries, quoted tag names, hashtags, and Cc/Bcc matching.
