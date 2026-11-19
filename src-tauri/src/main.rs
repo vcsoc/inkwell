@@ -37,10 +37,60 @@ async fn events() -> Result<Vec<Event>, String> {
     read(Workspace::events).await
 }
 
+#[tauri::command]
+async fn export_theme(
+    window: tauri::WebviewWindow,
+    format: String,
+    contents: String,
+) -> Result<bool, String> {
+    use std::{fs::OpenOptions, io::Write};
+    use tauri_plugin_dialog::DialogExt;
+
+    if contents.len() > 16000 || !matches!(format.as_str(), "yaml" | "json") {
+        return Err("Invalid theme export.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(path) = window
+            .dialog()
+            .file()
+            .set_parent(&window)
+            .add_filter("Inkwell theme", &[&format])
+            .set_file_name(format!("inkwell-theme.{format}"))
+            .blocking_save_file()
+        else {
+            return Ok(false);
+        };
+        let path = path.into_path().map_err(|_| "Choose a local theme file.")?;
+        // Never replace an existing file, even if the platform dialog permits it.
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|error| {
+                if error.kind() == std::io::ErrorKind::AlreadyExists {
+                    "A file with that name already exists. Pick a new name."
+                } else {
+                    "Could not create the theme file."
+                }
+            })?;
+        file.write_all(contents.as_bytes())
+            .map_err(|_| "Could not write the theme file.")?;
+        Ok(true)
+    })
+    .await
+    .map_err(|_| "Could not open the save dialog.".to_owned())?
+}
+
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            folders, messages, message, contacts, events
+            folders,
+            messages,
+            message,
+            contacts,
+            events,
+            export_theme
         ])
         .run(tauri::generate_context!())
         .expect("could not launch Inkwell Preview");

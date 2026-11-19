@@ -5,6 +5,8 @@ use std::{
     time::Duration,
 };
 
+pub mod vault;
+
 pub const SCHEMA: i64 = 22;
 pub const PAGE_SIZE: u32 = 50;
 

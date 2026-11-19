@@ -36,6 +36,7 @@ function folders() {
   $('folders').replaceChildren(contents);
 }
 function select(view, folder) {
+  if (state.view === 'theme' && view !== 'theme') window.InkwellTheme.revert();
   state.view = view;
   if (folder) state.folder = folder;
   state.offset = 0;
@@ -91,6 +92,15 @@ function formatDate(value) {
 async function load() {
   const ticket = ++state.list;
   const { view, folder, search, offset } = state;
+  if (view === 'theme') {
+    $('title').textContent = 'Theme Studio';
+    $('search-form').hidden = true;
+    $('pages').hidden = true;
+    $('status').textContent = '';
+    $('rows').replaceChildren();
+    window.InkwellTheme.mount($('rows'));
+    return;
+  }
   $('title').textContent = view === 'mail' ? state.folders.find((item) => item.key === folder)?.label || 'Inbox' : view === 'calendar' ? 'Calendar' : 'Contacts';
   $('search-form').hidden = view !== 'mail';
   $('status').textContent = 'Reading workspace...';
@@ -133,7 +143,7 @@ async function openMessage(id, row) {
   }
 }
 for (const button of $('sections').querySelectorAll('button')) button.onclick = () => select(button.dataset.view);
-$('refresh').onclick = refresh;
+$('refresh').onclick = () => { if (state.view !== 'theme') void refresh(); };
 $('search-form').onsubmit = (event) => {
   event.preventDefault();
   state.search = $('search').value;

@@ -14,6 +14,10 @@ cargo run --locked --manifest-path src-tauri/Cargo.toml
 
 The preview reads local and server folders, messages as inert plain text, contacts, and calendar events. Mail pages show up to 50 messages, contacts up to 1,000 entries, and calendar up to 500 events. Refresh re-reads the database; it does not sync. Folder search is a literal substring search and is not the legacy advanced search. Client data never enters a local HTTP server. CI checks this build on Linux, macOS, and Windows; macOS and Windows runtime and installer behavior still need platform testing.
 
+## Theme Studio
+
+The default uses the exact Waypoint Light dashboard colors. Open **Theme Studio** to start from Light, Dark, Follow System, or High Contrast, then customize colors, typography, spacing, and density. The sample preview uses no workspace data. Save stores the active theme and its library on this device; leaving the studio discards unsaved changes. YAML and JSON files contain appearance settings only. Export uses the desktop save dialog and does not overwrite an existing file.
+
 ## Cutover requirements
 
 - Account setup and legacy Fernet credential compatibility; no re-encryption or destructive migrations without round-trip tests.

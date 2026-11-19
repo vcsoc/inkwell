@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0-alpha.2
+
+- Replaced the preview palette with the exact Waypoint light and dark dashboard tokens. Waypoint Light is the default; Dark and Follow System are also available.
+- Added Theme Studio: live previews, color/contrast, typography and spacing controls, a persistent local theme library, and YAML/JSON file import/export.
+- Added a Rust codec for the existing Fernet vault format, verified with synthetic legacy credentials. The preview does not open the vault or enable account operations.
+
 ## 0.2.0-alpha.1
 
 - Archived the Electron/Python project without changing its stored workspace or user configuration.

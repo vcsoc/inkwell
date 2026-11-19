@@ -1,19 +1,21 @@
 [package]
 name = "inkwell-tauri"
-version = "0.2.0-alpha.1"
+version = "0.2.0-alpha.2"
 edition = "2024"
 license = "GPL-3.0-only"
 build = "build.rs"
 
 [features]
 default = ["desktop"]
-desktop = ["dep:tauri", "dep:tauri-build"]
+desktop = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-dialog"]
 
 [dependencies]
 dirs = "6"
+fernet = { version = "0.2.2", default-features = false, features = ["rustcrypto"] }
 rusqlite = { version = "0.39", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 tauri = { version = "2.12", optional = true }
+tauri-plugin-dialog = { version = "2.8.3", optional = true }
 
 [build-dependencies]
 tauri-build = { version = "2.7", optional = true }
